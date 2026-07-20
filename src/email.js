@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const config = require('./config');
 const db = require('./db');
+const utils = require('./utils');
 
 function getTransporter() {
   const host = process.env.SMTP_HOST;
@@ -21,6 +22,8 @@ function getTransporter() {
 }
 
 function isDryRun() {
+  const setting = utils.getSetting('DRY_RUN');
+  if (setting !== null) return !!setting;
   return config.DRY_RUN || process.env.DRY_RUN === 'true';
 }
 

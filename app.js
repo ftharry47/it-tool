@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const api = require('./src/handlers');
 const config = require('./src/config');
+const utils = require('./src/utils');
 
 const log = (msg) => fs.appendFileSync('app.log', new Date().toISOString() + ' ' + msg + '\n');
 log('app.js starting');
@@ -19,8 +20,15 @@ function disabledPage(title, message) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#111827;color:#fff;text-align:center}</style></head><body><div><h1>${title}</h1><p>${message}</p></div></body></html>`;
 }
 
+function isSettingEnabled(name, envDefault) {
+  try {
+    const setting = utils.getSetting(name);
+    return setting === null ? envDefault : !!setting;
+  } catch (e) { return envDefault; }
+}
+
 app.get('/', (req, res) => {
-  if (!config.FORM_ENABLED) return res.status(503).send(disabledPage('IT Support Unavailable', 'The support form is currently disabled.'));
+  if (!isSettingEnabled('FORM_ENABLED', config.FORM_ENABLED)) return res.status(503).send(disabledPage('IT Support Unavailable', 'The support form is currently disabled.'));
   const formPath = path.join(__dirname, 'public', 'index.html');
   if (fs.existsSync(formPath)) return res.sendFile(formPath);
   res.redirect('/dashboard');
@@ -29,7 +37,7 @@ app.get('/', (req, res) => {
 app.get('/form', (req, res) => res.redirect('/'));
 
 app.get('/dashboard', (req, res) => {
-  if (!config.DASHBOARD_ENABLED) return res.status(503).send(disabledPage('Dashboard Unavailable', 'The dashboard is currently disabled.'));
+  if (!isSettingEnabled('DASHBOARD_ENABLED', config.DASHBOARD_ENABLED)) return res.status(503).send(disabledPage('Dashboard Unavailable', 'The dashboard is currently disabled.'));
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 

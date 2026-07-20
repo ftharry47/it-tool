@@ -69,7 +69,7 @@
         .glass-card:hover { background: var(--card-hover); border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
         
         .gradient-text { background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 50%, #ffffff 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: gradient 4s ease infinite; }
-        [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
         
         @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
@@ -485,12 +485,60 @@
             </section>
             
             <section id="settingsSection" class="section">
-                <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Settings</h3><p class="text-sm" style="color:var(--text-muted)">Configure your preferences</p></div>
+                <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Settings</h3><p class="text-sm" style="color:var(--text-muted)">Configure portal behavior, notifications and automation</p></div>
                 <div class="grid md:grid-cols-2 gap-5">
-                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-user-settings-line text-lg text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto-Assign Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Auto-assign to available staff</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="autoAssignToggle" onclick="toggleAutoAssign()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
-                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center"><i class="ri-timer-line text-lg text-red-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto Sign Out</h4><p class="text-xs" style="color:var(--text-muted)">Sign out after 15 min inactivity</p></div></div><div class="toggle-container"><div class="toggle-switch-new active" id="autoSignOutToggle" onclick="toggleAutoSignOut()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
-                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-moon-line text-lg text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Theme</h4><p class="text-xs" style="color:var(--text-muted)">Switch between light and dark</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="themeToggle" onclick="toggleTheme()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
-                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center"><i class="ri-key-line text-lg text-blue-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Clear Saved Credentials</h4><p class="text-xs" style="color:var(--text-muted)">Remove saved login credentials</p></div></div><button class="btn btn-secondary" onclick="clearSavedCredentials()"><i class="ri-delete-bin-line"></i> Clear</button></div></div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-user-settings-line text-lg text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto-Assign Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Auto-assign new tickets to available L1 staff</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new" id="autoAssignToggle" onclick="toggleSettingSwitch('AUTO_ASSIGN')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 flex items-center justify-center"><i class="ri-flashlight-line text-lg text-orange-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Dry-Run Mode</h4><p class="text-xs" style="color:var(--text-muted)">Log emails instead of sending them</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new" id="dryRunToggle" onclick="toggleSettingSwitch('DRY_RUN')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center"><i class="ri-form-line text-lg text-blue-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Support Form</h4><p class="text-xs" style="color:var(--text-muted)">Allow users to submit support requests</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new" id="formEnabledToggle" onclick="toggleSettingSwitch('FORM_ENABLED')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-dashboard-3-line text-lg text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Dashboard</h4><p class="text-xs" style="color:var(--text-muted)">Enable the IT support dashboard</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new" id="dashboardEnabledToggle" onclick="toggleSettingSwitch('DASHBOARD_ENABLED')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center"><i class="ri-timer-line text-lg text-red-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto Sign Out</h4><p class="text-xs" style="color:var(--text-muted)">Sign out after 15 min inactivity</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new active" id="autoSignOutToggle" onclick="toggleAutoSignOut()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/20 flex items-center justify-center"><i class="ri-moon-line text-lg text-indigo-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Theme</h4><p class="text-xs" style="color:var(--text-muted)">Switch between light and dark</p></div></div>
+                            <div class="toggle-container"><div class="toggle-switch-new" id="themeToggle" onclick="toggleTheme()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-5 mt-5">
+                    <h4 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">Admin & Notification Emails</h4>
+                    <div class="grid md:grid-cols-2 gap-5">
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Primary Admin</label><div class="flex gap-2"><input type="email" id="primaryAdminEmail" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="admin@company.com"><button class="btn btn-primary" onclick="saveEmailSetting('PRIMARY_ADMIN_EMAIL','primaryAdminEmail')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Secondary Admin</label><div class="flex gap-2"><input type="email" id="secondaryAdminEmail" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="admin2@company.com"><button class="btn btn-primary" onclick="saveEmailSetting('SECONDARY_ADMIN_EMAIL','secondaryAdminEmail')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Tertiary Admin</label><div class="flex gap-2"><input type="email" id="tertiaryAdminEmail" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="admin3@company.com"><button class="btn btn-primary" onclick="saveEmailSetting('TERTIARY_ADMIN_EMAIL','tertiaryAdminEmail')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Escalation Email</label><div class="flex gap-2"><input type="email" id="escalationEmail" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="escalation@company.com"><button class="btn btn-primary" onclick="saveEmailSetting('ESCALATION_EMAIL','escalationEmail')">Save</button></div></div>
+                        <div class="md:col-span-2"><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Critical Alert Email</label><div class="flex gap-2"><input type="email" id="criticalEmail" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="critical@company.com"><button class="btn btn-primary" onclick="saveEmailSetting('CRITICAL_EMAIL','criticalEmail')">Save</button></div></div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-5 mt-5">
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500/20 to-gray-600/20 flex items-center justify-center"><i class="ri-key-line text-lg text-gray-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Clear Saved Credentials</h4><p class="text-xs" style="color:var(--text-muted)">Remove saved login credentials</p></div></div><button class="btn btn-secondary" onclick="clearSavedCredentials()"><i class="ri-delete-bin-line"></i> Clear</button></div></div>
+                    <div class="settings-card"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-information-line text-lg text-cyan-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">System Info</h4><p class="text-xs" style="color:var(--text-muted)">Version <span class="font-mono">8.0.0</span> • JSON DB</p></div></div></div>
                 </div>
             </section>
             <footer class="mt-8 py-5 border-t text-center" style="border-color:var(--border)"><p class="text-sm font-medium" style="color:var(--text-muted)">© 2025 Srihari. All Rights Reserved.</p></footer>
@@ -702,9 +750,7 @@ async function loadData(silent = false) {
             allTickets = Validator.validateArray(data.tickets); itStaff = Validator.validateArray(data.itStaff);
             dashboardStats = Validator.validateObject(data.stats); dashboardSettings = Validator.validateObject(data.settings);
             dashboardConfig = Validator.validateObject(data.config);
-            autoAssignEnabled = dashboardSettings.AUTO_ASSIGN === true || dashboardSettings.AUTO_ASSIGN === 'true';
-            const t = $('autoAssignToggle'); if (t) t.classList.toggle('active', autoAssignEnabled);
-            populateEditDropdowns(); renderAll();
+            populateEditDropdowns(); renderAll(); renderSettings();
         }
         try { allUsers = Validator.validateArray(await callGAS('getAllUsers')); renderStaffPanel(); }
         catch { allUsers = itStaff.map(s => ({ name: s.name, role: s.level, status: s.status || 'Online', displayName: s.name })); }
@@ -793,7 +839,38 @@ async function saveLocation() {
 function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && !$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, STATUS_POLLING_INTERVAL); }
 function stopStatusPolling() { if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; } }
 async function updateMyStatus() { const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error updating status', 'error'); } }
-async function toggleAutoAssign() { const t = $('autoAssignToggle'); autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); try { const r = await callGAS('toggleAutoAssign', autoAssignEnabled, currentUser?.displayName || 'User'); if (r?.success) showToast(`Auto-assign ${autoAssignEnabled ? 'enabled' : 'disabled'}`, 'info'); else { autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast(r?.error || 'Failed', 'error'); } } catch { autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast('Error toggling auto-assign', 'error'); } }
+const SETTINGS_TOGGLE_MAP = { 'AUTO_ASSIGN': 'autoAssignToggle', 'DRY_RUN': 'dryRunToggle', 'FORM_ENABLED': 'formEnabledToggle', 'DASHBOARD_ENABLED': 'dashboardEnabledToggle' };
+const SETTINGS_EMAIL_MAP = { 'PRIMARY_ADMIN_EMAIL': 'primaryAdminEmail', 'SECONDARY_ADMIN_EMAIL': 'secondaryAdminEmail', 'TERTIARY_ADMIN_EMAIL': 'tertiaryAdminEmail', 'ESCALATION_EMAIL': 'escalationEmail', 'CRITICAL_EMAIL': 'criticalEmail' };
+
+function getSettingBool(name) { return dashboardSettings[name] === true || String(dashboardSettings[name]).toLowerCase() === 'true'; }
+
+async function toggleSettingSwitch(name) {
+    const id = SETTINGS_TOGGLE_MAP[name]; const el = id ? $(id) : null;
+    const was = name === 'AUTO_ASSIGN' ? autoAssignEnabled : getSettingBool(name);
+    const next = !was;
+    if (el) el.classList.toggle('active', next);
+    if (name === 'AUTO_ASSIGN') autoAssignEnabled = next;
+    try {
+        const r = await callGAS('setSetting', name, String(next), currentUser?.displayName || 'User');
+        if (r?.success) { dashboardSettings[name] = next; showToast(`${name.replace(/_/g,' ')} ${next ? 'enabled' : 'disabled'}`, 'info'); }
+        else throw new Error(r?.error || 'Failed');
+    } catch (e) { showToast(e.message || 'Error saving setting', 'error'); if (el) el.classList.toggle('active', was); if (name === 'AUTO_ASSIGN') autoAssignEnabled = was; }
+}
+
+async function saveEmailSetting(key, inputId) {
+    const input = $(inputId), value = input.value.trim();
+    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) { showToast('Enter a valid email address', 'error'); input.focus(); return; }
+    try {
+        const r = await callGAS('setSetting', key, value, currentUser?.displayName || 'User');
+        if (r?.success) { dashboardSettings[key] = value; showToast(`${key.replace(/_/g,' ')} saved`, 'success'); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error saving email', 'error'); }
+}
+
+function renderSettings() {
+    Object.entries(SETTINGS_TOGGLE_MAP).forEach(([key, id]) => { const el = $(id); if (!el) return; const val = getSettingBool(key); el.classList.toggle('active', val); if (key === 'AUTO_ASSIGN') autoAssignEnabled = val; });
+    Object.entries(SETTINGS_EMAIL_MAP).forEach(([key, id]) => { const el = $(id); if (el) el.value = dashboardSettings[key] || ''; });
+}
 function toggleAutoSignOut() { autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled ? 'enabled' : 'disabled'}`, 'info'); }
 function resetInactivityTimer() { if (inactivityTimer) clearTimeout(inactivityTimer); if (currentUser && autoSignOutEnabled) inactivityTimer = setTimeout(() => { showToast('Session expired due to inactivity', 'warning'); executeLogout(); }, INACTIVITY_TIMEOUT); }
 function setupInactivityTracking() { if (!autoSignOutEnabled || !currentUser) return; if (!inactivityListenersAttached) { inactivityEvents.forEach(e => document.addEventListener(e, handleInactivityEvent, { passive: true })); inactivityListenersAttached = true; } resetInactivityTimer(); }
@@ -1051,6 +1128,7 @@ async function handleEscalation() {
 function showSection(sectionName) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     const section = $(sectionName + 'Section'); if (section) section.classList.add('active');
+    if (sectionName === 'settings' && currentUser) renderSettings();
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const navItem = document.querySelector(`.nav-item[data-section="${sectionName}"]`); if (navItem) navItem.classList.add('active');
     if (window.innerWidth < 1024) $('sidebar').classList.remove('open');

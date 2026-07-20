@@ -1,5 +1,6 @@
 const db = require('../db');
 const utils = require('../utils');
+const config = require('../config');
 
 function validateUser(employeeId, password) {
   if (!employeeId || !password) {
@@ -102,12 +103,13 @@ function setupSystem() {
 function getSystemStatus() {
   const d = db.readDb();
   const settings = utils.getAllSettings();
+  const dryRunSetting = utils.getSetting('DRY_RUN');
   return {
     formEnabled: settings.FORM_ENABLED !== false && settings.FORM_ENABLED !== 'false',
     dashboardEnabled: settings.DASHBOARD_ENABLED !== false && settings.DASHBOARD_ENABLED !== 'false',
     autoAssign: utils.getAutoAssignSetting(),
-    dryRun: require('../config').DRY_RUN,
-    version: '7.9.0',
+    dryRun: dryRunSetting !== null ? !!dryRunSetting : config.DRY_RUN,
+    version: '8.0.0',
     settings,
     adminEmails: utils.getAdminEmails(d),
     dbPath: db.DB_PATH
