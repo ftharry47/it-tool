@@ -1,0 +1,16 @@
+﻿
+> form.html:1597:      if (typeof google !== 'undefined' && google.script && google.script.run) {
+> form.html:1598:        google.script.run
+  form.html:1599:          .withSuccessHandler(handleTrackSuccess)
+  form.html:1600:          .withFailureHandler(handleTrackError)
+> form.html:1657:      if (typeof google !== 'undefined' && google.script && google.script.run) {
+> form.html:1658:        google.script.run
+  form.html:1659:          .withSuccessHandler(function(result) {
+  form.html:1660:            emailInput.classList.remove('email-verifying');
+> form.html:1901:        if (typeof google !== 'undefined' && google.script && google.script.run) {
+  form.html:1902:          showProcessingAnimation();
+> form.html:1903:          google.script.run
+  form.html:1904:            .withSuccessHandler(handleSuccess)
+  form.html:1905:            .withFailureHandler(handleError)
+
+

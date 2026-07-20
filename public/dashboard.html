@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Support Control Center</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; }
+        .font-heading { font-family: 'Space Grotesk', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        ::-webkit-scrollbar { width: 0px; height: 0px; display: none; }
+        * { scrollbar-width: none; -ms-overflow-style: none; }
+        
+        :root, [data-theme="dark"] {
+            --bg-primary: #09090b; --bg-secondary: #18181b; --bg-tertiary: #27272a;
+            --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
+            --border: rgba(255,255,255,0.1); --accent: #e4e4e7;
+            --card-bg: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            --card-hover: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%);
+            --input-bg: rgba(255,255,255,0.08); --success: #22c55e; --warning: #f59e0b;
+            --danger: #ef4444; --info: #06b6d4; --purple: #a855f7;
+        }
+        
+        [data-theme="light"] {
+            --bg-primary: #f0f7ff; --bg-secondary: #ffffff; --bg-tertiary: #dbeafe;
+            --text-primary: #1e3a5f; --text-secondary: #3b6894; --text-muted: #6b9dc9;
+            --border: rgba(30,58,95,0.15); --accent: #1e40af;
+            --card-bg: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(219,234,254,0.9) 100%);
+            --card-hover: linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(219,234,254,1) 100%);
+            --input-bg: rgba(30,58,95,0.08);
+        }
+        [data-theme="light"] .glass-card, [data-theme="light"] .metric-card,
+        [data-theme="light"] .team-card, [data-theme="light"] .settings-card,
+        [data-theme="light"] .report-card { box-shadow: 0 4px 20px rgba(30,58,95,0.1); border-color: rgba(30,58,95,0.12); }
+        [data-theme="light"] .sidebar { background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%); border-color: rgba(30,58,95,0.1); }
+        [data-theme="light"] .login-card { background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(219,234,254,0.98) 100%); }
+        [data-theme="light"] .login-input { background: rgba(30,58,95,0.08); color: #1e3a5f; border-color: rgba(30,58,95,0.2); }
+        [data-theme="light"] .login-input::placeholder { color: #6b9dc9; }
+        [data-theme="light"] select { background-color: #dbeafe !important; color: #1e3a5f !important; border-color: rgba(30,58,95,0.15); }
+        [data-theme="light"] th { background: rgba(30,58,95,0.05); }
+        [data-theme="light"] .modal-content { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); }
+        [data-theme="light"] .nav-item:hover { background: rgba(30,64,175,0.1); }
+        [data-theme="light"] .nav-item.active { background: linear-gradient(135deg, rgba(30,64,175,0.15) 0%, rgba(30,64,175,0.08) 100%); border-color: rgba(30,64,175,0.2); }
+        [data-theme="light"] .progress-bar { background: rgba(30,58,95,0.1); }
+        [data-theme="light"] .staff-item { background: rgba(30,58,95,0.03); border-color: rgba(30,58,95,0.1); }
+        [data-theme="light"] .staff-item:hover { background: rgba(30,58,95,0.06); }
+        [data-theme="light"] .staff-item.staff-online { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
+        [data-theme="light"] .btn-primary { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: #fff; }
+        [data-theme="light"] .btn-secondary { background: rgba(30,58,95,0.08); border-color: rgba(30,58,95,0.15); }
+        [data-theme="light"] .login-btn { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: #fff; }
+        [data-theme="light"] .login-btn:hover { box-shadow: 0 10px 40px rgba(30,64,175,0.3); }
+        [data-theme="light"] .confirm-dialog { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); }
+        [data-theme="light"] .toast { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); }
+        [data-theme="light"] .metric-card:hover { border-color: rgba(30,64,175,0.4); }
+        [data-theme="light"] .metric-card::before { background: linear-gradient(90deg, transparent, rgba(30,64,175,0.5), transparent); }
+        [data-theme="light"] .notes-section { background: rgba(30,58,95,0.03); border-color: rgba(30,58,95,0.1); }
+        [data-theme="light"] .note-item { background: rgba(30,58,95,0.05); border-color: rgba(30,58,95,0.1); }
+        [data-theme="light"] .timeline-section { background: rgba(30,58,95,0.03); border-color: rgba(30,58,95,0.1); }
+        
+        body { background: var(--bg-primary); color: var(--text-primary); transition: background 0.3s, color 0.3s; }
+        
+        .glass-card { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border); transition: all 0.3s ease; }
+        .glass-card:hover { background: var(--card-hover); border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        
+        .gradient-text { background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 50%, #ffffff 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: gradient 4s ease infinite; }
+        [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes bellShake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(10deg); } 50% { transform: rotate(-10deg); } 75% { transform: rotate(5deg); } }
+        
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-delayed { animation: float 6s ease-in-out 2s infinite; }
+        .animate-spin-slow { animation: spin 20s linear infinite; }
+        .animate-bell { animation: bellShake 0.5s ease-in-out; }
+        .animate-pulse-live { animation: pulse 2s ease-in-out infinite; }
+        
+        .login-container { min-height: 100vh; display: flex; background: linear-gradient(135deg, #09090b 0%, #18181b 50%, #27272a 100%); position: relative; overflow: hidden; }
+        [data-theme="light"] .login-container { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%); }
+        .login-bg-pattern { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 60px 60px; }
+        [data-theme="light"] .login-bg-pattern { background-image: linear-gradient(rgba(30,64,175,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(30,64,175,0.05) 1px, transparent 1px); }
+        .login-glow { position: absolute; width: 600px; height: 600px; border-radius: 50%; filter: blur(100px); opacity: 0.3; }
+        .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 60px; position: relative; z-index: 1; }
+        .login-right { width: 580px; display: flex; align-items: center; justify-content: center; padding: 40px; position: relative; z-index: 1; }
+        .login-card { width: 100%; max-width: 500px; background: linear-gradient(135deg, rgba(40,40,45,0.95) 0%, rgba(30,30,35,0.98) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.15); border-radius: 28px; padding: 56px; }
+        .login-input { width: 100%; padding: 18px 22px 18px 56px; background: var(--input-bg); border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; color: #ffffff; font-size: 16px; font-weight: 500; transition: all 0.3s; }
+        .login-input:focus { outline: none; border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.12); box-shadow: 0 0 0 4px rgba(255,255,255,0.08); }
+        .login-input::placeholder { color: #9ca3af; font-weight: 400; }
+        .login-input.input-error { border-color: rgba(239,68,68,0.6); background: rgba(239,68,68,0.1); }
+        .login-btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #fafafa 0%, #e4e4e7 100%); color: #09090b; border: none; border-radius: 14px; font-weight: 700; font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.3s; }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(255,255,255,0.2); }
+        .login-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        
+        .login-icon { color: #1a1a1a; }
+        .login-icon-secondary { color: #a8a8a8; }
+        [data-theme="light"] .login-icon { color: #1e3a5f; }
+        [data-theme="light"] .login-icon-secondary { color: #6b9dc9; }
+        
+        .feature-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; transition: all 0.3s; }
+        .feature-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); transform: translateY(-4px); }
+        [data-theme="light"] .feature-card { background: rgba(255,255,255,0.6); border-color: rgba(30,64,175,0.1); }
+        [data-theme="light"] .feature-card:hover { background: rgba(255,255,255,0.9); border-color: rgba(30,64,175,0.2); }
+        
+        .login-decor { border-color: rgba(0,0,0,0.3) !important; }
+        .login-decor-silver { border-color: rgba(168,168,168,0.4) !important; }
+        [data-theme="light"] .login-decor { border-color: rgba(30,64,175,0.2) !important; }
+        [data-theme="light"] .login-decor-silver { border-color: rgba(30,64,175,0.15) !important; }
+        
+        .icon-gradient-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .icon-gradient-blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .icon-gradient-purple { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .icon-gradient-orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        
+        .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; background: linear-gradient(180deg, #0a0a0b 0%, #121214 100%); border-right: 1px solid var(--border); z-index: 50; display: flex; flex-direction: column; transition: transform 0.3s ease, background 0.3s; }
+        .nav-item { display: flex; align-items: center; gap: 14px; padding: 14px 20px; margin: 3px 12px; border-radius: 12px; color: var(--text-secondary); font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .nav-item.active { background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1); }
+        .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+        
+        .main { margin-left: 280px; min-height: 100vh; padding: 24px; }
+        
+        .metric-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px; padding: 20px; position: relative; overflow: hidden; transition: all 0.3s; }
+        .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(192,192,192,0.5), transparent); opacity: 0; transition: opacity 0.3s; }
+        .metric-card:hover::before { opacity: 1; }
+        .metric-card:hover { transform: translateY(-4px); border-color: rgba(192,192,192,0.4); }
+        .metric-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+        .metric-icon.total { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; }
+        .metric-icon.open { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+        .metric-icon.progress { background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; }
+        .metric-icon.resolved { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+        .metric-icon.escalated { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+        .metric-icon.sla { background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff; }
+        .metric-icon.high { background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; }
+        .metric-value { font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 700; color: var(--text-primary); }
+        
+        .chart-container { height: 260px; position: relative; }
+        .progress-bar { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; position: relative; }
+        .progress-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite; background-size: 200% 100%; }
+        
+        .staff-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; transition: all 0.2s; }
+        .staff-item:hover { background: rgba(255,255,255,0.05); }
+        .staff-item.staff-online { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
+        .staff-item.staff-break { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); }
+        .staff-item.staff-meeting { background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.3); }
+        .staff-item.staff-offline { background: rgba(113,113,122,0.05); border-color: rgba(113,113,122,0.2); }
+        .staff-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #3f3f46 0%, #52525b 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 13px; position: relative; }
+        .status-dot { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-secondary); }
+        .status-dot.online { background: #22c55e !important; box-shadow: 0 0 8px #22c55e; }
+        .status-dot.offline { background: #52525b !important; }
+        .status-dot.break { background: #f59e0b !important; box-shadow: 0 0 6px #f59e0b; }
+        .status-dot.meeting { background: #a855f7 !important; box-shadow: 0 0 6px #a855f7; }
+        
+        .live-indicator { display: inline-flex; align-items: center; gap: 6px; }
+        .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+        
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: rgba(255,255,255,0.03); padding: 12px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+        td { padding: 14px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .ticket-id { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-primary); cursor: pointer; }
+        .ticket-id:hover { text-decoration: underline; color: var(--info); }
+        
+        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .badge-open { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-progress { background: rgba(168,85,247,0.15); color: #c084fc; }
+        .badge-resolved { background: rgba(16,185,129,0.15); color: #34d399; }
+        .badge-critical { background: rgba(239,68,68,0.15); color: #f87171; }
+        .badge-high { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-medium { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        .badge-low { background: rgba(16,185,129,0.15); color: #34d399; }
+        .badge-pending { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        .badge-l1 { background: rgba(168,85,247,0.15); color: #c084fc; }
+        .badge-l2 { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-l3 { background: rgba(239,68,68,0.15); color: #f87171; }
+        .badge-vip-high { background: rgba(239,68,68,0.15); color: #f87171; }
+        .badge-vip-middle { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-vip-low { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        .badge-note-workdone { background: rgba(34,197,94,0.15); color: #4ade80; }
+        .badge-note-update { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .badge-note-investigation { background: rgba(168,85,247,0.15); color: #c084fc; }
+        .badge-note-solution { background: rgba(16,185,129,0.15); color: #34d399; }
+        .badge-note-followup { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-note-general { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        
+        .notification-btn { position: relative; }
+        .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+        
+        .modal-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 280px; background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal-overlay.show { display: flex; }
+        .modal-content { background: linear-gradient(135deg, #18181b 0%, #0f0f10 100%); border: none; border-radius: 0; width: 100%; height: 100%; display: flex; flex-direction: column; animation: modalIn 0.3s ease; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        .modal-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%); flex-shrink: 0; }
+        .modal-body { padding: 28px; flex: 1; overflow-y: auto; }
+        .modal-footer { padding: 20px 28px; border-top: 1px solid var(--border); background: rgba(255,255,255,0.02); flex-shrink: 0; }
+        
+        .modal-close { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(239,68,68,0.1) 100%); border: 2px solid rgba(239,68,68,0.5); display: flex; align-items: center; justify-content: center; cursor: pointer; color: #ef4444; transition: all 0.2s; font-size: 24px; }
+        .modal-close:hover { background: linear-gradient(135deg, rgba(239,68,68,0.4) 0%, rgba(239,68,68,0.2) 100%); border-color: #ef4444; transform: scale(1.05); box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+        
+        .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: center; justify-content: center; }
+        .confirm-overlay.show { display: flex; }
+        .confirm-dialog { background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px; max-width: 380px; width: 90%; text-align: center; animation: modalIn 0.2s ease; }
+        .confirm-dialog-icon { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+        .confirm-dialog-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+        .confirm-dialog-message { font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+        .confirm-dialog-buttons { display: flex; gap: 12px; justify-content: center; }
+        .confirm-dialog-buttons .btn { min-width: 120px; padding: 14px 28px; font-size: 15px; }
+        
+        .btn { padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; border: none; position: relative; overflow: hidden; }
+        .btn-primary { background: linear-gradient(135deg, #fafafa 0%, #d4d4d8 100%); color: #09090b; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.15); }
+        .btn-secondary { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-primary); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .btn-success { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+        .btn-purple { background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-info { background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff; }
+        .btn-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+        .btn-processing { pointer-events: none; opacity: 0.7; }
+        .btn-processing .btn-text { opacity: 0; }
+        .btn-processing .btn-spinner { display: flex !important; }
+        .btn-spinner { display: none !important; position: absolute; width: 18px; height: 18px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        
+        select { background-color: #27272a !important; color: #fafafa !important; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; }
+        select:focus { outline: none; border-color: rgba(255,255,255,0.3); }
+        
+        .loading-overlay { position: fixed; inset: 0; background: var(--bg-primary); z-index: 300; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 8px; }
+        .loading-overlay.show { display: flex; }
+        .spinner { width: 50px; height: 50px; border: 3px solid var(--border); border-top-color: var(--text-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
+        
+        .toast { position: fixed; bottom: 100px; right: 24px; background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; display: none; align-items: center; gap: 10px; z-index: 400; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .toast.show { display: flex; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .section { display: none; }
+        .section.active { display: block; }
+        .team-card, .settings-card, .report-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all 0.3s; }
+        .team-card:hover, .report-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-4px); }
+        
+        .toggle-container { position: relative; }
+        .toggle-switch-new { position: relative; width: 56px; height: 28px; background: linear-gradient(135deg, #3f3f46 0%, #52525b 100%); border-radius: 14px; cursor: pointer; transition: all 0.3s ease; border: 2px solid rgba(255,255,255,0.1); }
+        .toggle-switch-new.active { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-color: rgba(34,197,94,0.5); box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+        .toggle-switch-new::before { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: linear-gradient(135deg, #ffffff 0%, #e4e4e7 100%); border-radius: 50%; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .toggle-switch-new.active::before { left: 30px; background: linear-gradient(135deg, #ffffff 0%, #dcfce7 100%); }
+        .toggle-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none; transition: all 0.3s; }
+        .toggle-label-off { right: 8px; color: rgba(255,255,255,0.6); }
+        .toggle-label-on { left: 8px; color: rgba(255,255,255,0); }
+        .toggle-switch-new.active .toggle-label-off { color: rgba(255,255,255,0); }
+        .toggle-switch-new.active .toggle-label-on { color: rgba(255,255,255,0.9); }
+        
+        .format-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-secondary); transition: all 0.2s; }
+        .format-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+        
+        .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        .hidden { display: none !important; }
+        
+        .theme-toggle { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
+        .theme-toggle:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+        
+        /* Priority Dropdown - Same size as status */
+        .priority-dropdown { position: relative; }
+        .priority-dropdown select {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .priority-dropdown select.priority-critical { background-color: rgba(239,68,68,0.2) !important; border-color: rgba(239,68,68,0.5) !important; color: #f87171 !important; }
+        .priority-dropdown select.priority-high { background-color: rgba(245,158,11,0.2) !important; border-color: rgba(245,158,11,0.5) !important; color: #fbbf24 !important; }
+        .priority-dropdown select.priority-medium { background-color: rgba(59,130,246,0.2) !important; border-color: rgba(59,130,246,0.5) !important; color: #60a5fa !important; }
+        .priority-dropdown select.priority-low { background-color: rgba(34,197,94,0.2) !important; border-color: rgba(34,197,94,0.5) !important; color: #4ade80 !important; }
+        .priority-dropdown select.priority-pending { background-color: rgba(113,113,122,0.2) !important; border-color: rgba(113,113,122,0.5) !important; color: #a1a1aa !important; }
+        
+        .notes-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 16px; padding: 16px; height: 100%; display: flex; flex-direction: column; }
+        .notes-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .notes-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); }
+        .notes-title i { color: var(--warning); }
+        .notes-count { background: rgba(245,158,11,0.15); color: #fbbf24; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .notes-list { flex: 1; overflow-y: auto; margin-bottom: 12px; max-height: 280px; }
+        .note-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; transition: all 0.2s; }
+        .note-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); }
+        .note-item:last-child { margin-bottom: 0; }
+        .note-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .note-author { display: flex; align-items: center; gap: 8px; }
+        .note-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 600; }
+        .note-author-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+        .note-time { font-size: 10px; color: var(--text-muted); }
+        .note-content { font-size: 13px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .add-note-form { border-top: 1px solid var(--border); padding-top: 12px; }
+        .add-note-form select { width: 100%; margin-bottom: 8px; padding: 10px 12px; font-size: 13px; }
+        .add-note-form textarea { width: 100%; padding: 12px; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; resize: none; margin-bottom: 8px; }
+        .add-note-form textarea:focus { outline: none; border-color: rgba(168,85,247,0.5); }
+        .add-note-form textarea::placeholder { color: var(--text-muted); }
+        
+        .timeline-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 16px; padding: 16px; height: 100%; display: flex; flex-direction: column; }
+        .timeline-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .timeline-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); }
+        .timeline-title i { color: var(--info); }
+        .timeline-list { flex: 1; overflow-y: auto; max-height: 380px; }
+        .timeline-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .timeline-icon.action-created { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        .timeline-icon.action-assigned { background: rgba(34,197,94,0.2); color: #4ade80; }
+        .timeline-icon.action-status { background: rgba(168,85,247,0.2); color: #c084fc; }
+        .timeline-icon.action-escalated { background: rgba(239,68,68,0.2); color: #f87171; }
+        .timeline-icon.action-resolved { background: rgba(16,185,129,0.2); color: #34d399; }
+        .timeline-icon.action-note { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        .timeline-icon.action-priority { background: rgba(244,63,94,0.2); color: #fb7185; }
+        .timeline-icon.action-edit { background: rgba(6,182,212,0.2); color: #22d3ee; }
+        .timeline-content { flex: 1; min-width: 0; }
+        .timeline-action { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+        .timeline-details { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+        .timeline-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); }
+        .timeline-user { font-weight: 500; }
+        
+        .editable-field { display: flex; align-items: center; gap: 8px; }
+        .editable-field .edit-btn { width: 24px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); font-size: 12px; transition: all 0.2s; }
+        .editable-field .edit-btn:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); color: #60a5fa; }
+        .edit-dropdown { position: relative; }
+        .edit-dropdown select { padding: 8px 12px; font-size: 12px; min-width: 180px; }
+        .edit-input { position: relative; }
+        .edit-input input { width: 100%; padding: 8px 12px; font-size: 12px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-primary); margin-top: 4px; }
+        .edit-input input:focus { outline: none; border-color: rgba(59,130,246,0.5); }
+        .edit-input .edit-actions { display: flex; gap: 4px; margin-top: 6px; }
+        .edit-input .edit-actions button { padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; }
+        .edit-input .edit-actions .save-btn { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
+        .edit-input .edit-actions .cancel-btn { background: rgba(255,255,255,0.1); color: var(--text-secondary); border: 1px solid var(--border); }
+        
+        .ai-bot-btn { position: fixed; bottom: 24px; right: 30px; width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 2px solid rgba(255,255,255,0.1); cursor: pointer; z-index: 500; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: all 0.3s ease; overflow: hidden; }
+        .ai-bot-btn:hover { transform: scale(1.1); border-color: rgba(168,85,247,0.5); box-shadow: 0 12px 40px rgba(168,85,247,0.3); }
+        .ai-bot-btn .ai-bot-image { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
+        .ai-bot-popup { position: fixed; bottom: 90px; right: 90px; width: 280px; background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 16px; z-index: 501; box-shadow: 0 20px 60px rgba(0,0,0,0.5); opacity: 0; visibility: hidden; transform: translateY(20px) scale(0.95); transition: all 0.3s ease; }
+        .ai-bot-popup.show { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        .rage-avatar { width: 60px; height: 60px; border-radius: 12px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 8px; }
+        [data-theme="light"] .rage-avatar { background: #ffffff; }
+        .rage-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .popup-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; color: var(--text-primary); }
+        .ai-coming-soon-box { background: linear-gradient(135deg, rgba(192,192,192,0.15) 0%, rgba(0,0,0,0.8) 100%); border: 1px solid rgba(192,192,192,0.25); border-radius: 12px; padding: 12px; }
+        .ai-coming-soon-box p:first-child { color: #c0c0c0 !important; }
+        [data-theme="light"] .ai-bot-btn { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-color: rgba(30,64,175,0.2); box-shadow: 0 8px 32px rgba(30,64,175,0.15); }
+        [data-theme="light"] .ai-bot-btn:hover { border-color: rgba(30,64,175,0.4); box-shadow: 0 12px 40px rgba(30,64,175,0.25); }
+        [data-theme="light"] .ai-bot-popup { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-color: rgba(30,64,175,0.15); box-shadow: 0 20px 60px rgba(30,64,175,0.2); }
+        [data-theme="light"] .ai-coming-soon-box { background: rgba(30,64,175,0.08); border-color: rgba(30,64,175,0.2); }
+        
+        .internal-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(239,68,68,0.15); color: #f87171; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+        
+        .remember-me { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+        .remember-me input[type="checkbox"] { width: 18px; height: 18px; accent-color: #a855f7; cursor: pointer; }
+        .remember-me label { color: #9ca3af; font-size: 14px; cursor: pointer; user-select: none; }
+        .remember-me label:hover { color: #e4e4e7; }
+        [data-theme="light"] .remember-me label { color: #6b9dc9; }
+        [data-theme="light"] .remember-me label:hover { color: #1e3a5f; }
+        
+        .input-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: none; }
+        .input-hint.error { color: #f87171; display: block; }
+        .input-hint.success { color: #4ade80; display: block; }
+        
+        @media (max-width: 1200px) { .modal-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 1024px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main { margin-left: 0; } .login-left { display: none; } .login-right { width: 100%; } .mobile-toggle { display: flex !important; } .modal-overlay { left: 0; } }
+        @media (max-width: 768px) { .modal-grid { grid-template-columns: 1fr; } }
+        
+        .mobile-toggle { display: none; position: fixed; top: 20px; left: 20px; z-index: 60; width: 44px; height: 44px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; align-items: center; justify-content: center; cursor: pointer; color: var(--text-primary); }
+    </style>
+</head>
+<body data-theme="dark">
+    <div id="loginPage" class="login-container">
+        <div class="login-bg-pattern"></div>
+        <div class="login-glow" style="top:-200px;left:-200px;background:radial-gradient(circle,rgba(168,168,168,0.15),transparent);"></div>
+        <div class="login-glow" style="bottom:-300px;right:-200px;background:radial-gradient(circle,rgba(0,0,0,0.2),transparent);"></div>
+        <div class="absolute top-20 left-20 w-20 h-20 border login-decor rounded-2xl animate-spin-slow"></div>
+        <div class="absolute bottom-32 left-32 w-16 h-16 border login-decor-silver rotate-45 animate-float"></div>
+        <div class="absolute top-40 right-40 w-24 h-24 border login-decor rounded-full animate-float-delayed"></div>
+        
+        <div class="login-left">
+            <div class="mb-8">
+                <div class="flex items-center gap-4 mb-8"><span class="font-heading font-bold text-4xl text-white">AlignedCardio</span></div>
+                <h1 class="font-heading font-bold text-5xl md:text-6xl mb-6"><span class="text-white">Centralized</span><br><span class="gradient-text">Service Management</span></h1>
+                <p class="text-zinc-400 text-lg max-w-md">Streamline your IT operations with our comprehensive ticket management and support platform.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 max-w-lg">
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-robot-line text-2xl icon-gradient-green"></i></div><h3 class="font-heading font-semibold text-white mb-2">Smart Automation</h3><p class="text-sm text-zinc-500">AI-powered workflows automate repetitive tasks efficiently</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-timer-flash-line text-2xl icon-gradient-blue"></i></div><h3 class="font-heading font-semibold text-white mb-2">Real-time Updates</h3><p class="text-sm text-zinc-500">Live ticket tracking and instant notifications</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-team-line text-2xl icon-gradient-purple"></i></div><h3 class="font-heading font-semibold text-white mb-2">Team Management</h3><p class="text-sm text-zinc-500">Efficient workload distribution and performance tracking</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-bar-chart-grouped-line text-2xl icon-gradient-orange"></i></div><h3 class="font-heading font-semibold text-white mb-2">Analytics</h3><p class="text-sm text-zinc-500">Comprehensive reports and SLA compliance metrics</p></div>
+            </div>
+        </div>
+        
+        <div class="login-right">
+            <div class="login-card">
+                <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-white mb-3">Welcome Back</h2><p class="text-zinc-300 text-base font-medium">Sign in with your Employee ID</p></div>
+                <form id="loginForm">
+                    <div id="loginError" class="hidden mb-5 p-4 rounded-xl bg-red-500/15 border border-red-500/30"><p id="loginErrorText" class="text-red-400 text-sm text-center font-medium">Invalid credentials</p></div>
+                    <div class="mb-5 relative"><i class="ri-user-3-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="text" id="employeeId" class="login-input" placeholder="Employee ID" required autocomplete="off" maxlength="20"><p id="employeeIdHint" class="input-hint"></p></div>
+                    <div class="mb-5 relative"><i class="ri-lock-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="password" id="password" class="login-input" placeholder="Password" required autocomplete="off" maxlength="50"><button type="button" class="absolute right-5 top-1/2 -translate-y-1/2 login-icon-secondary hover:text-white transition-colors" onclick="togglePassword()"><i id="pwdToggleIcon" class="ri-eye-line text-xl"></i></button><p id="passwordHint" class="input-hint"></p></div>
+                    <div class="remember-me"><input type="checkbox" id="rememberMe"><label for="rememberMe">Remember my credentials</label></div>
+                    <button type="submit" id="loginBtn" class="login-btn"><span>Sign In</span><i class="ri-arrow-right-line text-lg"></i></button>
+                </form>
+                <p class="text-center text-sm text-zinc-400 mt-10 font-medium">© 2025 Srihari. All Rights Reserved.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="dashboardPage" class="hidden">
+        <button class="mobile-toggle" onclick="toggleSidebar()"><i class="ri-menu-line text-xl"></i></button>
+        
+        <aside id="sidebar" class="sidebar">
+            <div class="p-5 border-b border-white/5"><div class="flex items-center justify-center"><span class="font-heading font-bold text-xl" style="color:var(--text-primary)">AlignedCardio</span></div></div>
+            <div class="px-4 py-2"><p class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color:var(--text-muted)">Main Menu</p></div>
+            <nav class="flex-1 overflow-y-auto px-2">
+                <div class="nav-item active" data-section="dashboard" onclick="handleNavClick('dashboard')"><i class="ri-dashboard-3-line text-xl"></i><span>Dashboard</span></div>
+                <div class="nav-item" data-section="tickets" onclick="handleNavClick('tickets')"><i class="ri-ticket-2-line text-xl"></i><span>All Tickets</span><span class="nav-badge" id="openTicketsBadge">0</span></div>
+                <div class="nav-item" data-section="team" onclick="handleNavClick('team')"><i class="ri-team-line text-xl"></i><span>Team Performance</span></div>
+                <div class="nav-item" data-section="sla" onclick="handleNavClick('sla')"><i class="ri-speed-line text-xl"></i><span>SLA Metrics</span></div>
+                <div class="nav-item" data-section="analytics" onclick="handleNavClick('analytics')"><i class="ri-bar-chart-grouped-line text-xl"></i><span>Analytics</span></div>
+                <div class="nav-item" data-section="reports" onclick="handleNavClick('reports')"><i class="ri-file-chart-line text-xl"></i><span>Reports</span></div>
+                <div class="nav-item" data-section="settings" onclick="handleNavClick('settings')"><i class="ri-settings-3-line text-xl"></i><span>Settings</span></div>
+            </nav>
+            <div class="p-4 border-t border-white/5">
+                <div class="flex items-center gap-3 p-3 rounded-xl mb-3" style="background:rgba(255,255,255,0.05)"><div class="staff-avatar" id="userAvatar">U<div class="status-dot online" id="userStatusDot"></div></div><div class="flex-1 min-w-0"><p class="text-sm font-semibold truncate" style="color:var(--text-primary)" id="userName">User</p><p class="text-xs" style="color:var(--text-muted)" id="userRole">Role</p></div></div>
+                <select class="w-full p-2 rounded-xl text-sm mb-3" id="userStatusSelect" onchange="updateMyStatus()"><option value="Online">Online</option><option value="Offline">Offline</option><option value="Break">On Break</option><option value="In Meeting">In Meeting</option></select>
+                <button class="w-full p-2 rounded-xl border text-sm flex items-center justify-center gap-2 transition-all" style="border-color:var(--border);color:var(--text-muted)" onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.color='#ef4444'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'" onclick="confirmLogout()"><i class="ri-logout-box-r-line"></i><span>Sign Out</span></button>
+            </div>
+        </aside>
+        
+        <main class="main">
+            <header class="glass-card rounded-2xl p-4 mb-5 flex items-center justify-between">
+                <div><h1 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="greetingText">Good Morning</h1><p class="text-sm mt-1" style="color:var(--text-secondary)" id="currentDate"></p></div>
+                <div class="flex items-center gap-2">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme"><i class="ri-sun-line text-lg" id="themeIcon"></i></button>
+                    <button class="notification-btn w-10 h-10 rounded-xl flex items-center justify-center transition-all" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted)" id="notificationBtn" onclick="handleNavClick('tickets')"><i class="ri-notification-3-line text-lg"></i><span class="notification-badge" id="notificationBadge">0</span></button>
+                    <button class="w-10 h-10 rounded-xl flex items-center justify-center transition-all" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted)" id="refreshBtn" onclick="refreshData()"><i class="ri-refresh-line text-lg"></i></button>
+                </div>
+            </header>
+            
+            <section id="dashboardSection" class="section active">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5" id="metricsGrid"></div>
+                <div class="grid lg:grid-cols-3 gap-5 mb-5">
+                    <div class="lg:col-span-2 glass-card rounded-2xl p-5"><div class="flex items-center justify-between mb-5"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Ticket Trends</h3><p class="text-sm" style="color:var(--text-muted)">Weekly overview</p></div><select class="px-3 py-2 rounded-xl text-sm" id="trendPeriod" onchange="renderTrendChart()"><option value="week">This Week</option><option value="month">This Month</option></select></div><div class="chart-container" id="trendChart"></div><div class="flex justify-center gap-5 mt-3" id="trendLegend"></div></div>
+                    <div class="glass-card rounded-2xl p-5"><div class="flex items-center justify-between mb-4"><div><h3 class="font-heading font-semibold text-base" style="color:var(--text-primary)">Staff Availability</h3></div></div><div id="staffList" class="max-h-72 overflow-y-auto"></div></div>
+                </div>
+                <div class="grid md:grid-cols-3 gap-5 mb-5">
+                    <div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Status</h3><div id="statusBars"></div></div>
+                    <div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Priority</h3><div id="priorityBars"></div></div>
+                    <div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Location</h3><div id="locationBars"></div></div>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex items-center justify-between" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Recent Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Latest 10 tickets</p></div><button class="btn btn-primary" onclick="handleNavClick('tickets')">View All <i class="ri-arrow-right-line"></i></button></div><div class="table-container"><table><thead><tr><th>Ticket ID</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="recentTicketsBody"></tbody></table></div></div>
+            </section>
+            
+            <section id="ticketsSection" class="section">
+                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex flex-wrap items-center justify-between gap-3" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">All Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Manage and track all support tickets</p></div><div class="flex items-center gap-2"><div class="relative"><i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)"></i><input type="text" id="ticketSearch" placeholder="Search..." class="pl-10 pr-3 py-2 rounded-xl text-sm w-48" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" oninput="filterTickets()"></div><select class="px-3 py-2 rounded-xl text-sm" id="statusFilter" onchange="filterTickets()"><option value="">All Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Resolved">Resolved</option></select><select class="px-3 py-2 rounded-xl text-sm" id="priorityFilter" onchange="filterTickets()"><option value="">All Priority</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Pending">Pending</option></select></div></div><div class="table-container" style="max-height:550px;overflow-y:auto;"><table><thead><tr><th>Ticket ID</th><th>Created</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Impact Area</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="allTicketsBody"></tbody></table></div></div>
+            </section>
+            
+            <section id="teamSection" class="section">
+                <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Team Performance</h3><p class="text-sm" style="color:var(--text-muted)">Individual metrics and SLA compliance</p></div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-5" id="teamGrid"></div>
+                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b" style="border-color:var(--border)"><h3 class="font-heading font-semibold text-base" style="color:var(--text-primary)">Performance Summary</h3></div><div class="table-container"><table><thead><tr><th>Team Member</th><th>Level</th><th>Tickets Handled</th><th>Resolved</th><th>Open</th><th>SLA Compliance</th><th>Avg Resolution</th></tr></thead><tbody id="teamTableBody"></tbody></table></div></div>
+            </section>
+            
+            <section id="slaSection" class="section">
+                <div class="glass-card rounded-2xl p-5 mb-5"><div class="flex items-center justify-between mb-5"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">SLA Compliance Trends</h3><p class="text-sm" style="color:var(--text-muted)">Monitor service level agreements</p></div><select class="px-3 py-2 rounded-xl text-sm" id="slaTrendPeriod" onchange="renderSlaTrend()"><option value="week">This Week</option><option value="month">This Month</option></select></div><div class="chart-container" id="slaTrendChart"></div><div class="flex justify-center gap-5 mt-3" id="slaTrendLegend"></div></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3"><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-critical">Critical</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">1 hour</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">4 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-high">High</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">4 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">24 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-medium">Medium</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">8 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">48 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-low">Low</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">24 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">72 hours</span></div></div></div>
+            </section>
+            
+            <section id="analyticsSection" class="section">
+                <div class="glass-card rounded-2xl p-5 mb-5"><div class="flex items-center justify-between mb-5"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Ticket Analytics</h3><p class="text-sm" style="color:var(--text-muted)">Analyze patterns and performance</p></div><select class="px-3 py-2 rounded-xl text-sm" id="analyticsTrendPeriod" onchange="renderAnalyticsTrend()"><option value="week">This Week</option><option value="month">This Month</option></select></div><div class="chart-container" id="analyticsTrendChart"></div><div class="flex justify-center gap-5 mt-3" id="analyticsTrendLegend"></div></div>
+                <div class="grid md:grid-cols-3 gap-5"><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Issue Type</h3><div id="issueTypeBars"></div></div><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Escalation Level</h3><div id="escalationBars"></div></div><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Assignee</h3><div id="assigneeBars"></div></div></div>
+            </section>
+            
+            <section id="reportsSection" class="section">
+                <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Reports</h3><p class="text-sm" style="color:var(--text-muted)">Generate and download reports</p></div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5"><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-ticket-2-line text-xl text-cyan-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">All Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Complete export</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('tickets','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('tickets','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-team-line text-xl text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Team Performance</h4><p class="text-xs" style="color:var(--text-muted)">Staff metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('team','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('team','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-speed-line text-xl text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">SLA Compliance</h4><p class="text-xs" style="color:var(--text-muted)">SLA metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('sla','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('sla','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 flex items-center justify-center"><i class="ri-calendar-line text-xl text-amber-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Monthly Summary</h4><p class="text-xs" style="color:var(--text-muted)">Statistics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('monthly','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('monthly','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div></div>
+            </section>
+            
+            <section id="settingsSection" class="section">
+                <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Settings</h3><p class="text-sm" style="color:var(--text-muted)">Configure your preferences</p></div>
+                <div class="grid md:grid-cols-2 gap-5">
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-user-settings-line text-lg text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto-Assign Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Auto-assign to available staff</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="autoAssignToggle" onclick="toggleAutoAssign()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center"><i class="ri-timer-line text-lg text-red-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto Sign Out</h4><p class="text-xs" style="color:var(--text-muted)">Sign out after 15 min inactivity</p></div></div><div class="toggle-container"><div class="toggle-switch-new active" id="autoSignOutToggle" onclick="toggleAutoSignOut()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-moon-line text-lg text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Theme</h4><p class="text-xs" style="color:var(--text-muted)">Switch between light and dark</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="themeToggle" onclick="toggleTheme()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center"><i class="ri-key-line text-lg text-blue-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Clear Saved Credentials</h4><p class="text-xs" style="color:var(--text-muted)">Remove saved login credentials</p></div></div><button class="btn btn-secondary" onclick="clearSavedCredentials()"><i class="ri-delete-bin-line"></i> Clear</button></div></div>
+                </div>
+            </section>
+            <footer class="mt-8 py-5 border-t text-center" style="border-color:var(--border)"><p class="text-sm font-medium" style="color:var(--text-muted)">© 2025 Srihari. All Rights Reserved.</p></footer>
+        </main>
+    </div>
+
+    <div id="ticketModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><div><h2 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="modalTicketId">Ticket Details</h2><div class="flex items-center gap-2 mt-1" id="modalVipLevel"></div><div class="flex gap-2 mt-2" id="modalBadges"></div></div><button class="modal-close" onclick="confirmCloseModal()" title="Close (Esc)"><i class="ri-close-line"></i></button></div>
+            <div class="modal-body">
+                <div class="modal-grid mb-6">
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Requester</p><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalName">--</p></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Email</p><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalEmail">--</p></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Phone</p><div class="editable-field" id="phoneField"><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalPhone">--</p><button class="edit-btn" onclick="toggleEditPhone()" title="Edit Phone"><i class="ri-pencil-line"></i></button></div><div class="edit-input hidden" id="phoneEdit"><input type="text" id="phoneInput" placeholder="Enter phone number" maxlength="20"><div class="edit-actions"><button class="save-btn" onclick="savePhone()">Save</button><button class="cancel-btn" onclick="cancelEditPhone()">Cancel</button></div></div></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Location</p><div class="editable-field" id="locationField"><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalLocation">--</p><button class="edit-btn" onclick="toggleEditLocation()" title="Edit Location"><i class="ri-pencil-line"></i></button></div><div class="edit-dropdown hidden" id="locationEdit"><select id="locationSelect" class="w-full mt-1" onchange="saveLocation()"><option value="">Select Location</option></select></div></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Issue Type</p><div class="editable-field" id="issueTypeField"><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalIssueType">--</p><button class="edit-btn" onclick="toggleEditIssueType()" title="Edit Issue Type"><i class="ri-pencil-line"></i></button></div><div class="edit-dropdown hidden" id="issueTypeEdit"><select id="issueTypeSelect" class="w-full mt-1" onchange="saveIssueType()"><option value="">Select Issue Type</option></select></div></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Impact Area</p><div class="editable-field" id="impactAreaField"><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalImpactArea">--</p><button class="edit-btn" onclick="toggleEditImpactArea()" title="Edit Impact Area"><i class="ri-pencil-line"></i></button></div><div class="edit-dropdown hidden" id="impactAreaEdit"><select id="impactAreaSelect" class="w-full mt-1" onchange="saveImpactArea()"><option value="">Select Impact Area</option></select></div></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Created</p><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalCreated">--</p></div>
+                    <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Assigned To</p><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalAssigned">--</p></div>
+                </div>
+                <div class="grid lg:grid-cols-2 gap-5 mb-5"><div><h4 class="text-xs font-semibold mb-2 flex items-center gap-2" style="color:var(--text-primary)"><i class="ri-chat-1-line" style="color:var(--text-muted)"></i> Description</h4><div class="p-3 rounded-xl text-sm min-h-28" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-secondary)" id="modalDescription">--</div></div><div id="additionalDescSection" style="display:none"><h4 class="text-xs font-semibold mb-2 flex items-center gap-2" style="color:var(--text-primary)"><i class="ri-file-text-line" style="color:var(--text-muted)"></i> Additional Details</h4><div class="p-3 rounded-xl text-sm min-h-28" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-secondary)" id="modalAdditionalDesc">--</div></div></div>
+                <div class="grid lg:grid-cols-2 gap-5">
+                    <div class="notes-section"><div class="notes-header"><div class="notes-title"><i class="ri-sticky-note-line"></i><span>Internal Notes</span><span class="internal-badge"><i class="ri-lock-line"></i> Staff Only</span></div><span class="notes-count" id="notesCount">0</span></div><div class="notes-list" id="notesList"><p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">No notes yet</p></div><div class="add-note-form"><select id="noteTypeSelect" class="w-full"><option value="General">General Note</option><option value="Work Done">Work Done</option><option value="Update">Update</option><option value="Investigation">Investigation</option><option value="Solution">Solution</option><option value="Follow-up">Follow-up</option></select><textarea id="noteText" rows="3" placeholder="Add a note about what you've done or observed..." maxlength="1000"></textarea><button class="btn btn-warning w-full" id="addNoteBtn" onclick="handleAddNote()"><span class="btn-text flex items-center gap-1"><i class="ri-add-line"></i> Add Note</span><div class="btn-spinner"></div></button></div></div>
+                    <div class="timeline-section"><div class="timeline-header"><div class="timeline-title"><i class="ri-history-line"></i><span>Activity Timeline</span></div></div><div class="timeline-list" id="ticketTimeline"><p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">Loading...</p></div></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="mb-3"><p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">Select Priority Before Assigning</p><div class="priority-dropdown"><select id="modalPrioritySelect" class="w-full" onchange="updatePriorityStyle()"><option value="">-- Select Priority --</option><option value="Critical">P1 - Critical</option><option value="High">P2 - High</option><option value="Medium">P3 - Medium</option><option value="Low">P4 - Low</option></select></div></div>
+                <div class="grid grid-cols-3 gap-2 mb-3"><select class="p-2 rounded-xl text-sm" id="modalStatusSelect"><option value="">Update Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Resolved">Resolved</option></select><select class="p-2 rounded-xl text-sm" id="modalAssignSelect"><option value="">Assign To</option></select><select class="p-2 rounded-xl text-sm" id="modalEscalateSelect" onchange="toggleEscalationReason()"><option value="">Escalate To</option></select></div>
+                <div class="p-3 rounded-xl mb-3" id="escReasonGroup" style="display:none;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3)"><p class="text-xs font-semibold mb-2 flex items-center gap-2" style="color:#c084fc"><i class="ri-arrow-up-circle-line"></i> Escalation Reason (Required)</p><textarea class="w-full p-2 rounded-xl text-sm resize-none" id="modalEscReasonInput" rows="2" placeholder="Enter reason..." style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" maxlength="500"></textarea></div>
+                <div class="grid grid-cols-3 gap-2"><button class="btn btn-primary" id="updateBtn" onclick="handleStatusChange()"><span class="btn-text flex items-center gap-1"><i class="ri-refresh-line"></i> Update</span><div class="btn-spinner"></div></button><button class="btn btn-success" id="assignBtn" onclick="handleAssignment()"><span class="btn-text flex items-center gap-1"><i class="ri-user-add-line"></i> Assign</span><div class="btn-spinner"></div></button><button class="btn btn-purple" id="escalateBtn" onclick="handleEscalation()"><span class="btn-text flex items-center gap-1"><i class="ri-arrow-up-circle-line"></i> Escalate</span><div class="btn-spinner"></div></button></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmCloseDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(245,158,11,0.15)"><i class="ri-error-warning-line text-4xl text-amber-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Close Ticket Details?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">Any unsaved changes will be lost. Are you sure you want to close this ticket view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelCloseModal()">Cancel</button><button class="btn btn-danger" onclick="forceCloseModal()">Close</button></div></div></div>
+    <div id="confirmNavDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(59,130,246,0.15)"><i class="ri-arrow-left-right-line text-4xl text-blue-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Leave Ticket View?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You have a ticket open. Do you want to leave this view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelNavigation()">Stay</button><button class="btn btn-info" onclick="confirmNavigation()">Leave</button></div></div></div>
+    <div id="confirmLogoutDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(239,68,68,0.15)"><i class="ri-logout-box-r-line text-4xl text-red-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Sign Out?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You will be signed out of the IT Support Control Center. You will need to sign in again to access the dashboard.</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelLogout()">Cancel</button><button class="btn btn-danger" onclick="executeLogout()">Sign Out</button></div></div></div>
+    <div id="loadingOverlay" class="loading-overlay"><div class="spinner"></div><div class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Loading Dashboard</div><div style="color:var(--text-muted)">Fetching latest data...</div></div>
+    <div id="toast" class="toast"><i id="toastIcon" class="ri-checkbox-circle-line text-lg text-emerald-400"></i><span id="toastMessage" class="text-sm" style="color:var(--text-primary)">Success!</span></div>
+    <div class="ai-bot-btn hidden" id="aiBotBtn" onclick="toggleBotPopup()"><img src="https://lh3.googleusercontent.com/d/1GE0iQqxwIHOpywIeF_X-hNnPBuG1oLtT" alt="AI Assistant" class="ai-bot-image"></div>
+    <div id="botPopup" class="ai-bot-popup"><div class="flex items-center gap-3 mb-3"><div class="rage-avatar"><img src="https://lh3.googleusercontent.com/d/1GE0iQqxwIHOpywIeF_X-hNnPBuG1oLtT" alt="Rage AI"></div><div><p class="popup-title">Rage</p><p class="text-xs" style="color:var(--text-muted)">AI Assistant</p></div></div><div class="ai-coming-soon-box"><p class="text-sm font-semibold mb-1" style="color:#c084fc">Coming Soon</p><p class="text-xs leading-relaxed" style="color:var(--text-secondary)">Rage will be available soon to help with IT support queries and automate ticket management.</p></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+let autoSignOutEnabled = true, autoAssignEnabled = false;
+let currentUser = null, allTickets = [], allUsers = [], itStaff = [], dashboardStats = {}, dashboardSettings = {}, dashboardConfig = {};
+let currentTicket = null, currentTicketNotes = [], isRefreshing = false, isProcessing = false;
+let inactivityTimer = null, pendingSection = null, statusPollingInterval = null;
+const STATUS_POLLING_INTERVAL = 5000, CREDENTIALS_KEY = 'it_support_credentials';
+let inactivityListenersAttached = false;
+const inactivityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+function handleInactivityEvent() { resetInactivityTimer(); }
+
+const Validator = {
+    sanitizeString: function(str) {
+        if (str === null || str === undefined) return '';
+        if (typeof str === 'number') return String(str);
+        if (typeof str !== 'string') return String(str);
+        return str.replace(/[<>"'&]/g, function(m) {
+            return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[m];
+        }).trim();
+    },
+    validateEmployeeId: function(empId) {
+        if (!empId || typeof empId !== 'string') return { valid: false, message: 'Employee ID is required' };
+        empId = empId.trim();
+        if (empId.length < 2) return { valid: false, message: 'Employee ID must be at least 2 characters' };
+        if (empId.length > 20) return { valid: false, message: 'Employee ID must be less than 20 characters' };
+        if (!/^[a-zA-Z0-9_-]+$/.test(empId)) return { valid: false, message: 'Only letters, numbers, underscore and hyphen allowed' };
+        return { valid: true, message: '' };
+    },
+    validatePassword: function(pwd) {
+        if (!pwd || typeof pwd !== 'string') return { valid: false, message: 'Password is required' };
+        if (pwd.length < 3) return { valid: false, message: 'Password must be at least 3 characters' };
+        if (pwd.length > 50) return { valid: false, message: 'Password is too long' };
+        return { valid: true, message: '' };
+    },
+    validateNoteText: function(note) {
+        if (!note || typeof note !== 'string') return { valid: false, message: 'Note text is required' };
+        note = note.trim();
+        if (note.length < 1) return { valid: false, message: 'Note cannot be empty' };
+        if (note.length > 1000) return { valid: false, message: 'Note must be less than 1000 characters' };
+        return { valid: true, message: '', sanitized: this.sanitizeString(note) };
+    },
+    validateEscalationReason: function(reason) {
+        if (!reason || typeof reason !== 'string') return { valid: false, message: 'Escalation reason is required' };
+        reason = reason.trim();
+        if (reason.length < 5) return { valid: false, message: 'Reason must be at least 5 characters' };
+        if (reason.length > 500) return { valid: false, message: 'Reason must be less than 500 characters' };
+        return { valid: true, message: '', sanitized: this.sanitizeString(reason) };
+    },
+    validateTicketId: function(ticketId) {
+        if (!ticketId) return { valid: false, message: 'Invalid ticket ID' };
+        const id = String(ticketId).trim();
+        if (id.length < 3 || id.length > 20) return { valid: false, message: 'Invalid ticket ID format' };
+        return { valid: true, message: '' };
+    },
+    validateSelection: function(value, allowedValues, fieldName) {
+        if (!value) return { valid: false, message: `Please select a ${fieldName}` };
+        if (allowedValues && !allowedValues.includes(value)) return { valid: false, message: `Invalid ${fieldName} selection` };
+        return { valid: true, message: '' };
+    },
+    validatePhoneNumber: function(phone) {
+        if (!phone || typeof phone !== 'string') return { valid: false, message: 'Phone number is required' };
+        phone = phone.trim();
+        if (phone.length < 7) return { valid: false, message: 'Phone number is too short' };
+        if (phone.length > 20) return { valid: false, message: 'Phone number is too long' };
+        if (!/^[\d\s\-\(\)\+\.]+$/.test(phone)) return { valid: false, message: 'Invalid phone number format' };
+        return { valid: true, message: '', sanitized: this.sanitizeString(phone) };
+    },
+    validateLocation: function(location) {
+        if (!location || typeof location !== 'string') return { valid: false, message: 'Location is required' };
+        location = location.trim();
+        if (location.length < 2) return { valid: false, message: 'Location is too short' };
+        if (location.length > 100) return { valid: false, message: 'Location is too long' };
+        return { valid: true, message: '', sanitized: this.sanitizeString(location) };
+    },
+    validateArray: function(arr) { return Array.isArray(arr) ? arr : []; },
+    validateObject: function(obj) { return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : {}; }
+};
+
+function showInputHint(inputId, message, type = 'error') { const hint = $(inputId + 'Hint'), input = $(inputId); if (hint) { hint.textContent = message; hint.className = 'input-hint ' + type; } if (input) input.classList.toggle('input-error', type === 'error'); }
+function clearInputHint(inputId) { const hint = $(inputId + 'Hint'), input = $(inputId); if (hint) { hint.textContent = ''; hint.className = 'input-hint'; } if (input) input.classList.remove('input-error'); }
+function saveCredentials(empId, pwd) { try { localStorage.setItem(CREDENTIALS_KEY, JSON.stringify({ employeeId: empId, password: btoa(pwd), timestamp: Date.now() })); } catch (e) {} }
+function loadSavedCredentials() { try { const saved = localStorage.getItem(CREDENTIALS_KEY); if (saved) { const c = JSON.parse(saved); if (Date.now() - c.timestamp < 30*24*60*60*1000) return { employeeId: c.employeeId, password: atob(c.password) }; localStorage.removeItem(CREDENTIALS_KEY); } } catch (e) { localStorage.removeItem(CREDENTIALS_KEY); } return null; }
+function clearSavedCredentials() { try { localStorage.removeItem(CREDENTIALS_KEY); $('rememberMe').checked = false; showToast('Saved credentials cleared', 'info'); } catch (e) { showToast('Could not clear credentials', 'error'); } }
+function populateSavedCredentials() { const saved = loadSavedCredentials(); if (saved) { $('employeeId').value = saved.employeeId; $('password').value = saved.password; $('rememberMe').checked = true; } }
+function updatePriorityStyle() { const s = $('modalPrioritySelect'), v = s.value; s.classList.remove('priority-critical','priority-high','priority-medium','priority-low','priority-pending'); s.classList.add(v === 'Critical' ? 'priority-critical' : v === 'High' ? 'priority-high' : v === 'Medium' ? 'priority-medium' : v === 'Low' ? 'priority-low' : 'priority-pending'); }
+function setSelectedPriority(p) { const s = $('modalPrioritySelect'); s.value = (p && p !== 'Pending') ? p : ''; updatePriorityStyle(); }
+function getSelectedPriority() { return $('modalPrioritySelect').value || null; }
+function toggleBotPopup() { $('botPopup').classList.toggle('show'); }
+function hideBotPopup() { $('botPopup').classList.remove('show'); }
+function toggleTheme() { const body = document.body, next = (body.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark'; body.setAttribute('data-theme', next); localStorage.setItem('theme', next); $('themeIcon').className = next === 'dark' ? 'ri-sun-line text-lg' : 'ri-moon-line text-lg'; const t = $('themeToggle'); if (t) t.classList.toggle('active', next === 'light'); }
+function loadTheme() { const saved = localStorage.getItem('theme') || 'dark'; document.body.setAttribute('data-theme', saved); $('themeIcon').className = saved === 'dark' ? 'ri-sun-line text-lg' : 'ri-moon-line text-lg'; const t = $('themeToggle'); if (t) t.classList.toggle('active', saved === 'light'); }
+function handleNavClick(section) { if ($('ticketModal').classList.contains('show')) { pendingSection = section; $('confirmNavDialog').classList.add('show'); } else showSection(section); }
+function cancelNavigation() { $('confirmNavDialog').classList.remove('show'); pendingSection = null; }
+function confirmNavigation() { $('confirmNavDialog').classList.remove('show'); forceCloseModal(); if (pendingSection) { showSection(pendingSection); pendingSection = null; } }
+function formatDate(d) { if (!d) return '--'; try { const date = new Date(d); return isNaN(date.getTime()) ? '--' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '--'; } }
+function formatTimeAgo(d) { if (!d) return '--'; try { const date = new Date(d), now = new Date(), ms = now - date, mins = Math.floor(ms/60000), hrs = Math.floor(ms/3600000), days = Math.floor(ms/86400000); if (mins < 1) return 'Just now'; if (mins < 60) return mins + 'm ago'; if (hrs < 24) return hrs + 'h ago'; if (days < 7) return days + 'd ago'; return formatDate(d); } catch { return '--'; } }
+function getVal(ticket, key) { if (!ticket || typeof ticket !== 'object') return ''; const map = { 'TICKET_ID': 'Ticket ID', 'CREATED_DATE': 'Created Date', 'EMPLOYEE_ID': 'Employee ID', 'NAME': 'Name', 'EMAIL': 'Email Address', 'PHONE': 'Phone Number', 'LOCATION': 'Location', 'ISSUE_TYPE': 'Issue Type', 'IMPACT_AREA': 'Impact Area', 'SHORT_DESC': 'Short Description', 'ADDITIONAL_DESC': 'Additional Description', 'STATUS': 'Status', 'PRIORITY': 'Priority', 'VIP_LEVEL': 'VIP Level', 'CRITICAL_FLAG': 'Critical Flag', 'ASSIGNED_TO': 'Assigned To', 'ASSIGNED_DATE': 'Assigned Date', 'ESCALATION_LEVEL': 'Escalation Level', 'ESCALATED_TO': 'Escalated To', 'ESCALATION_DATE': 'Escalation Date', 'LAST_UPDATED': 'Last Updated', 'RESOLVED_BY': 'Resolved By', 'RESOLVED_DATE': 'Resolved Date' }; return ticket[map[key]] || ticket[key] || ''; }
+const escapeHtml = s => { if (s === null || s === undefined) return ''; const str = String(s); return str.replace(/[<>"'&]/g, m => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'})[m]); };
+const statusBadge = s => `<span class="badge badge-${{'Open':'open','In Progress':'progress','Resolved':'resolved'}[s||'Open']||'open'}">${escapeHtml(s||'Open')}</span>`;
+const priorityBadge = p => { const l = (p || 'Pending').toLowerCase(); return `<span class="badge badge-${{'critical':'critical','high':'high','medium':'medium','low':'low','pending':'pending'}[l]||'pending'}">${escapeHtml(p||'Pending')}</span>`; };
+const levelBadge = l => `<span class="badge badge-${(l||'L1').toLowerCase()}">${escapeHtml(l||'L1')}</span>`;
+const vipBadge = v => { const l = (v || 'Low').toLowerCase(); return `<span class="badge badge-${{'high':'vip-high','middle':'vip-middle','low':'vip-low'}[l]||'vip-low'}"><i class="ri-vip-crown-fill mr-1"></i>VIP: ${escapeHtml(v||'Low')}</span>`; };
+const noteTypeBadge = t => { const l = (t || 'general').toLowerCase().replace(/\s+/g,'').replace('-',''); return `<span class="badge badge-${{'workdone':'note-workdone','update':'note-update','investigation':'note-investigation','solution':'note-solution','followup':'note-followup','general':'note-general'}[l]||'note-general'}">${escapeHtml(t||'General')}</span>`; };
+function showLoading() { $('loadingOverlay').classList.add('show'); }
+function hideLoading() { $('loadingOverlay').classList.remove('show'); }
+function showToast(msg, type = 'success') { if (!currentUser || $('dashboardPage').classList.contains('hidden')) return; const icons = { success: 'ri-checkbox-circle-line text-emerald-400', error: 'ri-error-warning-line text-red-400', warning: 'ri-alert-line text-amber-400', info: 'ri-information-line text-blue-400' }; $('toastMessage').textContent = msg; $('toastIcon').className = icons[type] + ' text-lg'; $('toast').classList.add('show'); setTimeout(() => $('toast').classList.remove('show'), 3000); }
+function setButtonProcessing(btnId, p) { const btn = $(btnId); if (btn) { btn.classList.toggle('btn-processing', p); btn.disabled = p; } }
+async function callGAS(fn, ...args) {
+  const response = await fetch('/api/' + fn, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ args: args })
+  });
+  if (!response.ok) throw new Error('API error');
+  return response.json();
+}
+function updateGreeting() { const h = new Date().getHours(), name = currentUser?.displayName?.split(' ')[0] || 'User'; $('greetingText').textContent = `${h >= 5 && h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening'}, ${escapeHtml(name)}!`; $('currentDate').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+function updateUserStatusDot() { const s = $('userStatusSelect').value; $('userStatusDot').className = 'status-dot ' + ({ 'Online': 'online', 'Offline': 'offline', 'Break': 'break', 'In Meeting': 'meeting' }[s] || 'offline'); }
+function updateNotificationBadge() { const count = allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length; const badge = $('notificationBadge'); badge.textContent = count > 99 ? '99+' : count; badge.style.display = count > 0 ? 'flex' : 'none'; if (count > 0) { $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); } }
+function togglePassword() { const p = $('password'); p.type = p.type === 'password' ? 'text' : 'password'; $('pwdToggleIcon').className = p.type === 'password' ? 'ri-eye-line text-xl' : 'ri-eye-off-line text-xl'; }
+function toggleSidebar() { $('sidebar').classList.toggle('open'); }
+$('employeeId').addEventListener('input', function() { const v = Validator.validateEmployeeId(this.value); if (this.value && !v.valid) showInputHint('employeeId', v.message, 'error'); else clearInputHint('employeeId'); });
+$('password').addEventListener('input', function() { clearInputHint('password'); });
+$('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const empId = $('employeeId').value.trim(), pwd = $('password').value, btn = $('loginBtn'), rememberMe = $('rememberMe').checked;
+    $('loginError').classList.add('hidden'); clearInputHint('employeeId'); clearInputHint('password');
+    const ev = Validator.validateEmployeeId(empId); if (!ev.valid) { showInputHint('employeeId', ev.message, 'error'); $('employeeId').focus(); return; }
+    const pv = Validator.validatePassword(pwd); if (!pv.valid) { showInputHint('password', pv.message, 'error'); $('password').focus(); return; }
+    btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div><span>Signing in...</span>';
+    try {
+        const result = await callGAS('validateUser', empId, pwd);
+        if (result?.success) { currentUser = Validator.validateObject(result); sessionStorage.setItem('user', JSON.stringify(result)); if (rememberMe) saveCredentials(empId, pwd); else localStorage.removeItem(CREDENTIALS_KEY); showDashboard(); }
+        else { $('loginErrorText').textContent = result?.message || 'Invalid credentials'; $('loginError').classList.remove('hidden'); }
+    } catch { $('loginErrorText').textContent = 'Login failed. Please try again.'; $('loginError').classList.remove('hidden'); }
+    finally { btn.disabled = false; btn.innerHTML = '<span>Sign In</span><i class="ri-arrow-right-line text-lg"></i>'; }
+});
+function confirmLogout() { $('confirmLogoutDialog').classList.add('show'); }
+function cancelLogout() { $('confirmLogoutDialog').classList.remove('show'); }
+function executeLogout() {
+    $('confirmLogoutDialog').classList.remove('show');
+    if ($('ticketModal').classList.contains('show')) { $('ticketModal').classList.remove('show'); document.body.style.overflow = ''; currentTicket = null; currentTicketNotes = []; }
+    $('confirmCloseDialog').classList.remove('show'); $('confirmNavDialog').classList.remove('show');
+    $('aiBotBtn').classList.add('hidden'); hideBotPopup(); stopInactivityTracking(); stopStatusPolling();
+    if (currentUser) callGAS('updateUserStatus', currentUser.employeeId, 'Offline').catch(() => {});
+    currentUser = null; sessionStorage.removeItem('user');
+    $('loginPage').style.display = 'flex'; $('dashboardPage').classList.add('hidden');
+    if (!$('rememberMe').checked) { $('employeeId').value = ''; $('password').value = ''; }
+    allTickets = []; allUsers = []; itStaff = []; pendingSection = null;
+}
+async function showDashboard() {
+    $('loginPage').style.display = 'none'; $('dashboardPage').classList.remove('hidden');
+    showLoading(); loadTheme();
+    const name = currentUser.displayName || 'User', initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
+    $('userAvatar').innerHTML = escapeHtml(initials) + '<div class="status-dot online" id="userStatusDot"></div>';
+    $('userName').textContent = escapeHtml(name); $('userRole').textContent = escapeHtml(currentUser.role || 'Staff');
+    updateGreeting(); updateUserStatusDot();
+    if (autoSignOutEnabled) setupInactivityTracking();
+    await loadData(); startStatusPolling(); $('aiBotBtn').classList.remove('hidden'); hideLoading();
+}
+async function loadData(silent = false) {
+    try {
+        const data = await callGAS('getDashboardData', !silent);
+        if (data) {
+            allTickets = Validator.validateArray(data.tickets); itStaff = Validator.validateArray(data.itStaff);
+            dashboardStats = Validator.validateObject(data.stats); dashboardSettings = Validator.validateObject(data.settings);
+            dashboardConfig = Validator.validateObject(data.config);
+            autoAssignEnabled = dashboardSettings.AUTO_ASSIGN === true || dashboardSettings.AUTO_ASSIGN === 'true';
+            const t = $('autoAssignToggle'); if (t) t.classList.toggle('active', autoAssignEnabled);
+            populateEditDropdowns(); renderAll();
+        }
+        try { allUsers = Validator.validateArray(await callGAS('getAllUsers')); renderStaffPanel(); }
+        catch { allUsers = itStaff.map(s => ({ name: s.name, role: s.level, status: s.status || 'Online', displayName: s.name })); }
+    } catch (e) { console.error('Load error:', e); if (!silent) showToast('Failed to load data', 'error'); }
+}
+async function refreshData() { if (isRefreshing) return; isRefreshing = true; $('refreshBtn').querySelector('i').classList.add('animate-spin'); try { await loadData(); showToast('Data refreshed'); } catch { showToast('Refresh failed', 'error'); } finally { $('refreshBtn').querySelector('i').classList.remove('animate-spin'); isRefreshing = false; } }
+function populateEditDropdowns() {
+    const its = $('issueTypeSelect'); if (its && dashboardConfig.issueTypes) { its.innerHTML = '<option value="">Select Issue Type</option>'; Validator.validateArray(dashboardConfig.issueTypes).forEach(t => { its.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }); }
+    const ias = $('impactAreaSelect'); if (ias && dashboardConfig.impactAreas) { ias.innerHTML = '<option value="">Select Impact Area</option>'; Validator.validateArray(dashboardConfig.impactAreas).forEach(a => { ias.innerHTML += `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`; }); }
+    const ls = $('locationSelect'); if (ls && dashboardConfig.locations) { ls.innerHTML = '<option value="">Select Location</option>'; Validator.validateArray(dashboardConfig.locations).forEach(l => { ls.innerHTML += `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`; }); }
+}
+function toggleEditIssueType() { const f = $('issueTypeField'), e = $('issueTypeEdit'), s = $('issueTypeSelect'); if (e.classList.contains('hidden')) { s.value = $('modalIssueType').textContent !== '--' ? $('modalIssueType').textContent : ''; e.classList.remove('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; } else { e.classList.add('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; } }
+async function saveIssueType() { const s = $('issueTypeSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateIssueType', tid, nv, currentUser.displayName); if (r?.success) { $('modalIssueType').textContent = nv; currentTicket['Issue Type'] = nv; toggleEditIssueType(); showToast('Issue type updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating issue type', 'error'); } }
+function toggleEditImpactArea() { const f = $('impactAreaField'), e = $('impactAreaEdit'), s = $('impactAreaSelect'); if (e.classList.contains('hidden')) { s.value = $('modalImpactArea').textContent !== '--' ? $('modalImpactArea').textContent : ''; e.classList.remove('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; } else { e.classList.add('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; } }
+async function saveImpactArea() { const s = $('impactAreaSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateImpactArea', tid, nv, currentUser.displayName); if (r?.success) { $('modalImpactArea').textContent = nv; currentTicket['Impact Area'] = nv; toggleEditImpactArea(); showToast('Impact area updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating impact area', 'error'); } }
+
+// Phone Number Edit Functions
+function toggleEditPhone() { 
+    const f = $('phoneField'), e = $('phoneEdit'), i = $('phoneInput'); 
+    if (e.classList.contains('hidden')) { 
+        i.value = $('modalPhone').textContent !== '--' ? $('modalPhone').textContent : ''; 
+        e.classList.remove('hidden'); 
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; 
+        i.focus();
+    } else { 
+        e.classList.add('hidden'); 
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; 
+    } 
+}
+function cancelEditPhone() {
+    $('phoneEdit').classList.add('hidden');
+    $('phoneField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+}
+async function savePhone() { 
+    const i = $('phoneInput'), nv = i.value.trim(); 
+    if (!currentTicket) return; 
+    const pv = Validator.validatePhoneNumber(nv);
+    if (!pv.valid) { showToast(pv.message, 'error'); return; }
+    const tid = getVal(currentTicket, 'TICKET_ID'); 
+    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } 
+    try { 
+        const r = await callGAS('updatePhoneNumber', tid, pv.sanitized, currentUser.displayName); 
+        if (r?.success) { 
+            $('modalPhone').textContent = pv.sanitized; 
+            currentTicket['Phone Number'] = pv.sanitized; 
+            cancelEditPhone();
+            showToast('Phone number updated', 'success'); 
+            loadTimeline(tid); 
+            await loadData(true); 
+        } else showToast(r?.error || 'Failed to update', 'error'); 
+    } catch { showToast('Error updating phone number', 'error'); } 
+}
+
+// Location Edit Functions
+function toggleEditLocation() { 
+    const f = $('locationField'), e = $('locationEdit'), s = $('locationSelect'); 
+    if (e.classList.contains('hidden')) { 
+        s.value = $('modalLocation').textContent !== '--' ? $('modalLocation').textContent : ''; 
+        e.classList.remove('hidden'); 
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; 
+    } else { 
+        e.classList.add('hidden'); 
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; 
+    } 
+}
+async function saveLocation() { 
+    const s = $('locationSelect'), nv = s.value; 
+    if (!nv || !currentTicket) return; 
+    const lv = Validator.validateLocation(nv);
+    if (!lv.valid) { showToast(lv.message, 'error'); return; }
+    const tid = getVal(currentTicket, 'TICKET_ID'); 
+    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } 
+    try { 
+        const r = await callGAS('updateLocation', tid, lv.sanitized, currentUser.displayName); 
+        if (r?.success) { 
+            $('modalLocation').textContent = lv.sanitized; 
+            currentTicket['Location'] = lv.sanitized; 
+            toggleEditLocation(); 
+            showToast('Location updated', 'success'); 
+            loadTimeline(tid); 
+            await loadData(true); 
+        } else showToast(r?.error || 'Failed to update', 'error'); 
+    } catch { showToast('Error updating location', 'error'); } 
+}
+
+function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && !$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, STATUS_POLLING_INTERVAL); }
+function stopStatusPolling() { if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; } }
+async function updateMyStatus() { const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error updating status', 'error'); } }
+async function toggleAutoAssign() { const t = $('autoAssignToggle'); autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); try { const r = await callGAS('toggleAutoAssign', autoAssignEnabled, currentUser?.displayName || 'User'); if (r?.success) showToast(`Auto-assign ${autoAssignEnabled ? 'enabled' : 'disabled'}`, 'info'); else { autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast(r?.error || 'Failed', 'error'); } } catch { autoAssignEnabled = !autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast('Error toggling auto-assign', 'error'); } }
+function toggleAutoSignOut() { autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled ? 'enabled' : 'disabled'}`, 'info'); }
+function resetInactivityTimer() { if (inactivityTimer) clearTimeout(inactivityTimer); if (currentUser && autoSignOutEnabled) inactivityTimer = setTimeout(() => { showToast('Session expired due to inactivity', 'warning'); executeLogout(); }, INACTIVITY_TIMEOUT); }
+function setupInactivityTracking() { if (!autoSignOutEnabled || !currentUser) return; if (!inactivityListenersAttached) { inactivityEvents.forEach(e => document.addEventListener(e, handleInactivityEvent, { passive: true })); inactivityListenersAttached = true; } resetInactivityTimer(); }
+function stopInactivityTracking() { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } if (inactivityListenersAttached) { inactivityEvents.forEach(e => document.removeEventListener(e, handleInactivityEvent, { passive: true })); inactivityListenersAttached = false; } }
+function renderAll() { renderMetrics(); renderTrendChart(); renderStaffPanel(); renderProgressBars(); renderRecentTickets(); renderAllTickets(); populateStaffDropdowns(); loadTeam(); renderSlaTrend(); loadAnalytics(); $('openTicketsBadge').textContent = allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length; updateNotificationBadge(); }
+function renderMetrics() {
+    const s = dashboardStats, total = s.total ?? allTickets.length;
+    const open = s.open ?? allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length;
+    const inProgress = s.inProgress ?? allTickets.filter(t => getVal(t, 'STATUS') === 'In Progress').length;
+    const resolved = s.resolved ?? allTickets.filter(t => getVal(t, 'STATUS') === 'Resolved').length;
+    const escalated = allTickets.filter(t => getVal(t, 'ESCALATION_LEVEL') && getVal(t, 'ESCALATION_LEVEL') !== 'L1').length;
+    const highPriority = s.highPriority ?? allTickets.filter(t => ['High', 'Critical'].includes(getVal(t, 'PRIORITY'))).length;
+    const sla = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    const metrics = [{ label: 'Total', value: total, icon: 'ri-inbox-2-line', c: 'total' },{ label: 'Open', value: open, icon: 'ri-time-line', c: 'open' },{ label: 'In Progress', value: inProgress, icon: 'ri-loader-4-line', c: 'progress' },{ label: 'Resolved', value: resolved, icon: 'ri-checkbox-circle-line', c: 'resolved' },{ label: 'Escalated', value: escalated, icon: 'ri-arrow-up-circle-line', c: 'escalated' },{ label: 'SLA', value: sla + '%', icon: 'ri-speed-line', c: 'sla' },{ label: 'High Priority', value: highPriority, icon: 'ri-error-warning-line', c: 'high' }];
+    $('metricsGrid').innerHTML = metrics.map(m => `<div class="metric-card"><div class="metric-icon ${m.c} mb-3"><i class="${m.icon}"></i></div><div class="metric-value">${m.value}</div><div class="text-xs mt-1" style="color:var(--text-muted)">${m.label}</div></div>`).join('');
+}
+function renderStaffPanel() {
+    const container = $('staffList'); let users = [];
+    if (allUsers.length > 0) users = allUsers.map(u => ({ name: u.displayName || u.name || 'Unknown', role: u.role || 'L1', status: u.status || 'Offline', employeeId: u.employeeId }));
+    else if (itStaff.length > 0) users = itStaff.map(s => ({ name: s.name, role: s.level, status: s.status || 'Offline' }));
+    if (!users.length) { container.innerHTML = '<p class="text-center py-6" style="color:var(--text-muted)">No staff data</p>'; return; }
+    const workload = {}; allTickets.forEach(t => { const a = getVal(t, 'ASSIGNED_TO'), st = (getVal(t, 'STATUS') || '').toLowerCase(); if (a && (st === 'open' || st === 'in progress')) workload[a] = (workload[a] || 0) + 1; });
+    const sorted = [...users].sort((a, b) => { const order = { 'Online': 0, 'In Meeting': 1, 'Break': 2, 'Offline': 3 }; return (order[a.status] ?? 3) - (order[b.status] ?? 3); });
+    container.innerHTML = sorted.slice(0, 10).map(u => {
+        const name = escapeHtml(u.name || 'Unknown'), initials = name.split(' ').map(x => x[0]).join('').toUpperCase().substring(0, 2), sl = (u.status || 'Offline').toLowerCase();
+        let statusClass = 'staff-offline', sc = 'offline', statusText = 'Offline', statusColor = 'var(--text-muted)';
+        if (sl === 'online' || sl === 'active') { statusClass = 'staff-online'; sc = 'online'; statusText = 'Online'; statusColor = '#22c55e'; }
+        else if (sl === 'break' || sl === 'on break') { statusClass = 'staff-break'; sc = 'break'; statusText = 'On Break'; statusColor = '#f59e0b'; }
+        else if (sl === 'in meeting' || sl === 'meeting') { statusClass = 'staff-meeting'; sc = 'meeting'; statusText = 'In Meeting'; statusColor = '#a855f7'; }
+        return `<div class="staff-item ${statusClass}"><div class="staff-avatar">${initials}<div class="status-dot ${sc}"></div></div><div class="flex-1 min-w-0"><p class="text-sm font-semibold truncate" style="color:var(--text-primary)">${name}</p><div class="flex items-center gap-2">${levelBadge(u.role)}<span class="text-xs" style="color:${statusColor}">${statusText}</span></div></div><div class="text-right"><p class="text-base font-bold" style="color:${sc === 'online' ? '#22c55e' : 'var(--text-primary)'}">${workload[u.name] || 0}</p><p class="text-xs" style="color:var(--text-muted)">Active</p></div></div>`;
+    }).join('');
+}
+function renderProgressBars() {
+    renderProgressList('statusBars', [{ label: 'Open', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length, color: '#fbbf24' },{ label: 'In Progress', value: allTickets.filter(t => getVal(t, 'STATUS') === 'In Progress').length, color: '#c084fc' },{ label: 'Resolved', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Resolved').length, color: '#34d399' }]);
+    renderProgressList('priorityBars', [{ label: 'Critical', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Critical').length, color: '#f87171' },{ label: 'High', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'High').length, color: '#fbbf24' },{ label: 'Medium', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Medium').length, color: '#60a5fa' },{ label: 'Low', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Low').length, color: '#34d399' },{ label: 'Pending', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Pending' || !getVal(t, 'PRIORITY')).length, color: '#a1a1aa' }]);
+    const locData = {}; allTickets.forEach(t => { const l = getVal(t, 'LOCATION') || 'Other'; locData[l] = (locData[l] || 0) + 1; });
+    const colors = ['#22d3ee', '#c084fc', '#f472b6', '#34d399', '#fbbf24'];
+    renderProgressList('locationBars', Object.entries(locData).slice(0, 5).map(([l, v], i) => ({ label: escapeHtml(l), value: v, color: colors[i % 5] })));
+}
+function renderProgressList(id, items) { const c = $(id); if (!c) return; if (!items.length || items.every(i => i.value === 0)) { c.innerHTML = '<p class="text-center py-3" style="color:var(--text-muted)">No data</p>'; return; } const max = Math.max(...items.map(i => i.value), 1); c.innerHTML = items.map(i => `<div class="mb-3"><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-secondary)">${escapeHtml(i.label)}</span><span class="font-semibold" style="color:var(--text-primary)">${i.value}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${(i.value/max)*100}%;background:linear-gradient(90deg,${i.color},transparent);"></div></div></div>`).join(''); }
+
+function getTrendData(period) {
+    const labels = period === 'week' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+    const data = { created: [], resolved: [], inProgress: [] };
+    if (period === 'week') { labels.forEach((_, i) => { const dt = allTickets.filter(t => { try { return new Date(getVal(t, 'CREATED_DATE')).getDay() === (i + 1) % 7; } catch { return false; } }); data.created.push(dt.length); data.resolved.push(dt.filter(t => getVal(t, 'STATUS') === 'Resolved').length); data.inProgress.push(dt.filter(t => getVal(t, 'STATUS') === 'In Progress').length); }); }
+    else { const now = new Date(); for (let w = 3; w >= 0; w--) { const ws = new Date(now); ws.setDate(now.getDate() - (w * 7 + 6)); const we = new Date(now); we.setDate(now.getDate() - (w * 7)); const wt = allTickets.filter(t => { try { const d = new Date(getVal(t, 'CREATED_DATE')); return d >= ws && d <= we; } catch { return false; } }); data.created.push(wt.length); data.resolved.push(wt.filter(t => getVal(t, 'STATUS') === 'Resolved').length); data.inProgress.push(wt.filter(t => getVal(t, 'STATUS') === 'In Progress').length); } }
+    return { labels, data };
+}
+
+function renderLineChart(cId, lId, data, labels, lines) {
+    const c = $(cId), leg = $(lId); if (!c) return;
+    const allVals = lines.flatMap(l => data[l.key] || []), max = Math.max(...allVals, 1), h = 220, w = 700, stepX = w / (labels.length - 1 || 1);
+    if (!allVals.length || allVals.every(v => v === 0)) { c.innerHTML = '<p class="text-center py-16" style="color:var(--text-muted)">No data</p>'; if (leg) leg.innerHTML = ''; return; }
+    const pts = arr => arr.map((v, i) => `${i * stepX},${h - 25 - (v / max) * (h - 50)}`).join(' ');
+    c.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:100%"><defs>${lines.map(l => `<linearGradient id="g_${cId}_${l.key}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:${l.color};stop-opacity:0.3"/><stop offset="100%" style="stop-color:${l.color};stop-opacity:0"/></linearGradient>`).join('')}</defs>${[0,1,2,3,4].map(i => `<line x1="0" y1="${25+i*((h-50)/4)}" x2="${w}" y2="${25+i*((h-50)/4)}" stroke="rgba(128,128,128,0.1)"/>`).join('')}${lines.map(l => `<polygon points="0,${h-25} ${pts(data[l.key])} ${w},${h-25}" fill="url(#g_${cId}_${l.key})"/><polyline points="${pts(data[l.key])}" fill="none" stroke="${l.color}" stroke-width="2.5" stroke-linecap="round"/>`).join('')}${labels.map((d, i) => `<text x="${i*stepX}" y="${h-5}" fill="var(--text-muted)" font-size="11" text-anchor="middle">${d}</text>`).join('')}</svg>`;
+    if (leg) leg.innerHTML = lines.map(l => `<div class="flex items-center gap-1 text-xs" style="color:var(--text-secondary)"><div class="w-2 h-2 rounded-full" style="background:${l.color}"></div>${l.label}</div>`).join('');
+}
+
+function renderTrendChart() { const { labels, data } = getTrendData($('trendPeriod')?.value || 'week'); renderLineChart('trendChart', 'trendLegend', data, labels, [{ key: 'created', color: '#a1a1aa', label: 'Created' }, { key: 'resolved', color: '#34d399', label: 'Resolved' }, { key: 'inProgress', color: '#c084fc', label: 'In Progress' }]); }
+function renderSlaTrend() { const { labels, data } = getTrendData($('slaTrendPeriod')?.value || 'week'); const slaData = { compliance: data.created.map((c, i) => c > 0 ? Math.round((data.resolved[i] / c) * 100) : 0), breached: data.created.map((c, i) => Math.max(0, c - data.resolved[i] - data.inProgress[i])) }; renderLineChart('slaTrendChart', 'slaTrendLegend', slaData, labels, [{ key: 'compliance', color: '#34d399', label: 'Compliance %' }, { key: 'breached', color: '#f87171', label: 'Breached' }]); }
+function renderAnalyticsTrend() { const { labels, data } = getTrendData($('analyticsTrendPeriod')?.value || 'week'); renderLineChart('analyticsTrendChart', 'analyticsTrendLegend', data, labels, [{ key: 'created', color: '#a1a1aa', label: 'Created' }, { key: 'resolved', color: '#34d399', label: 'Resolved' }, { key: 'inProgress', color: '#c084fc', label: 'In Progress' }]); }
+
+function renderRecentTickets() {
+    const tbody = $('recentTicketsBody'), recent = allTickets.slice(0, 10);
+    if (!recent.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6" style="color:var(--text-muted)">No tickets</td></tr>'; return; }
+    tbody.innerHTML = recent.map(t => `<tr><td class="ticket-id" onclick="openModal('${escapeHtml(getVal(t,'TICKET_ID'))}')">${escapeHtml(getVal(t,'TICKET_ID')||'--')}</td><td>${escapeHtml(getVal(t,'NAME')||'--')}</td><td>${escapeHtml(getVal(t,'LOCATION')||'--')}</td><td>${escapeHtml(getVal(t,'ISSUE_TYPE')||'--')}</td><td>${statusBadge(getVal(t,'STATUS'))}</td><td>${priorityBadge(getVal(t,'PRIORITY'))}</td><td>${escapeHtml(getVal(t,'ASSIGNED_TO')||'Unassigned')}</td><td>${levelBadge(getVal(t,'ESCALATION_LEVEL'))}</td><td><button class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted)" onclick="openModal('${escapeHtml(getVal(t,'TICKET_ID'))}')"><i class="ri-eye-line text-sm"></i></button></td></tr>`).join('');
+}
+
+function renderAllTickets() {
+    const tbody = $('allTicketsBody'), search = ($('ticketSearch')?.value || '').toLowerCase();
+    const statusF = $('statusFilter')?.value, priorityF = $('priorityFilter')?.value;
+    let filtered = allTickets;
+    if (search) filtered = filtered.filter(t => [getVal(t,'TICKET_ID'),getVal(t,'NAME'),getVal(t,'ISSUE_TYPE'),getVal(t,'LOCATION')].some(v => (v||'').toLowerCase().includes(search)));
+    if (statusF) filtered = filtered.filter(t => getVal(t, 'STATUS') === statusF);
+    if (priorityF) filtered = filtered.filter(t => getVal(t, 'PRIORITY') === priorityF);
+    if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6" style="color:var(--text-muted)">No tickets found</td></tr>'; return; }
+    tbody.innerHTML = filtered.map(t => `<tr><td class="ticket-id" onclick="openModal('${escapeHtml(getVal(t,'TICKET_ID'))}')">${escapeHtml(getVal(t,'TICKET_ID')||'--')}</td><td>${formatDate(getVal(t,'CREATED_DATE'))}</td><td>${escapeHtml(getVal(t,'NAME')||'--')}</td><td>${escapeHtml(getVal(t,'LOCATION')||'--')}</td><td>${escapeHtml(getVal(t,'ISSUE_TYPE')||'--')}</td><td>${escapeHtml(getVal(t,'IMPACT_AREA')||'--')}</td><td>${statusBadge(getVal(t,'STATUS'))}</td><td>${priorityBadge(getVal(t,'PRIORITY'))}</td><td>${escapeHtml(getVal(t,'ASSIGNED_TO')||'Unassigned')}</td><td>${levelBadge(getVal(t,'ESCALATION_LEVEL'))}</td><td><button class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted)" onclick="openModal('${escapeHtml(getVal(t,'TICKET_ID'))}')"><i class="ri-eye-line text-sm"></i></button></td></tr>`).join('');
+}
+
+function filterTickets() { renderAllTickets(); }
+
+async function loadTeam() {
+    try {
+        const perf = await callGAS('getTeamPerformance', {}); const perfData = Validator.validateArray(perf);
+        const grid = $('teamGrid'), tbody = $('teamTableBody');
+        if (!perfData?.length) { grid.innerHTML = '<p class="col-span-full text-center py-6" style="color:var(--text-muted)">No team data</p>'; tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6" style="color:var(--text-muted)">No data</td></tr>'; return; }
+        grid.innerHTML = perfData.map(m => `<div class="team-card"><div class="flex items-center gap-3 mb-3"><div class="staff-avatar">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><p class="font-semibold text-sm" style="color:var(--text-primary)">${escapeHtml(m.name)}</p>${levelBadge(m.level)}</div></div><div class="grid grid-cols-3 gap-2 mb-3"><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-lg font-bold" style="color:var(--text-primary)">${m.ticketsHandled}</p><p class="text-xs" style="color:var(--text-muted)">Handled</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-lg font-bold text-emerald-400">${m.resolved}</p><p class="text-xs" style="color:var(--text-muted)">Resolved</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-lg font-bold" style="color:var(--text-primary)">${m.openTickets}</p><p class="text-xs" style="color:var(--text-muted)">Open</p></div></div><div class="flex items-center gap-2"><span class="text-xs" style="color:var(--text-muted)">SLA</span><div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="text-sm font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></div>`).join('');
+        tbody.innerHTML = perfData.map(m => `<tr><td><div class="flex items-center gap-2"><div class="staff-avatar" style="width:28px;height:28px;font-size:10px;">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><span class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.name)}</span></div></td><td>${levelBadge(m.level)}</td><td class="font-semibold" style="color:var(--text-primary)">${m.ticketsHandled}</td><td>${m.resolved}</td><td>${m.openTickets}</td><td><div class="flex items-center gap-2"><div class="w-16 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></td><td class="font-semibold">${escapeHtml(m.avgResolutionTime)}</td></tr>`).join('');
+    } catch (e) { console.error('Load team error:', e); }
+}
+
+async function loadAnalytics() {
+    renderAnalyticsTrend();
+    const issueData = {}, escData = {}, assignData = {};
+    allTickets.forEach(t => { const issue = getVal(t, 'ISSUE_TYPE') || 'Other', esc = getVal(t, 'ESCALATION_LEVEL') || 'L1', assign = getVal(t, 'ASSIGNED_TO') || 'Unassigned'; issueData[issue] = (issueData[issue] || 0) + 1; escData[esc] = (escData[esc] || 0) + 1; assignData[assign] = (assignData[assign] || 0) + 1; });
+    const colors = ['#22d3ee', '#c084fc', '#f472b6', '#34d399', '#fbbf24'];
+    renderProgressList('issueTypeBars', Object.entries(issueData).slice(0, 5).map(([l, v], i) => ({ label: escapeHtml(l), value: v, color: colors[i % 5] })));
+    renderProgressList('escalationBars', Object.entries(escData).map(([l, v]) => ({ label: escapeHtml(l), value: v, color: { 'L1': '#c084fc', 'L2': '#fbbf24', 'L3': '#f87171' }[l] || '#22d3ee' })));
+    renderProgressList('assigneeBars', Object.entries(assignData).slice(0, 5).map(([l, v], i) => ({ label: escapeHtml(l), value: v, color: colors[i % 5] })));
+}
+
+function populateStaffDropdowns() {
+    const assign = $('modalAssignSelect'), esc = $('modalEscalateSelect');
+    assign.innerHTML = '<option value="">Assign To</option>'; esc.innerHTML = '<option value="">Escalate To</option>';
+    itStaff.forEach(s => { const name = escapeHtml(s.name), level = escapeHtml(s.level); assign.innerHTML += `<option value="${name}">${name} (${level})</option>`; esc.innerHTML += `<option value="${level}|${name}">${level} - ${name}</option>`; });
+}
+
+function toggleEscalationReason() { $('escReasonGroup').style.display = $('modalEscalateSelect').value ? 'block' : 'none'; }
+
+async function openModal(ticketId) {
+    if (!Validator.validateTicketId(ticketId).valid) { showToast('Invalid ticket ID', 'error'); return; }
+    currentTicket = allTickets.find(t => getVal(t, 'TICKET_ID') === ticketId);
+    if (!currentTicket) { try { const r = await callGAS('getTicketByIdForTracking', ticketId); if (r?.success) currentTicket = Validator.validateObject(r.ticket); } catch {} }
+    if (!currentTicket) { showToast('Ticket not found', 'error'); return; }
+    // Reset all edit fields
+    $('issueTypeEdit').classList.add('hidden'); $('impactAreaEdit').classList.add('hidden');
+    $('phoneEdit').classList.add('hidden'); $('locationEdit').classList.add('hidden');
+    $('issueTypeField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    $('impactAreaField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    $('phoneField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    $('locationField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    setSelectedPriority(getVal(currentTicket, 'PRIORITY'));
+    $('modalTicketId').textContent = escapeHtml(ticketId);
+    $('modalVipLevel').innerHTML = vipBadge(getVal(currentTicket, 'VIP_LEVEL') || 'Low');
+    let badges = `${statusBadge(getVal(currentTicket,'STATUS'))} ${priorityBadge(getVal(currentTicket,'PRIORITY'))} ${levelBadge(getVal(currentTicket,'ESCALATION_LEVEL'))}`;
+    if (getVal(currentTicket,'CRITICAL_FLAG') === 'true') badges += ' <span class="badge badge-critical"><i class="ri-alert-fill mr-1"></i>CRITICAL</span>';
+    $('modalBadges').innerHTML = badges;
+    $('modalName').textContent = escapeHtml(getVal(currentTicket,'NAME') || '--');
+    $('modalEmail').textContent = escapeHtml(getVal(currentTicket,'EMAIL') || '--');
+    $('modalPhone').textContent = escapeHtml(getVal(currentTicket,'PHONE') || '--');
+    $('modalLocation').textContent = escapeHtml(getVal(currentTicket,'LOCATION') || '--');
+    $('modalIssueType').textContent = escapeHtml(getVal(currentTicket,'ISSUE_TYPE') || '--');
+    $('modalImpactArea').textContent = escapeHtml(getVal(currentTicket,'IMPACT_AREA') || '--');
+    $('modalCreated').textContent = formatDate(getVal(currentTicket,'CREATED_DATE'));
+    $('modalAssigned').textContent = escapeHtml(getVal(currentTicket,'ASSIGNED_TO') || 'Unassigned');
+    $('modalDescription').textContent = escapeHtml(getVal(currentTicket,'SHORT_DESC') || '--');
+    const addDesc = getVal(currentTicket,'ADDITIONAL_DESC');
+    $('additionalDescSection').style.display = addDesc?.trim() ? 'block' : 'none';
+    $('modalAdditionalDesc').textContent = escapeHtml(addDesc || '--');
+    ['modalStatusSelect','modalAssignSelect','modalEscalateSelect','modalEscReasonInput'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    $('escReasonGroup').style.display = 'none'; $('noteText').value = ''; $('noteTypeSelect').value = 'General';
+    $('ticketModal').classList.add('show'); document.body.style.overflow = 'hidden';
+    loadNotes(ticketId); loadTimeline(ticketId);
+}
+
+async function loadNotes(ticketId) {
+    const notesList = $('notesList'), notesCount = $('notesCount');
+    notesList.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">Loading notes...</p>';
+    try {
+        const notes = await callGAS('getTicketNotes', ticketId); currentTicketNotes = Validator.validateArray(notes);
+        notesCount.textContent = currentTicketNotes.length;
+        if (!currentTicketNotes.length) { notesList.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">No notes yet. Add the first note!</p>'; return; }
+        notesList.innerHTML = currentTicketNotes.map(note => { const initials = (escapeHtml(note.addedBy) || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2); return `<div class="note-item"><div class="note-header"><div class="note-author"><div class="note-avatar">${initials}</div><div><div class="note-author-name">${escapeHtml(note.addedBy || 'Unknown')}</div><div class="note-time">${formatTimeAgo(note.timestamp)}</div></div></div>${noteTypeBadge(note.noteType)}</div><div class="note-content">${escapeHtml(note.note || '')}</div></div>`; }).join('');
+    } catch (e) { console.error('Error loading notes:', e); notesList.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">Failed to load notes</p>'; }
+}
+
+async function handleAddNote() {
+    if (isProcessing) return;
+    const noteText = $('noteText').value.trim(), noteType = $('noteTypeSelect').value;
+    const nv = Validator.validateNoteText(noteText);
+    if (!nv.valid) { showToast(nv.message, 'warning'); $('noteText').focus(); return; }
+    if (!currentTicket) { showToast('No ticket selected', 'error'); return; }
+    const ticketId = getVal(currentTicket, 'TICKET_ID');
+    if (!Validator.validateTicketId(ticketId).valid) { showToast('Invalid ticket', 'error'); return; }
+    isProcessing = true; setButtonProcessing('addNoteBtn', true);
+    try {
+        const result = await callGAS('addTicketNote', ticketId, nv.sanitized, currentUser.displayName, noteType);
+        if (result?.success) { showToast('Note added successfully', 'success'); $('noteText').value = ''; $('noteTypeSelect').value = 'General'; await loadNotes(ticketId); await loadTimeline(ticketId); }
+        else showToast(result?.error || 'Failed to add note', 'error');
+    } catch (e) { console.error('Error adding note:', e); showToast('Error adding note', 'error'); }
+    finally { setButtonProcessing('addNoteBtn', false); isProcessing = false; }
+}
+
+async function loadTimeline(ticketId) {
+    const tl = $('ticketTimeline');
+    tl.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">Loading timeline...</p>';
+    try {
+        let timeline = await callGAS('getTicketTimeline', ticketId); timeline = Validator.validateArray(timeline);
+        if (!timeline?.length) { timeline = []; if (getVal(currentTicket,'CREATED_DATE')) timeline.push({ timestamp: getVal(currentTicket,'CREATED_DATE'), action: 'Created', performedBy: getVal(currentTicket,'NAME') || 'User', type: 'history' }); }
+        if (!timeline.length) { tl.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">No activity yet</p>'; return; }
+        tl.innerHTML = timeline.map(e => {
+            const action = escapeHtml(e.action || '');
+            let iconClass = 'action-status', icon = 'ri-refresh-line';
+            if (action.toLowerCase().includes('created')) { iconClass = 'action-created'; icon = 'ri-add-circle-line'; }
+            else if (action.toLowerCase().includes('assigned') || action.toLowerCase().includes('reassigned')) { iconClass = 'action-assigned'; icon = 'ri-user-add-line'; }
+            else if (action.toLowerCase().includes('escalat')) { iconClass = 'action-escalated'; icon = 'ri-arrow-up-circle-line'; }
+            else if (action.toLowerCase().includes('resolved')) { iconClass = 'action-resolved'; icon = 'ri-checkbox-circle-line'; }
+            else if (action.toLowerCase().includes('note')) { iconClass = 'action-note'; icon = 'ri-sticky-note-line'; }
+            else if (action.toLowerCase().includes('priority')) { iconClass = 'action-priority'; icon = 'ri-flag-line'; }
+            else if (action.toLowerCase().includes('issue type') || action.toLowerCase().includes('impact area') || action.toLowerCase().includes('phone') || action.toLowerCase().includes('location')) { iconClass = 'action-edit'; icon = 'ri-pencil-line'; }
+            let details = '';
+            if (e.from && e.to) details = `${escapeHtml(e.from)} → ${escapeHtml(e.to)}`;
+            else if (e.to) details = escapeHtml(e.to);
+            else if (e.notes) { const nt = escapeHtml(e.notes); details = nt.length > 80 ? nt.substring(0, 80) + '...' : nt; }
+            return `<div class="timeline-item"><div class="timeline-icon ${iconClass}"><i class="${icon}"></i></div><div class="timeline-content"><div class="timeline-action">${action}</div>${details ? `<div class="timeline-details">${details}</div>` : ''}<div class="timeline-meta"><span class="timeline-user">${escapeHtml(e.performedBy || 'System')}</span><span>•</span><span>${formatTimeAgo(e.timestamp)}</span></div></div></div>`;
+        }).join('');
+    } catch (e) { console.error('Error loading timeline:', e); tl.innerHTML = '<p class="text-center py-4" style="color:var(--text-muted);font-size:13px;">Failed to load timeline</p>'; }
+}
+
+function confirmCloseModal() { $('confirmCloseDialog').classList.add('show'); }
+function cancelCloseModal() { $('confirmCloseDialog').classList.remove('show'); }
+function forceCloseModal() { $('confirmCloseDialog').classList.remove('show'); $('ticketModal').classList.remove('show'); document.body.style.overflow = ''; currentTicket = null; currentTicketNotes = []; }
+
+async function handleStatusChange() {
+    if (isProcessing) return;
+    const newStatus = $('modalStatusSelect').value;
+    if (!newStatus || !currentTicket) return;
+    const validStatuses = ['Open', 'In Progress', 'Resolved'];
+    if (!Validator.validateSelection(newStatus, validStatuses, 'status').valid) { showToast('Invalid status', 'error'); return; }
+    isProcessing = true; setButtonProcessing('updateBtn', true);
+    try {
+        const r = await callGAS('updateTicketStatus', getVal(currentTicket,'TICKET_ID'), newStatus, currentUser.displayName);
+        if (r?.success) { showToast('Status updated'); forceCloseModal(); await loadData(); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error', 'error'); }
+    finally { setButtonProcessing('updateBtn', false); isProcessing = false; }
+}
+
+async function handleAssignment() {
+    if (isProcessing) return;
+    const assignTo = $('modalAssignSelect').value;
+    if (!assignTo || !currentTicket) { showToast('Select a staff member', 'error'); return; }
+    const currentPriority = getVal(currentTicket, 'PRIORITY'), selectedPriority = getSelectedPriority();
+    if ((!currentPriority || currentPriority === 'Pending') && !selectedPriority) { showToast('Please select a priority before assigning', 'warning'); return; }
+    const validPriorities = ['Critical', 'High', 'Medium', 'Low'];
+    const priorityToSet = selectedPriority || currentPriority;
+    if (priorityToSet && priorityToSet !== 'Pending' && !Validator.validateSelection(priorityToSet, validPriorities, 'priority').valid) { showToast('Invalid priority', 'error'); return; }
+    isProcessing = true; setButtonProcessing('assignBtn', true);
+    try {
+        const r = await callGAS('assignTicket', getVal(currentTicket,'TICKET_ID'), assignTo, currentUser.displayName, priorityToSet);
+        if (r?.success) { showToast(`Assigned to ${escapeHtml(assignTo)}` + (selectedPriority ? ` with ${selectedPriority} priority` : '')); forceCloseModal(); await loadData(); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error', 'error'); }
+    finally { setButtonProcessing('assignBtn', false); isProcessing = false; }
+}
+
+async function handleEscalation() {
+    if (isProcessing) return;
+    const escVal = $('modalEscalateSelect').value, reason = $('modalEscReasonInput').value.trim();
+    if (!escVal || !currentTicket) { showToast('Select escalation target', 'error'); return; }
+    const rv = Validator.validateEscalationReason(reason);
+    if (!rv.valid) { showToast(rv.message, 'error'); $('modalEscReasonInput').focus(); return; }
+    const [level, name] = escVal.split('|');
+    const validLevels = ['L1', 'L2', 'L3'];
+    if (!Validator.validateSelection(level, validLevels, 'escalation level').valid) { showToast('Invalid escalation level', 'error'); return; }
+    isProcessing = true; setButtonProcessing('escalateBtn', true);
+    try {
+        const r = await callGAS('escalateTicket', getVal(currentTicket,'TICKET_ID'), name, level, currentUser.displayName, rv.sanitized);
+        if (r?.success) { showToast(`Escalated to ${level}`); forceCloseModal(); await loadData(); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error', 'error'); }
+    finally { setButtonProcessing('escalateBtn', false); isProcessing = false; }
+}
+
+function showSection(sectionName) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    const section = $(sectionName + 'Section'); if (section) section.classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const navItem = document.querySelector(`.nav-item[data-section="${sectionName}"]`); if (navItem) navItem.classList.add('active');
+    if (window.innerWidth < 1024) $('sidebar').classList.remove('open');
+}
+
+function downloadReport(type, format) {
+    const validTypes = ['tickets', 'team', 'sla', 'monthly'];
+    if (!validTypes.includes(type)) { showToast('Invalid report type', 'error'); return; }
+    showToast(`Generating ${type} report...`, 'info');
+    callGAS('generateReport', type).then(r => {
+        if (r?.success && r.csvContent) {
+            const fn = format === 'excel' ? r.fileName.replace('.csv', '.xls') : r.fileName;
+            const mime = format === 'excel' ? 'application/vnd.ms-excel' : 'text/csv';
+            const blob = new Blob([r.csvContent], { type: mime + ';charset=utf-8;' });
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = fn;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            showToast('Report downloaded');
+        } else showToast(r?.error || 'Failed', 'error');
+    }).catch(() => showToast('Error generating report', 'error'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    populateSavedCredentials();
+    const saved = sessionStorage.getItem('user');
+    if (saved) { try { currentUser = Validator.validateObject(JSON.parse(saved)); if (currentUser && currentUser.employeeId) showDashboard(); else sessionStorage.removeItem('user'); } catch { sessionStorage.removeItem('user'); } }
+    loadTheme();
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if ($('confirmLogoutDialog').classList.contains('show')) cancelLogout();
+        else if ($('confirmCloseDialog').classList.contains('show')) cancelCloseModal();
+        else if ($('confirmNavDialog').classList.contains('show')) cancelNavigation();
+        else if ($('ticketModal').classList.contains('show')) confirmCloseModal();
+        else if ($('botPopup').classList.contains('show')) hideBotPopup();
+    }
+});
+
+document.addEventListener('click', function(e) { var botBtn = document.querySelector('.ai-bot-btn'), popup = $('botPopup'); if (botBtn && popup && !botBtn.contains(e.target) && !popup.contains(e.target)) hideBotPopup(); });
+window.addEventListener('beforeunload', () => { stopStatusPolling(); stopInactivityTracking(); });
+</script>
+</body>
+</html>

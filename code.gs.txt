@@ -1,0 +1,4048 @@
+// ==================== IT TICKET SYSTEM v7.8 - WITH NOTES & EDIT FEATURES ====================
+// Full Google Apps Script with Setup, Form, Dashboard, Reports Support
+// UPDATED: Added Notes section for IT staff to track work done on tickets
+// UPDATED: Added ability to edit Issue Type and Impact Area from dashboard
+// UPDATED: Added ability to edit Phone Number and Location from dashboard
+// UPDATED: All changes tracked with user info and timestamps
+// UPDATED: Added multiple admin email support
+// UPDATED: Notes stored in separate sheet, not in activity timeline
+// Run setupSystem() first to create all required sheets
+
+// ==================== CRITICAL: SPREADSHEET CONFIGURATION ====================
+// STEP 1: Open your Google Sheet
+// STEP 2: Copy the ID from the URL: https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID_HERE/edit
+// STEP 3: Paste it below between the quotes
+
+const SPREADSHEET_ID = "1sewZ_tzmcUxF-O9XQWBoQ974Liz6dQMih0_j8opwdoY"; // <-- YOUR SPREADSHEET ID
+
+// Example: const SPREADSHEET_ID = "1ABC123xyz456DEF789ghi";
+
+// ==================== CONFIGURATION ====================
+const DRY_RUN = false; // Set to false for LIVE emails
+
+// ==================== ADMIN EMAIL CONFIGURATION ====================
+// Change these email addresses to customize who receives ticket notifications
+// Supports all email domains: Gmail, Microsoft 365, Yahoo, custom domains, etc.
+const ADMIN_EMAILS = {
+  // Primary IT Support email - receives all new ticket notifications
+  PRIMARY: "rick.barlow@alignedcardio.com",
+  
+  // Secondary admin email - receives all new ticket notifications
+  SECONDARY: "srihari.thangavel@alignedcardio.com",
+  
+  // Tertiary admin email (optional) - add more emails as needed
+  // Leave empty string "" if not needed
+  TERTIARY: "monapuri.pranay@alignedcardio.com",
+  
+  // Escalation email - receives escalation notifications
+  ESCALATION: "rick.barlow@alignedcardio.com",
+  
+  // Critical alerts email - receives critical/P1 ticket notifications
+  CRITICAL: "rick.barlow@alignedcardio.com"
+};
+
+// Build IT_TO array from admin emails (filters out empty strings)
+const IT_TO = [
+  ADMIN_EMAILS.PRIMARY,
+  ADMIN_EMAILS.SECONDARY,
+  ADMIN_EMAILS.TERTIARY,
+].filter(email => email && email.trim() !== "");
+
+// ==================== SHEET NAMES ====================
+const FORM_SHEET = "Form_Responses";
+const DIRECTORY_SHEET = "StaffDirectory";
+const IT_STAFF_SHEET = "IT_Staff";
+const HISTORY_SHEET = "Activity_Log";
+const USERS_SHEET = "Users";
+const SETTINGS_SHEET = "Settings";
+const NOTES_SHEET = "Ticket_Notes"; // Sheet for storing ticket notes (separate from activity log)
+
+// ==================== FORM PAGE CONTROL ====================
+const FORM_ENABLED = true;
+const FORM_DISABLED_MESSAGE = "IT Support form is currently unavailable. Please contact IT Admin at " + ADMIN_EMAILS.PRIMARY;
+
+// ==================== DASHBOARD CONTROL ====================
+const DASHBOARD_ENABLED = true;
+const DASHBOARD_DISABLED_MESSAGE = "Dashboard is currently under maintenance. Please contact IT Admin.";
+
+// ==================== COLUMN CONFIGURATION ====================
+const COLUMNS = {
+  CREATED_DATE: 1,
+  TICKET_ID: 2,
+  EMPLOYEE_ID: 3,
+  NAME: 4,
+  EMAIL: 5,
+  PHONE: 6,
+  LOCATION: 7,
+  ISSUE_TYPE: 8,
+  IMPACT_AREA: 9,
+  SHORT_DESCRIPTION: 10,
+  ADDITIONAL_DESCRIPTION: 11,
+  STATUS: 12,
+  PRIORITY: 13,
+  VIP_LEVEL: 14,
+  CRITICAL_FLAG: 15,
+  ASSIGNED_TO: 16,
+  ASSIGNED_DATE: 17,
+  ESCALATION_LEVEL: 18,
+  ESCALATED_TO: 19,
+  ESCALATION_DATE: 20,
+  LAST_UPDATED: 21,
+  RESOLVED_BY: 22,
+  RESOLVED_DATE: 23
+};
+
+const HEADERS = [
+  'Created Date', 'Ticket ID', 'Employee ID', 'Name', 'Email Address',
+  'Phone Number', 'Location', 'Issue Type', 'Impact Area',
+  'Short Description', 'Additional Description',
+  'Status', 'Priority', 'VIP Level', 'Critical Flag', 'Assigned To', 'Assigned Date', 'Escalation Level',
+  'Escalated To', 'Escalation Date', 'Last Updated', 'Resolved By', 'Resolved Date'
+];
+
+const HISTORY_HEADERS = ['Timestamp', 'Ticket ID', 'Action', 'From', 'To', 'Performed By', 'Notes'];
+const USERS_HEADERS = ['Employee ID', 'Password', 'Display Name', 'Role', 'Status'];
+const IT_STAFF_HEADERS = ['Name', 'Email', 'Level', 'Status'];
+const DIRECTORY_HEADERS = ['Employee ID', 'Name', 'Email', 'VIP Level'];
+const SETTINGS_HEADERS = ['Setting Name', 'Value', 'Last Updated', 'Updated By'];
+const NOTES_HEADERS = ['Timestamp', 'Ticket ID', 'Note', 'Added By', 'Note Type']; // Headers for notes sheet
+const TOTAL_COLUMNS = 23;
+
+// ==================== STAFF DIRECTORY COLUMN INDEXES ====================
+const DIR_COL = {
+  EMPLOYEE_ID: 0,
+  NAME: 1,
+  EMAIL: 2,
+  VIP_LEVEL: 3
+};
+
+// ==================== VIP LEVEL TO PRIORITY MAPPING ====================
+const VIP_PRIORITY_MAP = {
+  'High': 'Critical',
+  'Middle': 'High',
+  'Low': 'Medium'
+};
+
+// ==================== PRIORITY MAPPING (Form to Backend) ====================
+const PRIORITY_MAP = {
+  'P1': 'Critical',
+  'P2': 'High',
+  'P3': 'Medium',
+  'P4': 'Low',
+  'Critical': 'Critical',
+  'High': 'High',
+  'Medium': 'Medium',
+  'Low': 'Low',
+  'Pending': 'Pending'
+};
+
+// ==================== VALID PRIORITIES FOR DASHBOARD ====================
+const VALID_PRIORITIES = ['Pending', 'Low', 'Medium', 'High', 'Critical'];
+
+// ==================== SLA CONFIGURATION ====================
+const SLA_THRESHOLDS = {
+  'Critical': { response: 1, resolution: 4 },
+  'High': { response: 4, resolution: 24 },
+  'Medium': { response: 8, resolution: 48 },
+  'Low': { response: 24, resolution: 72 },
+  'Pending': { response: 24, resolution: 72 }
+};
+
+const EMAIL_STYLE = {
+  fontFamily: 'Verdana, Arial, sans-serif',
+  fontSize: '14px',
+  lineHeight: '1.6',
+  color: '#333333'
+};
+
+// ==================== VALID USER STATUSES ====================
+const VALID_USER_STATUSES = ['Online', 'Offline', 'Break', 'In Meeting', 'Active', 'Inactive'];
+
+// ==================== NOTE TYPES ====================
+const NOTE_TYPES = ['Work Done', 'Update', 'Investigation', 'Solution', 'Follow-up', 'General'];
+
+const CACHE_DURATION = 300;
+const CACHE = CacheService.getScriptCache();
+
+// ==================== CRITICAL FIX: GET SPREADSHEET FUNCTION ====================
+// This function works across ALL browsers (Chrome, Safari, Firefox, Edge)
+// It tries multiple methods to access the spreadsheet
+
+function getSpreadsheet() {
+  var ss = null;
+  
+  // Method 1: Use explicit Spreadsheet ID (MOST RELIABLE for web apps)
+  if (SPREADSHEET_ID && SPREADSHEET_ID.trim() !== "") {
+    try {
+      ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      if (ss) {
+        return ss;
+      }
+    } catch (e) {
+      Logger.log("Method 1 (openById) failed: " + e.toString());
+    }
+  }
+  
+  // Method 2: Try getActiveSpreadsheet (works when script is bound to sheet)
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) {
+      // Store the ID for future use
+      var props = PropertiesService.getScriptProperties();
+      props.setProperty('SPREADSHEET_ID', ss.getId());
+      return ss;
+    }
+  } catch (e) {
+    Logger.log("Method 2 (getActiveSpreadsheet) failed: " + e.toString());
+  }
+  
+  // Method 3: Try to get from Script Properties (fallback)
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var storedId = props.getProperty('SPREADSHEET_ID');
+    if (storedId) {
+      ss = SpreadsheetApp.openById(storedId);
+      if (ss) {
+        return ss;
+      }
+    }
+  } catch (e) {
+    Logger.log("Method 3 (Script Properties) failed: " + e.toString());
+  }
+  
+  // Method 4: Search by name in user's Drive (last resort)
+  try {
+    var files = DriveApp.getFilesByName("IT Support Tickets");
+    if (files.hasNext()) {
+      var file = files.next();
+      ss = SpreadsheetApp.openById(file.getId());
+      if (ss) {
+        // Store the ID for future use
+        var props = PropertiesService.getScriptProperties();
+        props.setProperty('SPREADSHEET_ID', ss.getId());
+        return ss;
+      }
+    }
+  } catch (e) {
+    Logger.log("Method 4 (Drive search) failed: " + e.toString());
+  }
+  
+  // If all methods fail, throw a helpful error
+  throw new Error("SPREADSHEET NOT FOUND: Please set SPREADSHEET_ID at the top of Code.gs. Open your Google Sheet, copy the ID from the URL (the long string between /d/ and /edit), and paste it in the SPREADSHEET_ID variable.");
+}
+
+// ==================== HELPER: Safe Get Spreadsheet ====================
+function safeGetSpreadsheet() {
+  try {
+    return getSpreadsheet();
+  } catch (e) {
+    Logger.log("Error getting spreadsheet: " + e.toString());
+    return null;
+  }
+}
+
+// ==================== SETUP SYSTEM ====================
+function setupSystem() {
+  try {
+    var ss = getSpreadsheet();
+    var results = [];
+    
+    Logger.log("========== SETTING UP IT TICKET SYSTEM v7.9 ==========");
+    Logger.log("Spreadsheet: " + ss.getName() + " (ID: " + ss.getId() + ")");
+    
+    // Store the spreadsheet ID in Script Properties for future reference
+    try {
+      var props = PropertiesService.getScriptProperties();
+      props.setProperty('SPREADSHEET_ID', ss.getId());
+      Logger.log("Spreadsheet ID stored in Script Properties");
+    } catch (e) {
+      Logger.log("Could not store spreadsheet ID: " + e.toString());
+    }
+    
+    // 1. Create Form_Responses sheet
+    results.push(createSheetWithHeaders(ss, FORM_SHEET, HEADERS, [
+      150, 120, 100, 150, 200, 120, 120, 150, 150, 300, 400, 100, 100, 100, 80, 150, 150, 100, 150, 150, 150, 150, 150
+    ]));
+    
+    // 2. Create Users sheet
+    results.push(createSheetWithHeaders(ss, USERS_SHEET, USERS_HEADERS, [150, 150, 200, 100, 100]));
+    addSampleUsers(ss);
+    
+    // 3. Create IT_Staff sheet
+    results.push(createSheetWithHeaders(ss, IT_STAFF_SHEET, IT_STAFF_HEADERS, [200, 250, 80, 100]));
+    addSampleITStaff(ss);
+    
+    // 4. Create Activity_Log sheet
+    results.push(createSheetWithHeaders(ss, HISTORY_SHEET, HISTORY_HEADERS, [180, 120, 150, 150, 150, 150, 300]));
+    
+    // 5. Create StaffDirectory sheet
+    results.push(createSheetWithHeaders(ss, DIRECTORY_SHEET, DIRECTORY_HEADERS, [120, 200, 250, 100]));
+    addSampleDirectory(ss);
+    
+    // 6. Create Settings sheet
+    results.push(createSheetWithHeaders(ss, SETTINGS_SHEET, SETTINGS_HEADERS, [200, 150, 180, 150]));
+    initializeSettings(ss);
+    
+    // 7. Create Ticket_Notes sheet
+    results.push(createSheetWithHeaders(ss, NOTES_SHEET, NOTES_HEADERS, [180, 120, 400, 150, 120]));
+    
+    // 8. Add sample tickets
+    addSampleTickets(ss);
+    
+    Logger.log("========== SETUP COMPLETE ==========");
+    Logger.log("Results: " + JSON.stringify(results));
+    
+    return {
+      success: true,
+      message: "System setup complete! All sheets created with sample data.",
+      spreadsheetId: ss.getId(),
+      spreadsheetName: ss.getName(),
+      spreadsheetUrl: ss.getUrl(),
+      results: results
+    };
+    
+  } catch (e) {
+    Logger.log("Setup error: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function createSheetWithHeaders(ss, sheetName, headers, widths) {
+  try {
+    var sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      Logger.log("Created sheet: " + sheetName);
+    } else {
+      Logger.log("Sheet exists: " + sheetName);
+    }
+    
+    // Set headers
+    var headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setValues([headers]);
+    headerRange.setBackground("#1e40af");
+    headerRange.setFontColor("#ffffff");
+    headerRange.setFontWeight("bold");
+    headerRange.setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+    
+    // Set column widths
+    if (widths && widths.length) {
+      widths.forEach(function(w, i) {
+        if (i < headers.length) sheet.setColumnWidth(i + 1, w);
+      });
+    }
+    
+    return { sheet: sheetName, status: "ready", headers: headers.length };
+    
+  } catch (e) {
+    Logger.log("Error creating sheet " + sheetName + ": " + e.toString());
+    return { sheet: sheetName, status: "error", error: e.toString() };
+  }
+}
+
+function addSampleUsers(ss) {
+  try {
+    var sheet = ss.getSheetByName(USERS_SHEET);
+    if (!sheet) return;
+    
+    if (sheet.getLastRow() < 2) {
+      var sampleUsers = [
+        ["admin", "admin123", "IT Administrator", "Admin", "Online"],
+        ["user1", "password1", "John Smith", "L1", "Online"],
+        ["user2", "password2", "Jane Doe", "L2", "Online"],
+        ["user3", "password3", "Mike Johnson", "L3", "Online"]
+      ];
+      sheet.getRange(2, 1, sampleUsers.length, 5).setValues(sampleUsers);
+      Logger.log("Added " + sampleUsers.length + " sample users");
+    }
+  } catch (e) {
+    Logger.log("Error adding sample users: " + e.toString());
+  }
+}
+
+function addSampleITStaff(ss) {
+  try {
+    var sheet = ss.getSheetByName(IT_STAFF_SHEET);
+    if (!sheet) return;
+    
+    if (sheet.getLastRow() < 2) {
+      var sampleStaff = [
+        ["John Smith", "john@example.com", "L1", "Online"],
+        ["Jane Doe", "jane@example.com", "L2", "Online"],
+        ["Mike Johnson", "mike@example.com", "L3", "Online"]
+      ];
+      sheet.getRange(2, 1, sampleStaff.length, 4).setValues(sampleStaff);
+      Logger.log("Added " + sampleStaff.length + " sample IT staff");
+    }
+  } catch (e) {
+    Logger.log("Error adding sample IT staff: " + e.toString());
+  }
+}
+
+function addSampleDirectory(ss) {
+  try {
+    var sheet = ss.getSheetByName(DIRECTORY_SHEET);
+    if (!sheet) return;
+    
+    if (sheet.getLastRow() < 2) {
+      var sampleDir = [
+        ["EMP001", "Alice Brown", "alice@example.com", "High"],
+        ["EMP002", "Bob Wilson", "bob@example.com", "Middle"],
+        ["EMP003", "Carol Davis", "carol@example.com", "Low"]
+      ];
+      sheet.getRange(2, 1, sampleDir.length, 4).setValues(sampleDir);
+      Logger.log("Added " + sampleDir.length + " sample directory entries");
+    }
+  } catch (e) {
+    Logger.log("Error adding sample directory: " + e.toString());
+  }
+}
+
+function initializeSettings(ss) {
+  try {
+    var sheet = ss.getSheetByName(SETTINGS_SHEET);
+    if (!sheet) return;
+    
+    if (sheet.getLastRow() < 2) {
+      var now = new Date();
+      var defaultSettings = [
+        ["AUTO_ASSIGN", "false", now, "System"],
+        ["DRY_RUN", "false", now, "System"],
+        ["FORM_ENABLED", "true", now, "System"],
+        ["DASHBOARD_ENABLED", "true", now, "System"],
+        ["PRIMARY_ADMIN_EMAIL", ADMIN_EMAILS.PRIMARY, now, "System"],
+        ["SECONDARY_ADMIN_EMAIL", ADMIN_EMAILS.SECONDARY, now, "System"],
+        ["TERTIARY_ADMIN_EMAIL", ADMIN_EMAILS.TERTIARY, now, "System"],
+        ["ESCALATION_EMAIL", ADMIN_EMAILS.ESCALATION, now, "System"],
+        ["CRITICAL_EMAIL", ADMIN_EMAILS.CRITICAL, now, "System"]
+      ];
+      sheet.getRange(2, 1, defaultSettings.length, 4).setValues(defaultSettings);
+      Logger.log("Added default settings");
+    }
+  } catch (e) {
+    Logger.log("Error initializing settings: " + e.toString());
+  }
+}
+
+function addSampleTickets(ss) {
+  try {
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    if (!sheet) return;
+    
+    if (sheet.getLastRow() < 2) {
+      var now = new Date();
+      var yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      var twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+      
+      var sampleTickets = [
+        [now, "SSPTKT-001", "EMP001", "Alice Brown", "alice@example.com", "555-0101", "Cath Lab", "Login issue", "User Productivity", "Cannot access patient records", "Error message appears when trying to open charts", "Open", "Pending", "High", "true", "", "", "L1", "", "", now, "", ""],
+        [yesterday, "SSPTKT-002", "EMP002", "Bob Wilson", "bob@example.com", "555-0102", "Echo Lab", "Laptop / desktop issue", "User Productivity", "Computer running slow", "Takes 5 minutes to boot up", "In Progress", "High", "Middle", "false", "John Smith", yesterday, "L1", "", "", yesterday, "", ""],
+        [twoDaysAgo, "SSPTKT-003", "EMP003", "Carol Davis", "carol@example.com", "555-0103", "Administration", "Printer / scanner", "Service Request", "Printer not working", "Paper jam error", "Resolved", "Medium", "Low", "false", "Jane Doe", twoDaysAgo, "L1", "", "", now, "Jane Doe", now]
+      ];
+      
+      sheet.getRange(2, 1, sampleTickets.length, 23).setValues(sampleTickets);
+      Logger.log("Added " + sampleTickets.length + " sample tickets");
+      
+      for (var i = 2; i <= sheet.getLastRow(); i++) {
+        sheet.getRange(i, COLUMNS.CREATED_DATE).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+        sheet.getRange(i, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+      }
+    }
+  } catch (e) {
+    Logger.log("Error adding sample tickets: " + e.toString());
+  }
+}
+
+// ==================== ADMIN EMAIL MANAGEMENT ====================
+function getAdminEmails() {
+  try {
+    var settings = getAllSettings();
+    return {
+      primary: settings.PRIMARY_ADMIN_EMAIL || ADMIN_EMAILS.PRIMARY,
+      secondary: settings.SECONDARY_ADMIN_EMAIL || ADMIN_EMAILS.SECONDARY,
+      tertiary: settings.TERTIARY_ADMIN_EMAIL || ADMIN_EMAILS.TERTIARY,
+      escalation: settings.ESCALATION_EMAIL || ADMIN_EMAILS.ESCALATION,
+      critical: settings.CRITICAL_EMAIL || ADMIN_EMAILS.CRITICAL
+    };
+  } catch (e) {
+    Logger.log("Error getting admin emails: " + e.toString());
+    return ADMIN_EMAILS;
+  }
+}
+
+function updateAdminEmail(emailType, newEmail, updatedBy) {
+  try {
+    if (!newEmail || !isValidEmail(newEmail)) {
+      return { success: false, error: 'Invalid email address' };
+    }
+    
+    var settingName = emailType.toUpperCase() + '_EMAIL';
+    if (emailType.toUpperCase() === 'SECONDARY' || emailType.toUpperCase() === 'TERTIARY') {
+      settingName = emailType.toUpperCase() + '_ADMIN_EMAIL';
+    }
+    
+    var result = setSetting(settingName, newEmail, updatedBy);
+    
+    if (result.success) {
+      Logger.log("Admin email updated: " + emailType + " = " + newEmail);
+      return { success: true, message: 'Email updated successfully' };
+    }
+    
+    return result;
+  } catch (e) {
+    Logger.log("Error updating admin email: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function isValidEmail(email) {
+  if (!email) return false;
+  var regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email.toString().trim());
+}
+
+// ==================== SETTINGS MANAGEMENT ====================
+function getSetting(settingName) {
+  try {
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(SETTINGS_SHEET);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      return null;
+    }
+    
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0] === settingName) {
+        return data[i][1];
+      }
+    }
+    
+    return null;
+  } catch (e) {
+    Logger.log("Error getting setting: " + e.toString());
+    return null;
+  }
+}
+
+function setSetting(settingName, value, updatedBy) {
+  try {
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(SETTINGS_SHEET);
+    
+    if (!sheet) {
+      sheet = ss.insertSheet(SETTINGS_SHEET);
+      sheet.getRange(1, 1, 1, SETTINGS_HEADERS.length).setValues([SETTINGS_HEADERS]);
+      sheet.getRange(1, 1, 1, SETTINGS_HEADERS.length).setBackground("#1e40af").setFontColor("#ffffff").setFontWeight("bold");
+    }
+    
+    var now = new Date();
+    var lastRow = sheet.getLastRow();
+    
+    if (lastRow >= 2) {
+      var data = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      
+      for (var i = 0; i < data.length; i++) {
+        if (data[i][0] === settingName) {
+          sheet.getRange(i + 2, 2).setValue(value);
+          sheet.getRange(i + 2, 3).setValue(now);
+          sheet.getRange(i + 2, 4).setValue(updatedBy || 'System');
+          return { success: true, message: 'Setting updated' };
+        }
+      }
+    }
+    
+    sheet.appendRow([settingName, value, now, updatedBy || 'System']);
+    return { success: true, message: 'Setting created' };
+    
+  } catch (e) {
+    Logger.log("Error setting value: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function getAutoAssignSetting() {
+  var value = getSetting('AUTO_ASSIGN');
+  return value === 'true' || value === true;
+}
+
+function toggleAutoAssign(enabled, updatedBy) {
+  try {
+    var value = enabled ? 'true' : 'false';
+    var result = setSetting('AUTO_ASSIGN', value, updatedBy);
+    
+    if (result.success) {
+      Logger.log("Auto-assign toggled to: " + value);
+      return {
+        success: true,
+        enabled: enabled,
+        message: 'Auto-assign ' + (enabled ? 'enabled' : 'disabled')
+      };
+    }
+    
+    return result;
+  } catch (e) {
+    Logger.log("Error toggling auto-assign: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function getAllSettings() {
+  try {
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(SETTINGS_SHEET);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      return {
+        AUTO_ASSIGN: false,
+        DRY_RUN: false,
+        FORM_ENABLED: true,
+        DASHBOARD_ENABLED: true,
+        PRIMARY_ADMIN_EMAIL: ADMIN_EMAILS.PRIMARY,
+        SECONDARY_ADMIN_EMAIL: ADMIN_EMAILS.SECONDARY,
+        TERTIARY_ADMIN_EMAIL: ADMIN_EMAILS.TERTIARY,
+        ESCALATION_EMAIL: ADMIN_EMAILS.ESCALATION,
+        CRITICAL_EMAIL: ADMIN_EMAILS.CRITICAL
+      };
+    }
+    
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    var settings = {};
+    
+    for (var i = 0; i < data.length; i++) {
+      var name = data[i][0];
+      var value = data[i][1];
+      
+      if (value === 'true') value = true;
+      else if (value === 'false') value = false;
+      
+      settings[name] = value;
+    }
+    
+    return settings;
+  } catch (e) {
+    Logger.log("Error getting all settings: " + e.toString());
+    return {};
+  }
+}
+
+// ==================== WEB APP ====================
+function doGet(e) {
+  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'form';
+  
+  var output;
+  
+  // First, verify spreadsheet access
+  try {
+    var ss = getSpreadsheet();
+    Logger.log("Spreadsheet accessed successfully: " + ss.getName());
+  } catch (ssError) {
+    // Show configuration error page
+    output = HtmlService.createHtmlOutput(getConfigErrorPageHtml(ssError.message));
+    output.setTitle("Configuration Required");
+    output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    output.addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    return output;
+  }
+  
+  switch (page) {
+    case 'dashboard':
+      if (!DASHBOARD_ENABLED) {
+        output = HtmlService.createHtmlOutput(getDisabledPageHtml("Dashboard Unavailable", DASHBOARD_DISABLED_MESSAGE));
+      } else {
+        output = HtmlService.createHtmlOutputFromFile("dashboard");
+      }
+      output.setTitle("IT Support Control Center");
+      break;
+      
+    case 'form':
+    default:
+      if (!FORM_ENABLED) {
+        output = HtmlService.createHtmlOutput(getDisabledPageHtml("IT Support Unavailable", FORM_DISABLED_MESSAGE));
+      } else {
+        output = HtmlService.createHtmlOutputFromFile("form");
+      }
+      output.setTitle("IT Support Request");
+      break;
+  }
+  
+  output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  output.addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  output.setSandboxMode(HtmlService.SandboxMode.IFRAME);
+  
+  return output;
+}
+
+function getConfigErrorPageHtml(errorMessage) {
+  return '<!DOCTYPE html>' +
+    '<html><head>' +
+    '<meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    '<title>Configuration Required</title>' +
+    '<style>' +
+    '*{margin:0;padding:0;box-sizing:border-box}' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#1e40af 0%,#7c3aed 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}' +
+    '.container{background:#fff;border-radius:16px;padding:40px;text-align:center;max-width:600px;box-shadow:0 25px 50px rgba(0,0,0,0.25)}' +
+    '.icon{width:80px;height:80px;background:#fef3c7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px}' +
+    '.icon svg{width:40px;height:40px;color:#d97706}' +
+    'h1{color:#1e40af;font-size:24px;margin-bottom:16px}' +
+    'p{color:#64748b;font-size:14px;line-height:1.6;margin-bottom:20px}' +
+    '.steps{background:#f1f5f9;border-radius:12px;padding:24px;text-align:left;margin:24px 0}' +
+    '.step{display:flex;gap:12px;margin-bottom:16px}' +
+    '.step:last-child{margin-bottom:0}' +
+    '.step-num{width:28px;height:28px;background:#1e40af;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0}' +
+    '.step-text{font-size:14px;color:#334155;line-height:1.5}' +
+    '.step-text code{background:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:12px;color:#1e40af}' +
+    '.error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:20px;text-align:left}' +
+    '.error-box p{color:#991b1b;font-size:12px;margin:0;word-break:break-word}' +
+    '</style></head>' +
+    '<body><div class="container">' +
+    '<div class="icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>' +
+    '<h1>Configuration Required</h1>' +
+    '<p>The IT Support Portal needs to be configured with your Google Sheet ID.</p>' +
+    '<div class="steps">' +
+    '<div class="step"><div class="step-num">1</div><div class="step-text">Open your Google Sheet</div></div>' +
+    '<div class="step"><div class="step-num">2</div><div class="step-text">Copy the ID from the URL:<br><code>https://docs.google.com/spreadsheets/d/<strong>YOUR_ID_HERE</strong>/edit</code></div></div>' +
+    '<div class="step"><div class="step-num">3</div><div class="step-text">Open the Script Editor (Extensions → Apps Script)</div></div>' +
+    '<div class="step"><div class="step-num">4</div><div class="step-text">Find <code>SPREADSHEET_ID</code> at the top of Code.gs</div></div>' +
+    '<div class="step"><div class="step-num">5</div><div class="step-text">Paste your Sheet ID and save</div></div>' +
+    '<div class="step"><div class="step-num">6</div><div class="step-text">Deploy → Manage deployments → Update</div></div>' +
+    '</div>' +
+    '<div class="error-box"><p><strong>Error:</strong> ' + errorMessage + '</p></div>' +
+    '</div></body></html>';
+}
+
+function getDisabledPageHtml(title, message) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' + title + '</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.container{background:rgba(255,255,255,0.95);border-radius:20px;padding:60px 40px;text-align:center;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.3)}.icon{width:80px;height:80px;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 30px}.icon svg{width:40px;height:40px;fill:white}h1{color:#1a1a2e;font-size:28px;margin-bottom:20px}p{color:#555;font-size:16px;line-height:1.6;margin-bottom:30px}.contact-box{background:#f8f9fa;border-radius:10px;padding:20px;border-left:4px solid #f5576c}.contact-box h3{color:#1a1a2e;font-size:14px;margin-bottom:10px}.contact-box a{color:#f5576c;text-decoration:none;font-weight:600}.contact-box a:hover{text-decoration:underline}</style></head><body><div class="container"><div class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div><h1>' + title + '</h1><p>' + message + '</p><div class="contact-box"><h3>Need Immediate Assistance?</h3><a href="mailto:' + ADMIN_EMAILS.PRIMARY + '">' + ADMIN_EMAILS.PRIMARY + '</a></div></div></body></html>';
+}
+
+// ==================== USER AUTHENTICATION ====================
+function validateUser(employeeId, password) {
+  try {
+    Logger.log("Validating user: " + employeeId);
+    
+    if (!employeeId || !password) {
+      return { success: false, message: 'Employee ID and Password are required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var usersSheet = ss.getSheetByName(USERS_SHEET);
+    
+    if (!usersSheet) {
+      Logger.log("Users sheet not found");
+      return { success: false, message: 'System not configured. Please contact IT Admin.' };
+    }
+    
+    var lastRow = usersSheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log("No users in Users sheet");
+      return { success: false, message: 'No users configured. Please contact IT Admin.' };
+    }
+    
+    var data = usersSheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowEmployeeId = data[i][0] ? data[i][0].toString().trim() : '';
+      var rowPassword = data[i][1] ? data[i][1].toString() : '';
+      var displayName = data[i][2] ? data[i][2].toString() : 'User';
+      var role = data[i][3] ? data[i][3].toString() : 'User';
+      var status = data[i][4] ? data[i][4].toString() : 'Online';
+      
+      if (rowEmployeeId.toLowerCase() === employeeId.toLowerCase().trim()) {
+        if (rowPassword === password) {
+          if (status.toLowerCase() === 'inactive') {
+            return { success: false, message: 'Your account is inactive. Please contact IT Admin.' };
+          }
+          
+          usersSheet.getRange(i + 2, 5).setValue('Online');
+          
+          Logger.log("User authenticated: " + displayName);
+          return {
+            success: true,
+            displayName: displayName,
+            role: role,
+            employeeId: rowEmployeeId,
+            status: 'Online',
+            message: 'Login successful'
+          };
+        } else {
+          return { success: false, message: 'Invalid password' };
+        }
+      }
+    }
+    
+    return { success: false, message: 'Employee ID not found' };
+    
+  } catch (error) {
+    Logger.log("Error in validateUser: " + error.toString());
+    return { success: false, message: 'Authentication error. Please try again.' };
+  }
+}
+
+// ==================== GET ALL USERS ====================
+function getAllUsers() {
+  try {
+    var ss = getSpreadsheet();
+    var usersSheet = ss.getSheetByName(USERS_SHEET);
+    
+    if (!usersSheet || usersSheet.getLastRow() < 2) {
+      return [];
+    }
+    
+    var data = usersSheet.getRange(2, 1, usersSheet.getLastRow() - 1, 5).getValues();
+    var users = [];
+    
+    for (var i = 0; i < data.length; i++) {
+      var employeeId = data[i][0] ? data[i][0].toString().trim() : '';
+      var displayName = data[i][2] ? data[i][2].toString().trim() : '';
+      var role = data[i][3] ? data[i][3].toString().trim() : 'User';
+      var status = data[i][4] ? data[i][4].toString().trim() : 'Online';
+      
+      if (employeeId && displayName) {
+        users.push({
+          employeeId: employeeId,
+          name: displayName,
+          displayName: displayName,
+          role: role,
+          status: status
+        });
+      }
+    }
+    
+    Logger.log("getAllUsers: " + users.length + " users found");
+    return users;
+    
+  } catch (e) {
+    Logger.log("Error in getAllUsers: " + e.toString());
+    return [];
+  }
+}
+
+// ==================== UPDATE USER STATUS ====================
+function updateUserStatus(employeeId, newStatus) {
+  try {
+    Logger.log("Updating status for " + employeeId + " to " + newStatus);
+    
+    if (!employeeId) {
+      return { success: false, error: 'Employee ID is required' };
+    }
+    
+    if (!newStatus) {
+      return { success: false, error: 'New status is required' };
+    }
+    
+    var normalizedStatus = newStatus;
+    var statusLower = newStatus.toLowerCase().trim();
+    
+    if (statusLower === 'online' || statusLower === 'active') {
+      normalizedStatus = 'Online';
+    } else if (statusLower === 'offline' || statusLower === 'inactive') {
+      normalizedStatus = 'Offline';
+    } else if (statusLower === 'break' || statusLower === 'on break') {
+      normalizedStatus = 'Break';
+    } else if (statusLower === 'in meeting' || statusLower === 'meeting') {
+      normalizedStatus = 'In Meeting';
+    }
+    
+    if (VALID_USER_STATUSES.indexOf(normalizedStatus) === -1) {
+      return { success: false, error: 'Invalid status. Must be one of: Online, Offline, Break, In Meeting' };
+    }
+    
+    var ss = getSpreadsheet();
+    var usersSheet = ss.getSheetByName(USERS_SHEET);
+    
+    if (!usersSheet) {
+      return { success: false, error: 'Users sheet not found' };
+    }
+    
+    var lastRow = usersSheet.getLastRow();
+    if (lastRow < 2) {
+      return { success: false, error: 'No users found' };
+    }
+    
+    var data = usersSheet.getRange(2, 1, lastRow - 1, 5).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowEmployeeId = data[i][0] ? data[i][0].toString().trim() : '';
+      
+      if (rowEmployeeId.toLowerCase() === employeeId.toLowerCase()) {
+        usersSheet.getRange(i + 2, 5).setValue(normalizedStatus);
+        updateITStaffStatus(data[i][2], normalizedStatus);
+        
+        Logger.log("Status updated for " + employeeId + " to " + normalizedStatus);
+        clearDashboardCache();
+        
+        return {
+          success: true,
+          message: 'Status updated to ' + normalizedStatus,
+          employeeId: employeeId,
+          newStatus: normalizedStatus
+        };
+      }
+    }
+    
+    return { success: false, error: 'User not found' };
+    
+  } catch (e) {
+    Logger.log("Error in updateUserStatus: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function updateITStaffStatus(staffName, newStatus) {
+  try {
+    if (!staffName) return;
+    
+    var ss = getSpreadsheet();
+    var itSheet = ss.getSheetByName(IT_STAFF_SHEET);
+    
+    if (!itSheet || itSheet.getLastRow() < 2) return;
+    
+    var data = itSheet.getRange(2, 1, itSheet.getLastRow() - 1, 4).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowName = data[i][0] ? data[i][0].toString().trim() : '';
+      
+      if (rowName.toLowerCase() === staffName.toLowerCase().trim()) {
+        itSheet.getRange(i + 2, 4).setValue(newStatus);
+        Logger.log("IT Staff status updated for " + staffName + " to " + newStatus);
+        return;
+      }
+    }
+  } catch (e) {
+    Logger.log("Error updating IT staff status: " + e.toString());
+  }
+}
+
+// ==================== SAFARI-COMPATIBLE EMPLOYEE LOOKUP ====================
+function lookupEmployee(email) {
+  try {
+    Logger.log("Looking up employee by email: " + email);
+    
+    var result = {
+      found: false,
+      empId: "",
+      name: "",
+      vipLevel: "Low"
+    };
+    
+    if (!email || typeof email !== 'string' || email.trim() === '') {
+      Logger.log("Invalid or empty email provided");
+      return JSON.parse(JSON.stringify(result));
+    }
+    
+    var ss = safeGetSpreadsheet();
+    if (!ss) {
+      Logger.log("Cannot access spreadsheet");
+      return JSON.parse(JSON.stringify(result));
+    }
+    
+    var directory = ss.getSheetByName(DIRECTORY_SHEET);
+    if (!directory) {
+      Logger.log("StaffDirectory sheet not found");
+      return JSON.parse(JSON.stringify(result));
+    }
+    
+    var lastRow = directory.getLastRow();
+    if (lastRow < 2) {
+      Logger.log("StaffDirectory has no data");
+      return JSON.parse(JSON.stringify(result));
+    }
+    
+    var allData = directory.getRange(2, 1, lastRow - 1, 4).getValues();
+    var searchEmail = String(email).toLowerCase().trim();
+    
+    for (var i = 0; i < allData.length; i++) {
+      var row = allData[i];
+      var rowEmail = row[DIR_COL.EMAIL] ? String(row[DIR_COL.EMAIL]).toLowerCase().trim() : '';
+      
+      if (rowEmail === searchEmail) {
+        var empId = row[DIR_COL.EMPLOYEE_ID] ? String(row[DIR_COL.EMPLOYEE_ID]).trim() : "";
+        var fullName = row[DIR_COL.NAME] ? String(row[DIR_COL.NAME]).trim() : "";
+        var vipLevel = row[DIR_COL.VIP_LEVEL] ? String(row[DIR_COL.VIP_LEVEL]).trim() : "Low";
+        
+        Logger.log("Employee found - ID: " + empId + ", Name: " + fullName + ", VIP: " + vipLevel);
+        
+        result = {
+          found: true,
+          empId: empId,
+          name: fullName,
+          vipLevel: vipLevel || "Low"
+        };
+        
+        return JSON.parse(JSON.stringify(result));
+      }
+    }
+    
+    Logger.log("Employee not found for email: " + searchEmail);
+    return JSON.parse(JSON.stringify(result));
+    
+  } catch (e) {
+    Logger.log("Error in lookupEmployee: " + e.toString());
+    return JSON.parse(JSON.stringify({
+      found: false,
+      empId: "",
+      name: "",
+      vipLevel: "Low"
+    }));
+  }
+}
+
+function lookupEmployeeSafe(email) {
+  try {
+    var result = lookupEmployee(email);
+    var cleanResult = {
+      found: result.found === true,
+      empId: String(result.empId || ""),
+      name: String(result.name || ""),
+      vipLevel: String(result.vipLevel || "Low")
+    };
+    return JSON.parse(JSON.stringify(cleanResult));
+  } catch (e) {
+    Logger.log("Error in lookupEmployeeSafe: " + e.toString());
+    return {
+      found: false,
+      empId: "",
+      name: "",
+      vipLevel: "Low",
+      error: String(e.toString())
+    };
+  }
+}
+
+// ==================== SUBMIT TICKET ====================
+function submitTicket(formData) {
+  try {
+    Logger.log("=== SUBMIT TICKET ===");
+    Logger.log("Form data: " + JSON.stringify(formData));
+    
+    if (!formData || typeof formData !== 'object') {
+      throw new Error("Invalid form data");
+    }
+    
+    var requiredFields = ['email', 'phone', 'location', 'shortDescription'];
+    var missingFields = requiredFields.filter(function(field) {
+      return !formData[field] || formData[field].toString().trim() === '';
+    });
+    
+    if (missingFields.length > 0) {
+      throw new Error("Missing required fields: " + missingFields.join(', '));
+    }
+    
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      throw new Error("Invalid email format");
+    }
+    
+    var ss = getSpreadsheet();
+    if (!ss) {
+      throw new Error("Unable to access spreadsheet");
+    }
+    
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      Logger.log("Creating Form_Responses sheet...");
+      sheet = ss.insertSheet(FORM_SHEET);
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+      formatHeaderRow(sheet, HEADERS.length);
+      setColumnWidths(sheet);
+      sheet.setFrozenRows(1);
+    }
+    
+    var employeeLookup = lookupEmployee(formData.email);
+    Logger.log("Employee lookup result: " + JSON.stringify(employeeLookup));
+    
+    var finalName = '';
+    var nameSource = '';
+    
+    if (employeeLookup.found === true && employeeLookup.name && employeeLookup.name.toString().trim() !== '') {
+      finalName = employeeLookup.name.toString().trim();
+      nameSource = 'StaffDirectory';
+    } else if (formData.name && formData.name.toString().trim() !== '') {
+      finalName = formData.name.toString().trim();
+      nameSource = 'Form';
+    } else {
+      finalName = 'Anonymous';
+      nameSource = 'Default';
+    }
+    
+    var vipLevel = 'Low';
+    if (employeeLookup.found === true && employeeLookup.vipLevel) {
+      vipLevel = employeeLookup.vipLevel.toString().trim();
+    }
+    
+    var issueType = (formData.issueType || '').toString().trim();
+    var impactArea = (formData.workMode || formData.impactArea || '').toString().trim();
+    
+    var criticalFlag = formData.criticalFlag === true || formData.criticalFlag === 'true';
+    
+    var priority = 'Pending';
+    
+    var ticketId = generateTicketId(sheet);
+    var timestamp = new Date();
+    
+    Logger.log("Creating ticket: " + ticketId + ", Name: " + finalName + ", Priority: " + priority + ", Critical: " + (criticalFlag ? 'Yes' : 'No'));
+    
+    var rowData = [
+      timestamp,
+      ticketId,
+      employeeLookup.empId || "",
+      finalName,
+      formData.email.toString().trim(),
+      formData.phone.toString().trim(),
+      formData.location.toString().trim(),
+      issueType,
+      impactArea,
+      (formData.shortDescription || 'No description').toString().trim(),
+      (formData.additionalDescription || '').toString().trim(),
+      "Open",
+      priority,
+      vipLevel,
+      criticalFlag ? "true" : "false",
+      "",
+      "",
+      "L1",
+      "",
+      "",
+      timestamp,
+      "",
+      ""
+    ];
+    
+    sheet.appendRow(rowData);
+    var lastRow = sheet.getLastRow();
+    formatDataRow(sheet, lastRow, rowData.length);
+    
+    var historyNotes = 'Ticket created - Awaiting priority assignment';
+    if (criticalFlag) historyNotes += ' [Marked as Critical]';
+    if (issueType) historyNotes += ' - Issue: ' + issueType;
+    if (impactArea) historyNotes += ' - Impact: ' + impactArea;
+    
+    logHistory(ticketId, 'Created', '', 'Open', finalName, historyNotes);
+    clearDashboardCache();
+    
+    sendTicketSubmittedEmail(ticketId, timestamp, finalName, formData, vipLevel, issueType, impactArea, criticalFlag);
+    
+    sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, finalName, formData, priority, vipLevel, issueType, impactArea, criticalFlag);
+    
+    return {
+      success: true,
+      ticketId: ticketId,
+      message: "Ticket created successfully",
+      timestamp: timestamp.toISOString(),
+      priority: priority,
+      vipLevel: vipLevel,
+      impactArea: impactArea,
+      issueType: issueType,
+      criticalFlag: criticalFlag,
+      employeeName: finalName,
+      nameSource: nameSource,
+      employeeFound: employeeLookup.found
+    };
+    
+  } catch (error) {
+    Logger.log("Error in submitTicket: " + error.toString());
+    return {
+      success: false,
+      error: error.message || "Failed to create ticket"
+    };
+  }
+}
+
+// ==================== UPDATE TICKET PRIORITY ====================
+function updateTicketPriority(ticketId, newPriority, updatedBy) {
+  try {
+    Logger.log("Updating priority: " + ticketId + " to " + newPriority);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newPriority) {
+      return { success: false, error: 'New priority is required' };
+    }
+    
+    if (VALID_PRIORITIES.indexOf(newPriority) === -1) {
+      return { success: false, error: 'Invalid priority. Must be one of: ' + VALID_PRIORITIES.join(', ') };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldPriority = rowData[COLUMNS.PRIORITY - 1] || 'Pending';
+    
+    safeUpdateCell(sheet, row, COLUMNS.PRIORITY, newPriority);
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    logHistory(ticketId, 'Priority Changed', oldPriority, newPriority, updatedBy || 'Dashboard User', 'Priority updated by ' + (updatedBy || 'Dashboard User'));
+    
+    clearDashboardCache();
+    
+    return {
+      success: true,
+      message: 'Priority updated to ' + newPriority,
+      ticketId: ticketId,
+      oldPriority: oldPriority,
+      newPriority: newPriority,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updateTicketPriority: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update priority' };
+  }
+}
+
+// ==================== UPDATE ISSUE TYPE ====================
+function updateIssueType(ticketId, newIssueType, updatedBy) {
+  try {
+    Logger.log("Updating issue type: " + ticketId + " to " + newIssueType + " by " + updatedBy);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newIssueType || newIssueType.trim() === '') {
+      return { success: false, error: 'Issue type is required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldIssueType = rowData[COLUMNS.ISSUE_TYPE - 1] || '';
+    
+    // Update the issue type
+    safeUpdateCell(sheet, row, COLUMNS.ISSUE_TYPE, newIssueType.trim());
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // Log to history with user info
+    var historyNote = 'Issue Type changed by ' + (updatedBy || 'Dashboard User');
+    logHistory(ticketId, 'Issue Type Changed', oldIssueType, newIssueType.trim(), updatedBy || 'Dashboard User', historyNote);
+    
+    clearDashboardCache();
+    
+    Logger.log("Issue type updated successfully for " + ticketId);
+    
+    return {
+      success: true,
+      message: 'Issue type updated to ' + newIssueType.trim(),
+      ticketId: ticketId,
+      oldIssueType: oldIssueType,
+      newIssueType: newIssueType.trim(),
+      updatedBy: updatedBy,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updateIssueType: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update issue type' };
+  }
+}
+
+// ==================== UPDATE IMPACT AREA ====================
+function updateImpactArea(ticketId, newImpactArea, updatedBy) {
+  try {
+    Logger.log("Updating impact area: " + ticketId + " to " + newImpactArea + " by " + updatedBy);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newImpactArea || newImpactArea.trim() === '') {
+      return { success: false, error: 'Impact area is required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldImpactArea = rowData[COLUMNS.IMPACT_AREA - 1] || '';
+    
+    // Update the impact area
+    safeUpdateCell(sheet, row, COLUMNS.IMPACT_AREA, newImpactArea.trim());
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // Log to history with user info
+    var historyNote = 'Impact Area changed by ' + (updatedBy || 'Dashboard User');
+    logHistory(ticketId, 'Impact Area Changed', oldImpactArea, newImpactArea.trim(), updatedBy || 'Dashboard User', historyNote);
+    
+    clearDashboardCache();
+    
+    Logger.log("Impact area updated successfully for " + ticketId);
+    
+    return {
+      success: true,
+      message: 'Impact area updated to ' + newImpactArea.trim(),
+      ticketId: ticketId,
+      oldImpactArea: oldImpactArea,
+      newImpactArea: newImpactArea.trim(),
+      updatedBy: updatedBy,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updateImpactArea: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update impact area' };
+  }
+}
+
+// ==================== UPDATE PHONE NUMBER ====================
+function updatePhoneNumber(ticketId, newPhone, updatedBy) {
+  try {
+    Logger.log("Updating phone number: " + ticketId + " to " + newPhone + " by " + updatedBy);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newPhone || newPhone.trim() === '') {
+      return { success: false, error: 'Phone number is required' };
+    }
+    
+    // Basic phone validation - allow digits, spaces, dashes, parentheses, plus sign
+    var phoneRegex = /^[\d\s\-\(\)\+\.]+$/;
+    var cleanPhone = newPhone.trim();
+    if (!phoneRegex.test(cleanPhone)) {
+      return { success: false, error: 'Invalid phone number format' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldPhone = rowData[COLUMNS.PHONE - 1] || '';
+    
+    // Update the phone number
+    safeUpdateCell(sheet, row, COLUMNS.PHONE, cleanPhone);
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // Log to history with user info
+    var historyNote = 'Phone Number changed by ' + (updatedBy || 'Dashboard User');
+    logHistory(ticketId, 'Phone Number Changed', oldPhone, cleanPhone, updatedBy || 'Dashboard User', historyNote);
+    
+    clearDashboardCache();
+    
+    Logger.log("Phone number updated successfully for " + ticketId);
+    
+    return {
+      success: true,
+      message: 'Phone number updated to ' + cleanPhone,
+      ticketId: ticketId,
+      oldPhone: oldPhone,
+      newPhone: cleanPhone,
+      updatedBy: updatedBy,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updatePhoneNumber: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update phone number' };
+  }
+}
+
+// ==================== UPDATE LOCATION ====================
+function updateLocation(ticketId, newLocation, updatedBy) {
+  try {
+    Logger.log("Updating location: " + ticketId + " to " + newLocation + " by " + updatedBy);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newLocation || newLocation.trim() === '') {
+      return { success: false, error: 'Location is required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldLocation = rowData[COLUMNS.LOCATION - 1] || '';
+    
+    // Update the location
+    safeUpdateCell(sheet, row, COLUMNS.LOCATION, newLocation.trim());
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // Log to history with user info
+    var historyNote = 'Location changed by ' + (updatedBy || 'Dashboard User');
+    logHistory(ticketId, 'Location Changed', oldLocation, newLocation.trim(), updatedBy || 'Dashboard User', historyNote);
+    
+    clearDashboardCache();
+    
+    Logger.log("Location updated successfully for " + ticketId);
+    
+    return {
+      success: true,
+      message: 'Location updated to ' + newLocation.trim(),
+      ticketId: ticketId,
+      oldLocation: oldLocation,
+      newLocation: newLocation.trim(),
+      updatedBy: updatedBy,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updateLocation: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update location' };
+  }
+}
+
+// ==================== TICKET NOTES FUNCTIONS ====================
+// Notes are stored in a SEPARATE sheet (Ticket_Notes) and NOT included in activity timeline
+
+// Add a note to a ticket - stored ONLY in Ticket_Notes sheet (not in Activity_Log)
+function addTicketNote(ticketId, noteText, addedBy, noteType) {
+  try {
+    Logger.log("Adding note to ticket: " + ticketId + " by " + addedBy);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!noteText || noteText.trim() === '') {
+      return { success: false, error: 'Note text is required' };
+    }
+    
+    if (!addedBy || addedBy.trim() === '') {
+      return { success: false, error: 'Added by is required' };
+    }
+    
+    // Validate note type
+    var validNoteType = noteType && NOTE_TYPES.indexOf(noteType) !== -1 ? noteType : 'General';
+    
+    var ss = getSpreadsheet();
+    
+    // Verify ticket exists
+    var formSheet = ss.getSheetByName(FORM_SHEET);
+    if (!formSheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var ticketRow = findTicketRow(formSheet, ticketId);
+    if (ticketRow === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    // Get or create notes sheet
+    var notesSheet = ss.getSheetByName(NOTES_SHEET);
+    if (!notesSheet) {
+      notesSheet = ss.insertSheet(NOTES_SHEET);
+      notesSheet.getRange(1, 1, 1, NOTES_HEADERS.length).setValues([NOTES_HEADERS]);
+      notesSheet.getRange(1, 1, 1, NOTES_HEADERS.length).setBackground("#1e40af").setFontColor("#ffffff").setFontWeight("bold");
+      notesSheet.setFrozenRows(1);
+      notesSheet.setColumnWidth(1, 180);
+      notesSheet.setColumnWidth(2, 120);
+      notesSheet.setColumnWidth(3, 400);
+      notesSheet.setColumnWidth(4, 150);
+      notesSheet.setColumnWidth(5, 120);
+      Logger.log("Created Ticket_Notes sheet");
+    }
+    
+    var now = new Date();
+    
+    // Add note to notes sheet ONLY (not to Activity_Log)
+    var noteRow = [
+      now,
+      ticketId,
+      noteText.trim(),
+      addedBy.trim(),
+      validNoteType
+    ];
+    
+    notesSheet.appendRow(noteRow);
+    
+    var lastRow = notesSheet.getLastRow();
+    notesSheet.getRange(lastRow, 1).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // Also update the ticket's last updated time
+    safeUpdateCell(formSheet, ticketRow, COLUMNS.LAST_UPDATED, now);
+    formSheet.getRange(ticketRow, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    // DO NOT log to Activity_Log - notes are kept separate
+    
+    clearDashboardCache();
+    
+    Logger.log("Note added successfully to ticket " + ticketId + " (stored in Ticket_Notes sheet only)");
+    
+    return {
+      success: true,
+      message: 'Note added successfully',
+      ticketId: ticketId,
+      noteType: validNoteType,
+      addedBy: addedBy.trim(),
+      timestamp: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in addTicketNote: " + error.toString());
+    return { success: false, error: error.message || 'Failed to add note' };
+  }
+}
+
+// Get all notes for a ticket from the separate Ticket_Notes sheet
+function getTicketNotes(ticketId) {
+  try {
+    Logger.log("Getting notes for ticket: " + ticketId);
+    
+    if (!ticketId) {
+      return [];
+    }
+    
+    var ss = getSpreadsheet();
+    var notesSheet = ss.getSheetByName(NOTES_SHEET);
+    
+    if (!notesSheet || notesSheet.getLastRow() < 2) {
+      Logger.log("No notes found - sheet empty or doesn't exist");
+      return [];
+    }
+    
+    var data = notesSheet.getRange(2, 1, notesSheet.getLastRow() - 1, 5).getValues();
+    var notes = [];
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowTicketId = data[i][1] ? data[i][1].toString().trim() : "";
+      
+      if (rowTicketId === ticketId.toString().trim()) {
+        var timestamp = data[i][0];
+        if (timestamp instanceof Date) {
+          timestamp = timestamp.toISOString();
+        } else if (timestamp) {
+          try {
+            timestamp = new Date(timestamp).toISOString();
+          } catch (e) {
+            timestamp = timestamp.toString();
+          }
+        }
+        
+        notes.push({
+          timestamp: timestamp,
+          ticketId: rowTicketId,
+          note: data[i][2] ? data[i][2].toString() : "",
+          addedBy: data[i][3] ? data[i][3].toString() : "",
+          noteType: data[i][4] ? data[i][4].toString() : "General"
+        });
+      }
+    }
+    
+    // Sort by timestamp descending (newest first)
+    notes.sort(function(a, b) {
+      try {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      } catch (e) {
+        return 0;
+      }
+    });
+    
+    Logger.log("getTicketNotes: " + notes.length + " notes found for " + ticketId);
+    return notes;
+    
+  } catch (e) {
+    Logger.log("Error getting ticket notes: " + e.toString());
+    return [];
+  }
+}
+
+// Delete a specific note (optional - for admin use)
+function deleteTicketNote(ticketId, timestamp, deletedBy) {
+  try {
+    Logger.log("Deleting note from ticket: " + ticketId + " at " + timestamp);
+    
+    if (!ticketId || !timestamp) {
+      return { success: false, error: 'Ticket ID and timestamp are required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var notesSheet = ss.getSheetByName(NOTES_SHEET);
+    
+    if (!notesSheet || notesSheet.getLastRow() < 2) {
+      return { success: false, error: 'No notes found' };
+    }
+    
+    var data = notesSheet.getRange(2, 1, notesSheet.getLastRow() - 1, 5).getValues();
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowTicketId = data[i][1] ? data[i][1].toString().trim() : "";
+      var rowTimestamp = data[i][0];
+      
+      if (rowTimestamp instanceof Date) {
+        rowTimestamp = rowTimestamp.toISOString();
+      }
+      
+      if (rowTicketId === ticketId.toString().trim() && rowTimestamp === timestamp) {
+        notesSheet.deleteRow(i + 2);
+        
+        clearDashboardCache();
+        
+        Logger.log("Note deleted successfully");
+        return { success: true, message: 'Note deleted successfully' };
+      }
+    }
+    
+    return { success: false, error: 'Note not found' };
+    
+  } catch (error) {
+    Logger.log("Error in deleteTicketNote: " + error.toString());
+    return { success: false, error: error.message || 'Failed to delete note' };
+  }
+}
+
+// Get note types for dropdown
+function getNoteTypes() {
+  return NOTE_TYPES;
+}
+
+// ==================== SEARCH TICKETS ====================
+function searchTickets(searchType, searchValue) {
+  try {
+    Logger.log("Searching tickets by " + searchType + ": " + searchValue);
+    
+    if (!searchValue || searchValue.trim() === '') {
+      return { success: false, error: 'Search value is required', tickets: [] };
+    }
+    
+    var allTickets = getAllTickets();
+    
+    if (!allTickets || allTickets.length === 0) {
+      return { success: false, error: 'No tickets found', tickets: [] };
+    }
+    
+    var searchLower = searchValue.toLowerCase().trim();
+    var matchedTickets = [];
+    
+    switch (searchType) {
+      case 'name':
+        matchedTickets = allTickets.filter(function(ticket) {
+          var name = (ticket['Name'] || '').toString().toLowerCase();
+          return name.indexOf(searchLower) !== -1;
+        });
+        break;
+        
+      case 'email':
+        matchedTickets = allTickets.filter(function(ticket) {
+          var email = (ticket['Email Address'] || '').toString().toLowerCase();
+          return email.indexOf(searchLower) !== -1;
+        });
+        break;
+        
+      case 'phone':
+        var searchDigits = searchValue.replace(/\D/g, '');
+        matchedTickets = allTickets.filter(function(ticket) {
+          var phone = (ticket['Phone Number'] || '').toString().replace(/\D/g, '');
+          return phone.indexOf(searchDigits) !== -1;
+        });
+        break;
+        
+      case 'location':
+        matchedTickets = allTickets.filter(function(ticket) {
+          var location = (ticket['Location'] || '').toString().toLowerCase();
+          return location.indexOf(searchLower) !== -1;
+        });
+        break;
+        
+      case 'issueType':
+        matchedTickets = allTickets.filter(function(ticket) {
+          var issueType = (ticket['Issue Type'] || '').toString().toLowerCase();
+          return issueType.indexOf(searchLower) !== -1;
+        });
+        break;
+        
+      case 'ticketId':
+        matchedTickets = allTickets.filter(function(ticket) {
+          var ticketId = (ticket['Ticket ID'] || '').toString().toLowerCase();
+          return ticketId.indexOf(searchLower) !== -1;
+        });
+        break;
+        
+      default:
+        return { success: false, error: 'Invalid search type', tickets: [] };
+    }
+    
+    matchedTickets.sort(function(a, b) {
+      try {
+        return new Date(b['Created Date'] || 0) - new Date(a['Created Date'] || 0);
+      } catch (e) {
+        return 0;
+      }
+    });
+    
+    return {
+      success: true,
+      tickets: matchedTickets.slice(0, 50),
+      count: matchedTickets.length
+    };
+    
+  } catch (error) {
+    Logger.log("Error in searchTickets: " + error.toString());
+    return { success: false, error: error.message || 'Search failed', tickets: [] };
+  }
+}
+
+// ==================== DASHBOARD DATA ====================
+function getDashboardData(forceRefresh) {
+  try {
+    Logger.log("getDashboardData called, forceRefresh: " + forceRefresh);
+    
+    if (forceRefresh) {
+      clearDashboardCache();
+    }
+    
+    var tickets = getAllTickets();
+    var itStaff = getITStaffList();
+    var stats = getDashboardStats(tickets);
+    var settings = getAllSettings();
+    
+    var result = {
+      tickets: tickets,
+      itStaff: itStaff,
+      stats: stats,
+      config: getDashboardConfig(),
+      settings: settings,
+      adminEmails: getAdminEmails(),
+      lastUpdated: new Date().toISOString()
+    };
+    
+    Logger.log("getDashboardData: " + tickets.length + " tickets, " + itStaff.length + " staff");
+    return result;
+    
+  } catch (e) {
+    Logger.log("Error in getDashboardData: " + e.toString());
+    return {
+      tickets: [],
+      itStaff: [],
+      stats: { total: 0, open: 0, inProgress: 0, resolved: 0, highPriority: 0 },
+      config: getDashboardConfig(),
+      settings: {},
+      adminEmails: getAdminEmails(),
+      error: e.message
+    };
+  }
+}
+
+function getAllTickets() {
+  try {
+    var cacheKey = 'dashboard_tickets';
+    var cached = getCachedData(cacheKey);
+    if (cached) {
+      Logger.log("getAllTickets: Returning " + cached.length + " cached tickets");
+      return cached;
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      Logger.log("Form_Responses sheet not found");
+      return [];
+    }
+    
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log("No tickets in sheet");
+      return [];
+    }
+    
+    var lastCol = sheet.getLastColumn();
+    var data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var headers = data[0];
+    var tickets = [];
+    
+    Logger.log("Sheet headers: " + JSON.stringify(headers));
+    
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var ticket = {};
+      
+      headers.forEach(function(header, j) {
+        if (!header) return;
+        
+        var headerStr = header.toString().trim();
+        var value = row[j];
+        
+        if (headerStr.toLowerCase().indexOf('date') !== -1 && value) {
+          if (value instanceof Date) {
+            value = value.toISOString();
+          } else {
+            try {
+              var d = new Date(value);
+              if (!isNaN(d.getTime())) {
+                value = d.toISOString();
+              } else {
+                value = value.toString();
+              }
+            } catch (e) {
+              value = value.toString();
+            }
+          }
+        } else {
+          value = value !== undefined && value !== null ? value.toString() : "";
+        }
+        
+        ticket[headerStr] = value;
+      });
+      
+      if (ticket["Ticket ID"] && ticket["Ticket ID"].trim() !== "") {
+        tickets.push(ticket);
+      }
+    }
+    
+    tickets.sort(function(a, b) {
+      try {
+        var dateA = a["Created Date"] ? new Date(a["Created Date"]) : new Date(0);
+        var dateB = b["Created Date"] ? new Date(b["Created Date"]) : new Date(0);
+        return dateB - dateA;
+      } catch (e) {
+        return 0;
+      }
+    });
+    
+    setCachedData(cacheKey, tickets);
+    
+    Logger.log("getAllTickets: " + tickets.length + " tickets loaded from sheet");
+    return tickets;
+    
+  } catch (e) {
+    Logger.log("Error in getAllTickets: " + e.toString());
+    return [];
+  }
+}
+
+function getDashboardStats(tickets) {
+  try {
+    if (!tickets) tickets = getAllTickets();
+    
+    var stats = {
+      total: tickets.length,
+      open: 0,
+      inProgress: 0,
+      resolved: 0,
+      unassigned: 0,
+      highPriority: 0,
+      critical: 0,
+      pending: 0,
+      markedCritical: 0,
+      resolvedToday: 0,
+      byLocation: {},
+      byVipLevel: {},
+      byAssignee: {},
+      byEscalationLevel: { 'L1': 0, 'L2': 0, 'L3': 0 },
+      byIssueType: {},
+      byImpactArea: {}
+    };
+    
+    var today = new Date().toDateString();
+    
+    tickets.forEach(function(ticket) {
+      var status = (ticket['Status'] || 'Open').toString().trim();
+      var location = (ticket['Location'] || 'Unknown').toString().trim();
+      var vipLevel = (ticket['VIP Level'] || 'Low').toString().trim();
+      var assignedTo = (ticket['Assigned To'] || 'Unassigned').toString().trim();
+      var priority = (ticket['Priority'] || 'Pending').toString().trim();
+      var escalationLevel = (ticket['Escalation Level'] || 'L1').toString().trim();
+      var resolvedDate = ticket['Resolved Date'];
+      var issueType = (ticket['Issue Type'] || '').toString().trim();
+      var impactArea = (ticket['Impact Area'] || '').toString().trim();
+      var criticalFlag = ticket['Critical Flag'] === 'true' || ticket['Critical Flag'] === true;
+      
+      switch (status.toLowerCase()) {
+        case 'open': stats.open++; break;
+        case 'in progress': stats.inProgress++; break;
+        case 'resolved': stats.resolved++; break;
+      }
+      
+      if (!ticket['Assigned To'] || ticket['Assigned To'] === '') {
+        stats.unassigned++;
+      }
+      
+      if (priority === 'High' || priority === 'Critical') {
+        stats.highPriority++;
+      }
+      
+      if (priority === 'Critical') {
+        stats.critical++;
+      }
+      
+      if (priority === 'Pending') {
+        stats.pending++;
+      }
+      
+      if (criticalFlag) {
+        stats.markedCritical++;
+      }
+      
+      if (resolvedDate) {
+        try {
+          var resDate = new Date(resolvedDate).toDateString();
+          if (resDate === today) {
+            stats.resolvedToday++;
+          }
+        } catch (e) {}
+      }
+      
+      stats.byLocation[location] = (stats.byLocation[location] || 0) + 1;
+      stats.byVipLevel[vipLevel] = (stats.byVipLevel[vipLevel] || 0) + 1;
+      stats.byAssignee[assignedTo] = (stats.byAssignee[assignedTo] || 0) + 1;
+      
+      if (stats.byEscalationLevel.hasOwnProperty(escalationLevel)) {
+        stats.byEscalationLevel[escalationLevel]++;
+      }
+      
+      if (issueType) {
+        stats.byIssueType[issueType] = (stats.byIssueType[issueType] || 0) + 1;
+      }
+      if (impactArea) {
+        stats.byImpactArea[impactArea] = (stats.byImpactArea[impactArea] || 0) + 1;
+      }
+    });
+    
+    return stats;
+    
+  } catch (e) {
+    Logger.log("Error in getDashboardStats: " + e.toString());
+    return { total: 0, open: 0, inProgress: 0, resolved: 0, unassigned: 0 };
+  }
+}
+
+function getDashboardConfig() {
+  return {
+    locations: ['ACP - Corporate', 'ASC - Colonial Heights', 'CH - Williamsburg', 'HRA - Greenville', 'JRC - Ashlake', 'JRC - Colonial Heights', 'JRC - Discovery', 'JRC - Discovery - AIC', 'JRC - Emporia', 'JRC - Franklin', 'JRC - Lawrenceville', 'NCC - Stafford', 'NCC - Woodbridge', 'PCC - Potomac', 'Solid State Practice', 'SWVC - Salem'],
+    issueTypes: [
+      'Login / Sign-in issue', 'Password reset / MFA issue', 'Mailbox / Outlook access', 'Teams / OneDrive / SharePoint access',
+      'Laptop / desktop issue', 'Monitor / keyboard / mouse', 'Printer / scanner', 'Hardware replacement',
+      'Application not working', 'Application access request', 'Installation / upgrade', 'License issue',
+      'No internet', 'VPN issue', 'Wi-Fi connectivity', 'Network slowness',
+      'Email not working', 'Outlook / Gmail issue', 'Teams / Zoom issue', 'Calendar problem',
+      'Add Ring Central User', 'Call Routing/IVR Issue', 'Poor Call Quality', 'Other Ring Central Issue',
+      'Phishing / suspicious email', 'Malware concern', 'Data access issue',
+      'New user setup', 'New software request', 'Access change', 'Equipment request',
+      'General IT query', 'Not listed above'
+    ],
+    impactAreas: ['System Outage', 'User Productivity', 'Security / Access', 'Service Request'],
+    vipLevels: ['High', 'Middle', 'Low'],
+    statuses: ['Open', 'In Progress', 'Resolved'],
+    priorities: ['Pending', 'Low', 'Medium', 'High', 'Critical'],
+    escalationLevels: ['L1', 'L2', 'L3'],
+    userStatuses: ['Online', 'Offline', 'Break', 'In Meeting'],
+    noteTypes: NOTE_TYPES,
+    version: '7.9.0',
+    lastUpdated: new Date().toISOString()
+  };
+}
+
+function getITStaffList() {
+  try {
+    var ss = getSpreadsheet();
+    var itSheet = ss.getSheetByName(IT_STAFF_SHEET);
+    
+    if (!itSheet) {
+      Logger.log("IT_Staff sheet not found");
+      return [];
+    }
+    
+    var lastRow = itSheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log("No IT staff in sheet");
+      return [];
+    }
+    
+    var data = itSheet.getRange(2, 1, lastRow - 1, 4).getValues();
+    var staffList = [];
+    
+    for (var i = 0; i < data.length; i++) {
+      var name = data[i][0] ? data[i][0].toString().trim() : "";
+      var email = data[i][1] ? data[i][1].toString().trim() : "";
+      var level = data[i][2] ? data[i][2].toString().trim() : "L1";
+      var status = data[i][3] ? data[i][3].toString().trim() : "Online";
+      
+      if (name) {
+        var isAvailable = ['Online', 'Active', 'Break', 'In Meeting'].indexOf(status) !== -1;
+        
+        staffList.push({
+          name: name,
+          email: email,
+          level: level,
+          status: status,
+          isAvailable: isAvailable
+        });
+      }
+    }
+    
+    Logger.log("getITStaffList: " + staffList.length + " staff found");
+    return staffList;
+    
+  } catch (e) {
+    Logger.log("Error getting IT staff: " + e.toString());
+    return [];
+  }
+}
+
+function getITStaffEmail(staffName) {
+  try {
+    var staffList = getITStaffList();
+    for (var i = 0; i < staffList.length; i++) {
+      if (staffList[i].name === staffName) {
+        return staffList[i].email;
+      }
+    }
+    return null;
+  } catch (e) {
+    Logger.log("Error getting IT staff email: " + e.toString());
+    return null;
+  }
+}
+
+// ==================== GET TICKET BY ID ====================
+function getTicketByIdForTracking(ticketId) {
+  try {
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: false, error: 'No tickets found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var headers = sheet.getRange(1, 1, 1, TOTAL_COLUMNS).getValues()[0];
+    var rowData = sheet.getRange(row, 1, 1, TOTAL_COLUMNS).getValues()[0];
+    
+    var ticket = {};
+    headers.forEach(function(header, index) {
+      var value = rowData[index];
+      
+      if (header && header.toString().toLowerCase().indexOf('date') !== -1 && value) {
+        try {
+          ticket[header] = value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+        } catch (e) {
+          ticket[header] = value ? value.toString() : '';
+        }
+      } else {
+        ticket[header] = value !== undefined && value !== null ? value : '';
+      }
+    });
+    
+    var history = getTicketHistory(ticketId);
+    var notes = getTicketNotes(ticketId);
+    
+    return {
+      success: true,
+      ticket: ticket,
+      history: history,
+      notes: notes
+    };
+    
+  } catch (error) {
+    Logger.log("Error in getTicketByIdForTracking: " + error.toString());
+    return { success: false, error: error.message || 'Failed to fetch ticket' };
+  }
+}
+
+// ==================== UPDATE TICKET STATUS ====================
+function updateTicketStatus(ticketId, newStatus, resolvedBy) {
+  try {
+    Logger.log("Updating status: " + ticketId + " to " + newStatus);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!newStatus) {
+      return { success: false, error: 'New status is required' };
+    }
+    
+    var validStatuses = ['Open', 'In Progress', 'Resolved'];
+    if (validStatuses.indexOf(newStatus) === -1) {
+      return { success: false, error: 'Invalid status' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var oldStatus = rowData[COLUMNS.STATUS - 1] || 'Open';
+    var assignedTo = rowData[COLUMNS.ASSIGNED_TO - 1] || '';
+    
+    safeUpdateCell(sheet, row, COLUMNS.STATUS, newStatus);
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    if (newStatus === 'Resolved') {
+      var resolver = resolvedBy || assignedTo || 'IT Support';
+      safeUpdateCell(sheet, row, COLUMNS.RESOLVED_BY, resolver);
+      safeUpdateCell(sheet, row, COLUMNS.RESOLVED_DATE, now);
+      sheet.getRange(row, COLUMNS.RESOLVED_DATE).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+      logHistory(ticketId, 'Resolved', oldStatus, 'Resolved', resolver, 'Ticket resolved by ' + resolver);
+    } else if (oldStatus === 'Resolved') {
+      safeUpdateCell(sheet, row, COLUMNS.RESOLVED_BY, '');
+      safeUpdateCell(sheet, row, COLUMNS.RESOLVED_DATE, '');
+      logHistory(ticketId, 'Reopened', 'Resolved', newStatus, resolvedBy || 'Dashboard User', 'Ticket reopened by ' + (resolvedBy || 'Dashboard User'));
+    } else {
+      logHistory(ticketId, 'Status Changed', oldStatus, newStatus, resolvedBy || 'Dashboard User', 'Status updated by ' + (resolvedBy || 'Dashboard User'));
+    }
+    
+    clearDashboardCache();
+    
+    if (oldStatus !== newStatus) {
+      var userEmail = rowData[COLUMNS.EMAIL - 1];
+      var userName = rowData[COLUMNS.NAME - 1];
+      
+      if (userEmail) {
+        var ticketInfo = {
+          'Ticket ID': rowData[COLUMNS.TICKET_ID - 1],
+          'Short Description': rowData[COLUMNS.SHORT_DESCRIPTION - 1],
+          'Location': rowData[COLUMNS.LOCATION - 1],
+          'Phone Number': rowData[COLUMNS.PHONE - 1],
+          'Issue Type': rowData[COLUMNS.ISSUE_TYPE - 1],
+          'Assigned To': assignedTo,
+          'Resolved By': newStatus === 'Resolved' ? (resolvedBy || assignedTo) : '',
+          'Status': newStatus
+        };
+        
+        sendStatusChangeEmail(ticketId, userName, userEmail, oldStatus, newStatus, ticketInfo);
+      }
+    }
+    
+    return {
+      success: true,
+      message: 'Status updated to ' + newStatus,
+      ticketId: ticketId,
+      newStatus: newStatus,
+      updatedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in updateTicketStatus: " + error.toString());
+    return { success: false, error: error.message || 'Failed to update status' };
+  }
+}
+
+// ==================== ASSIGN TICKET ====================
+function assignTicket(ticketId, assignedTo, assignedBy, priority) {
+  try {
+    Logger.log("Assigning ticket: " + ticketId + " to " + assignedTo + (priority ? " with priority " + priority : ""));
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!assignedTo) {
+      return { success: false, error: 'Assignee is required' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var previousAssignee = rowData[COLUMNS.ASSIGNED_TO - 1] || 'Unassigned';
+    var currentStatus = rowData[COLUMNS.STATUS - 1];
+    var oldPriority = rowData[COLUMNS.PRIORITY - 1] || 'Pending';
+    
+    safeUpdateCell(sheet, row, COLUMNS.ASSIGNED_TO, assignedTo);
+    safeUpdateCell(sheet, row, COLUMNS.ASSIGNED_DATE, now);
+    sheet.getRange(row, COLUMNS.ASSIGNED_DATE).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    if (currentStatus === 'Open' || !currentStatus) {
+      safeUpdateCell(sheet, row, COLUMNS.STATUS, 'In Progress');
+    }
+    
+    var prioritySet = false;
+    if (priority && VALID_PRIORITIES.indexOf(priority) !== -1) {
+      safeUpdateCell(sheet, row, COLUMNS.PRIORITY, priority);
+      prioritySet = true;
+      Logger.log("Priority set to: " + priority);
+    }
+    
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    var actionType = (!previousAssignee || previousAssignee === 'Unassigned' || previousAssignee === '') ? 'Assigned' : 'Reassigned';
+    var historyNotes = 'Ticket ' + actionType.toLowerCase() + ' to ' + assignedTo + ' by ' + (assignedBy || 'Dashboard User');
+    if (prioritySet) {
+      historyNotes += ' with priority ' + priority;
+    }
+    
+    logHistory(ticketId, actionType, previousAssignee, assignedTo, assignedBy || 'Dashboard User', historyNotes);
+    
+    if (prioritySet && oldPriority !== priority) {
+      logHistory(ticketId, 'Priority Changed', oldPriority, priority, assignedBy || 'Dashboard User', 'Priority set to ' + priority + ' by ' + (assignedBy || 'Dashboard User'));
+    }
+    
+    clearDashboardCache();
+    
+    var userEmail = rowData[COLUMNS.EMAIL - 1];
+    var userName = rowData[COLUMNS.NAME - 1];
+    
+    if (userEmail) {
+      sendTicketAssignedEmailToUser(ticketId, userName, assignedTo, rowData);
+    }
+    
+    var assignedStaffEmail = getITStaffEmail(assignedTo);
+    if (assignedStaffEmail) {
+      if (prioritySet) {
+        rowData[COLUMNS.PRIORITY - 1] = priority;
+      }
+      sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy || 'Dashboard', rowData);
+    }
+    
+    return {
+      success: true,
+      message: 'Ticket assigned to ' + assignedTo + (prioritySet ? ' with priority ' + priority : ''),
+      ticketId: ticketId,
+      assignedTo: assignedTo,
+      priority: prioritySet ? priority : oldPriority,
+      assignedDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in assignTicket: " + error.toString());
+    return { success: false, error: error.message || 'Failed to assign ticket' };
+  }
+}
+
+// ==================== ESCALATE TICKET ====================
+function escalateTicket(ticketId, escalateTo, escalationLevel, escalatedBy, reason) {
+  try {
+    Logger.log("Escalating ticket: " + ticketId + " to " + escalationLevel);
+    
+    if (!ticketId) {
+      return { success: false, error: 'Ticket ID is required' };
+    }
+    
+    if (!escalateTo) {
+      return { success: false, error: 'Escalation target is required' };
+    }
+    
+    if (!escalationLevel) {
+      return { success: false, error: 'Escalation level is required' };
+    }
+    
+    var validLevels = ['L1', 'L2', 'L3'];
+    if (validLevels.indexOf(escalationLevel) === -1) {
+      return { success: false, error: 'Invalid level' };
+    }
+    
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName(FORM_SHEET);
+    
+    if (!sheet) {
+      return { success: false, error: 'Form_Responses sheet not found' };
+    }
+    
+    var row = findTicketRow(sheet, ticketId);
+    
+    if (row === -1) {
+      return { success: false, error: 'Ticket not found' };
+    }
+    
+    var now = new Date();
+    var rowData = getRowData(sheet, row);
+    var previousLevel = rowData[COLUMNS.ESCALATION_LEVEL - 1] || 'L1';
+    var previousAssignee = rowData[COLUMNS.ASSIGNED_TO - 1] || 'Unassigned';
+    
+    safeUpdateCell(sheet, row, COLUMNS.ESCALATION_LEVEL, escalationLevel);
+    safeUpdateCell(sheet, row, COLUMNS.ESCALATED_TO, escalateTo);
+    safeUpdateCell(sheet, row, COLUMNS.ESCALATION_DATE, now);
+    sheet.getRange(row, COLUMNS.ESCALATION_DATE).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    safeUpdateCell(sheet, row, COLUMNS.ASSIGNED_TO, escalateTo);
+    safeUpdateCell(sheet, row, COLUMNS.STATUS, 'In Progress');
+    safeUpdateCell(sheet, row, COLUMNS.LAST_UPDATED, now);
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    var historyNotes = 'Escalated by ' + (escalatedBy || 'Dashboard User');
+    if (reason) {
+      historyNotes += ' - Reason: ' + reason;
+    }
+    
+    logHistory(ticketId, 'Escalated',
+      previousLevel + ' - ' + previousAssignee,
+      escalationLevel + ' - ' + escalateTo,
+      escalatedBy || 'Dashboard User',
+      historyNotes);
+    
+    clearDashboardCache();
+    
+    var userEmail = rowData[COLUMNS.EMAIL - 1];
+    var userName = rowData[COLUMNS.NAME - 1];
+    
+    if (userEmail) {
+      sendTicketEscalatedEmailToUser(ticketId, userName, escalateTo, escalationLevel, reason, rowData);
+    }
+    
+    var escalatedStaffEmail = getITStaffEmail(escalateTo);
+    if (escalatedStaffEmail) {
+      sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationLevel, escalatedBy || 'Dashboard', reason, rowData);
+    }
+    
+    var criticalFlag = rowData[COLUMNS.CRITICAL_FLAG - 1];
+    var priority = rowData[COLUMNS.PRIORITY - 1];
+    if (priority === 'Critical' || criticalFlag === 'true') {
+      sendCriticalEscalationNotification(ticketId, escalateTo, escalationLevel, reason, rowData);
+    }
+    
+    return {
+      success: true,
+      message: 'Ticket escalated to ' + escalationLevel + ' - ' + escalateTo,
+      ticketId: ticketId,
+      level: escalationLevel,
+      escalatedTo: escalateTo,
+      escalationDate: now.toISOString()
+    };
+    
+  } catch (error) {
+    Logger.log("Error in escalateTicket: " + error.toString());
+    return { success: false, error: error.message || 'Failed to escalate ticket' };
+  }
+}
+
+// ==================== AUTO-ASSIGNMENT ====================
+function autoAssignTicket(ticketId, priority) {
+  var autoAssignEnabled = getAutoAssignSetting();
+  
+  if (!autoAssignEnabled) {
+    Logger.log("Auto-assign is disabled");
+    return null;
+  }
+  
+  try {
+    Logger.log("Auto-assigning ticket " + ticketId);
+    
+    var itStaff = getITStaffList().filter(function(staff) {
+      var isL1 = staff.level === 'L1';
+      var isAvailable = ['Online', 'Active'].indexOf(staff.status) !== -1;
+      return isL1 && isAvailable;
+    });
+    
+    if (itStaff.length === 0) {
+      Logger.log("No available L1 staff for auto-assignment");
+      return null;
+    }
+    
+    var workload = getStaffWorkload();
+    
+    var selectedStaff = null;
+    var lowestLoad = Infinity;
+    
+    for (var i = 0; i < itStaff.length; i++) {
+      var staff = itStaff[i];
+      var load = workload[staff.name] || 0;
+      
+      if (load < lowestLoad) {
+        lowestLoad = load;
+        selectedStaff = staff;
+      }
+    }
+    
+    if (!selectedStaff) {
+      return null;
+    }
+    
+    var result = assignTicket(ticketId, selectedStaff.name, 'Auto-Assignment', null);
+    
+    if (result.success) {
+      return selectedStaff.name;
+    }
+    
+    return null;
+    
+  } catch (e) {
+    Logger.log("Error in autoAssignTicket: " + e.toString());
+    return null;
+  }
+}
+
+function getStaffWorkload() {
+  try {
+    var tickets = getAllTickets();
+    var workload = {};
+    
+    for (var i = 0; i < tickets.length; i++) {
+      var ticket = tickets[i];
+      var status = (ticket['Status'] || '').toString().toLowerCase();
+      var assignedTo = ticket['Assigned To'] || '';
+      
+      if ((status === 'open' || status === 'in progress') && assignedTo) {
+        workload[assignedTo] = (workload[assignedTo] || 0) + 1;
+      }
+    }
+    
+    return workload;
+    
+  } catch (e) {
+    Logger.log("Error getting workload: " + e.toString());
+    return {};
+  }
+}
+
+// ==================== HISTORY LOGGING ====================
+function logHistory(ticketId, action, fromValue, toValue, performedBy, notes) {
+  try {
+    var ss = getSpreadsheet();
+    var historySheet = ss.getSheetByName(HISTORY_SHEET);
+    
+    if (!historySheet) {
+      historySheet = ss.insertSheet(HISTORY_SHEET);
+      historySheet.getRange(1, 1, 1, HISTORY_HEADERS.length).setValues([HISTORY_HEADERS]);
+      historySheet.getRange(1, 1, 1, HISTORY_HEADERS.length).setFontWeight('bold').setBackground('#4CAF50').setFontColor('#fff');
+      historySheet.setFrozenRows(1);
+    }
+    
+    var timestamp = new Date();
+    var rowData = [
+      timestamp,
+      ticketId,
+      action,
+      fromValue || '',
+      toValue || '',
+      performedBy || 'System',
+      notes || ''
+    ];
+    
+    historySheet.appendRow(rowData);
+    
+    var lastRow = historySheet.getLastRow();
+    historySheet.getRange(lastRow, 1).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    
+    return true;
+    
+  } catch (e) {
+    Logger.log("Error logging history: " + e.toString());
+    return false;
+  }
+}
+
+function getTicketHistory(ticketId) {
+  try {
+    Logger.log("getTicketHistory: " + ticketId);
+    
+    if (!ticketId) return [];
+    
+    var ss = getSpreadsheet();
+    var historySheet = ss.getSheetByName(HISTORY_SHEET);
+    
+    if (!historySheet || historySheet.getLastRow() < 2) {
+      return [];
+    }
+    
+    var data = historySheet.getRange(2, 1, historySheet.getLastRow() - 1, 7).getValues();
+    var history = [];
+    
+    for (var i = 0; i < data.length; i++) {
+      var rowTicketId = data[i][1] ? data[i][1].toString().trim() : "";
+      if (rowTicketId === ticketId.toString().trim()) {
+        var timestamp = data[i][0];
+        if (timestamp instanceof Date) {
+          timestamp = timestamp.toISOString();
+        } else if (timestamp) {
+          try {
+            timestamp = new Date(timestamp).toISOString();
+          } catch (e) {
+            timestamp = timestamp.toString();
+          }
+        }
+        
+        history.push({
+          timestamp: timestamp,
+          ticketId: rowTicketId,
+          action: data[i][2] ? data[i][2].toString() : "",
+          from: data[i][3] ? data[i][3].toString() : "",
+          to: data[i][4] ? data[i][4].toString() : "",
+          performedBy: data[i][5] ? data[i][5].toString() : "",
+          notes: data[i][6] ? data[i][6].toString() : ""
+        });
+      }
+    }
+    
+    history.sort(function(a, b) {
+      try {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      } catch (e) {
+        return 0;
+      }
+    });
+    
+    Logger.log("getTicketHistory: " + history.length + " entries found");
+    return history;
+    
+  } catch (e) {
+    Logger.log("Error getting ticket history: " + e.toString());
+    return [];
+  }
+}
+
+// ==================== GET TICKET TIMELINE (HISTORY ONLY - NO NOTES) ====================
+function getTicketTimeline(ticketId) {
+  try {
+    Logger.log("Getting timeline for ticket: " + ticketId);
+    
+    if (!ticketId) {
+      return [];
+    }
+    
+    // Get ONLY history from Activity_Log - notes are kept separate
+    var history = getTicketHistory(ticketId);
+    
+    // Mark all entries with type 'history'
+    var timeline = history.map(function(h) {
+      h.type = 'history';
+      return h;
+    });
+    
+    // Sort by timestamp descending (newest first)
+    timeline.sort(function(a, b) {
+      try {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      } catch (e) {
+        return 0;
+      }
+    });
+    
+    Logger.log("getTicketTimeline: " + timeline.length + " entries found (notes excluded)");
+    return timeline;
+    
+  } catch (e) {
+    Logger.log("Error getting ticket timeline: " + e.toString());
+    return [];
+  }
+}
+
+// ==================== HELPER FUNCTIONS ====================
+function findTicketRow(sheet, ticketId) {
+  if (!ticketId || !sheet) return -1;
+  
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  
+  var ticketIds = sheet.getRange(2, COLUMNS.TICKET_ID, lastRow - 1, 1).getValues();
+  
+  for (var i = 0; i < ticketIds.length; i++) {
+    if (ticketIds[i][0] && ticketIds[i][0].toString().trim() === ticketId.toString().trim()) {
+      return i + 2;
+    }
+  }
+  
+  return -1;
+}
+
+function safeUpdateCell(sheet, row, column, value) {
+  if (!sheet || row < 1 || column < 1) {
+    return false;
+  }
+  
+  try {
+    sheet.getRange(row, column).setValue(value);
+    return true;
+  } catch (e) {
+    Logger.log("Error updating cell: " + e.toString());
+    return false;
+  }
+}
+
+function getRowData(sheet, row) {
+  if (!sheet || row < 2) return null;
+  return sheet.getRange(row, 1, 1, TOTAL_COLUMNS).getValues()[0];
+}
+
+function generateTicketId(sheet) {
+  try {
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return "SSPTKT-001";
+    
+    var data = sheet.getRange(2, COLUMNS.TICKET_ID, lastRow - 1, 1).getValues();
+    var highestNum = 0;
+    
+    for (var i = 0; i < data.length; i++) {
+      var ticketId = data[i][0];
+      if (ticketId && typeof ticketId === 'string' && ticketId.indexOf('SSPTKT-') === 0) {
+        var numPart = ticketId.split('-')[1];
+        var num = parseInt(numPart);
+        if (!isNaN(num) && num > highestNum) {
+          highestNum = num;
+        }
+      }
+    }
+    
+    var newNum = (highestNum + 1).toString();
+    while (newNum.length < 3) {
+      newNum = '0' + newNum;
+    }
+    
+    return "SSPTKT-" + newNum;
+    
+  } catch (e) {
+    Logger.log("Error generating ticket ID: " + e.toString());
+    return "SSPTKT-" + new Date().getTime().toString().slice(-6);
+  }
+}
+
+function formatHeaderRow(sheet, numColumns) {
+  try {
+    var headerRange = sheet.getRange(1, 1, 1, numColumns);
+    headerRange.setBackground('#1e40af');
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setFontWeight('bold');
+    headerRange.setHorizontalAlignment('center');
+    headerRange.setVerticalAlignment('middle');
+    headerRange.setBorder(true, true, true, true, true, true);
+  } catch (e) {
+    Logger.log("Error formatting header: " + e.toString());
+  }
+}
+
+function setColumnWidths(sheet) {
+  try {
+    var widths = [150, 120, 100, 150, 220, 130, 150, 150, 150, 300, 400, 100, 100, 100, 80, 150, 150, 100, 150, 150, 150, 150, 150];
+    widths.forEach(function(width, index) {
+      sheet.setColumnWidth(index + 1, width);
+    });
+  } catch (e) {
+    Logger.log("Error setting column widths: " + e.toString());
+  }
+}
+
+function formatDataRow(sheet, row, numColumns) {
+  try {
+    var dataRange = sheet.getRange(row, 1, 1, numColumns);
+    dataRange.setHorizontalAlignment('left');
+    dataRange.setVerticalAlignment('middle');
+    dataRange.setWrap(true);
+    
+    sheet.getRange(row, COLUMNS.CREATED_DATE).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+    sheet.getRange(row, COLUMNS.LAST_UPDATED).setNumberFormat('MM/dd/yyyy hh:mm:ss AM/PM');
+  } catch (e) {
+    Logger.log("Error formatting row: " + e.toString());
+  }
+}
+
+function formatDate(date) {
+  try {
+    return Utilities.formatDate(new Date(date), Session.getScriptTimeZone(), "MM/dd/yyyy HH:mm:ss");
+  } catch (error) {
+    return new Date(date).toLocaleString();
+  }
+}
+
+// ==================== EMAIL FUNCTIONS ====================
+function sendEmail(to, subject, body, cc) {
+  if (DRY_RUN) {
+    Logger.log("DRY_RUN: Email skipped to " + to);
+    Logger.log("Subject: " + subject);
+    return true;
+  }
+  
+  try {
+    var toEmails = Array.isArray(to) ? to.filter(function(e) { return e && e.trim() !== ''; }) : [to].filter(function(e) { return e && e.trim() !== ''; });
+    
+    if (toEmails.length === 0) {
+      Logger.log("No valid email recipients");
+      return false;
+    }
+    
+    var htmlBody = '<div style="font-family: ' + EMAIL_STYLE.fontFamily + '; font-size: ' + EMAIL_STYLE.fontSize + '; line-height: ' + EMAIL_STYLE.lineHeight + '; color: ' + EMAIL_STYLE.color + ';">' + body.replace(/\n/g, '<br>') + '</div>';
+    
+    var options = { htmlBody: htmlBody };
+    if (cc && cc.length > 0) {
+      var validCC = cc.filter(function(e) { return e && e.trim() !== ''; });
+      if (validCC.length > 0) {
+        options.cc = validCC.join(",");
+      }
+    }
+    
+    GmailApp.sendEmail(toEmails.join(","), subject, body, options);
+    Logger.log("Email sent to: " + toEmails.join(", "));
+    return true;
+  } catch (e) {
+    Logger.log("Error sending email: " + e.toString());
+    return false;
+  }
+}
+
+function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData, vipLevel, issueType, impactArea, criticalFlag) {
+  var subject = 'Ticket Submitted: ' + ticketId + ' - ' + formData.shortDescription.substring(0, 50);
+  
+  var body = 'Dear ' + userName + ',\n\n';
+  body += 'Thank you for submitting your IT support request.\n\n';
+  body += 'Ticket Details:\n';
+  body += '--------------------------------------------------\n';
+  body += 'Ticket ID: ' + ticketId + '\n';
+  body += 'Submitted: ' + formatDate(timestamp) + '\n';
+  body += 'Location: ' + formData.location + '\n';
+  body += 'Phone: ' + formData.phone + '\n';
+  
+  if (issueType) body += 'Issue Type: ' + issueType + '\n';
+  if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
+  if (criticalFlag) body += 'Note: Marked as Critical\n';
+  
+  body += '\nDescription:\n' + formData.shortDescription + '\n';
+  
+  if (formData.additionalDescription) {
+    body += '\nAdditional Details:\n' + formData.additionalDescription + '\n';
+  }
+  
+  body += '--------------------------------------------------\n\n';
+  body += 'An IT staff member will be assigned shortly.\n\n';
+  body += 'Best regards,\nIT Support Team\n' + ADMIN_EMAILS.PRIMARY;
+  
+  sendEmail([formData.email], subject, body);
+}
+
+function sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, userName, formData, priority, vipLevel, issueType, impactArea, criticalFlag) {
+  var urgencyTag = '';
+  if (criticalFlag) {
+    urgencyTag = ' [MARKED CRITICAL]';
+  } else if (impactArea === 'System Outage') {
+    urgencyTag = ' [SYSTEM OUTAGE]';
+  } else if (impactArea === 'Security / Access') {
+    urgencyTag = ' [SECURITY]';
+  }
+  
+  var subject = 'NEW IT Ticket [VIP:' + vipLevel + ']' + urgencyTag + ': ' + ticketId;
+  
+  var body = 'A new IT ticket has been submitted.\n\n';
+  body += 'Ticket Information:\n';
+  body += '--------------------------------------------------\n';
+  body += 'Ticket ID: ' + ticketId + '\n';
+  body += 'Priority: ' + priority + ' (Awaiting assignment)\n';
+  body += 'VIP Level: ' + vipLevel + '\n';
+  if (criticalFlag) body += 'User Marked as: CRITICAL\n';
+  if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
+  body += 'Submitted: ' + formatDate(timestamp) + '\n\n';
+  body += 'Employee Details:\n';
+  body += 'Employee ID: ' + (employeeLookup.empId || 'Not in directory') + '\n';
+  body += 'Name: ' + userName + '\n';
+  body += 'Email: ' + formData.email + '\n';
+  body += 'Phone: ' + formData.phone + '\n';
+  body += 'Location: ' + formData.location + '\n';
+  body += '\nIssue Details:\n';
+  if (issueType) body += 'Issue Type: ' + issueType + '\n';
+  body += 'Description:\n' + formData.shortDescription + '\n';
+  if (formData.additionalDescription) {
+    body += '\nAdditional Details:\n' + formData.additionalDescription + '\n';
+  }
+  body += '--------------------------------------------------\n\n';
+  body += 'Please assign this ticket and set the appropriate priority.\n\n';
+  body += 'IT Support System';
+  
+  var adminEmails = getAdminEmails();
+  
+  // Build recipients list from all configured admin emails
+  var recipients = [];
+  
+  if (adminEmails.primary && adminEmails.primary.trim() !== '') {
+    recipients.push(adminEmails.primary);
+  }
+  
+  if (adminEmails.secondary && adminEmails.secondary.trim() !== '') {
+    recipients.push(adminEmails.secondary);
+  }
+  
+  if (adminEmails.tertiary && adminEmails.tertiary.trim() !== '') {
+    recipients.push(adminEmails.tertiary);
+  }
+  
+  // Add critical email if critical flag is set and not already in list
+  if (criticalFlag && adminEmails.critical && adminEmails.critical.trim() !== '') {
+    if (recipients.indexOf(adminEmails.critical) === -1) {
+      recipients.push(adminEmails.critical);
+    }
+  }
+  
+  // Remove duplicates
+  var uniqueRecipients = [];
+  for (var i = 0; i < recipients.length; i++) {
+    if (uniqueRecipients.indexOf(recipients[i]) === -1) {
+      uniqueRecipients.push(recipients[i]);
+    }
+  }
+  
+  Logger.log("Sending new ticket notification to: " + uniqueRecipients.join(", "));
+  sendEmail(uniqueRecipients, subject, body);
+}
+
+function sendTicketAssignedEmailToUser(ticketId, userName, assignedTo, rowData) {
+  var shortDesc = rowData[COLUMNS.SHORT_DESCRIPTION - 1] || "";
+  var userEmail = rowData[COLUMNS.EMAIL - 1];
+  
+  var subject = 'Ticket Assigned: ' + ticketId + ' - Now with ' + assignedTo;
+  var body = 'Dear ' + userName + ',\n\nYour IT support ticket has been assigned.\n\nAssignment Details:\n--------------------------------------------------\nTicket ID: ' + ticketId + '\nDescription: ' + shortDesc + '\nAssigned To: ' + assignedTo + '\nStatus: In Progress\n--------------------------------------------------\n\n' + assignedTo + ' will work on your request.\n\nBest regards,\nIT Support Team';
+  sendEmail([userEmail], subject, body);
+}
+
+function sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy, rowData) {
+  var assignedStaffEmail = getITStaffEmail(assignedTo);
+  if (!assignedStaffEmail) return;
+  
+  var userName = rowData[COLUMNS.NAME - 1] || "";
+  var userEmail = rowData[COLUMNS.EMAIL - 1] || "";
+  var userPhone = rowData[COLUMNS.PHONE - 1] || "";
+  var location = rowData[COLUMNS.LOCATION - 1] || "";
+  var issueType = rowData[COLUMNS.ISSUE_TYPE - 1] || "";
+  var impactArea = rowData[COLUMNS.IMPACT_AREA - 1] || "";
+  var shortDesc = rowData[COLUMNS.SHORT_DESCRIPTION - 1] || "";
+  var additionalDesc = rowData[COLUMNS.ADDITIONAL_DESCRIPTION - 1] || "";
+  var priority = rowData[COLUMNS.PRIORITY - 1] || "Pending";
+  var vipLevel = rowData[COLUMNS.VIP_LEVEL - 1] || "";
+  var criticalFlag = rowData[COLUMNS.CRITICAL_FLAG - 1] || "";
+  
+  var body = 'Hello ' + assignedTo + ',\n\n';
+  body += 'You have been assigned a ticket by ' + assignedBy + '.\n\n';
+  body += 'Ticket Details:\n--------------------------------------------------\n';
+  body += 'Ticket ID: ' + ticketId + '\n';
+  body += 'Priority: ' + priority + ' (VIP Level: ' + vipLevel + ')\n';
+  if (criticalFlag === 'true') body += 'User Marked as: CRITICAL\n';
+  if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
+  body += '\nUser Information:\n';
+  body += 'Name: ' + userName + '\n';
+  body += 'Email: ' + userEmail + '\n';
+  body += 'Phone: ' + userPhone + '\n';
+  body += 'Location: ' + location + '\n';
+  body += '\nIssue:\n';
+  if (issueType) body += 'Issue Type: ' + issueType + '\n';
+  body += 'Description: ' + shortDesc + '\n';
+  if (additionalDesc) body += 'Additional Details: ' + additionalDesc + '\n';
+  body += '--------------------------------------------------\n\n';
+  body += 'Please review and work on this ticket.\n\nIT Support System';
+  
+  var subject = 'Ticket Assigned to You [' + priority + ']: ' + ticketId;
+  sendEmail([assignedStaffEmail], subject, body);
+}
+
+function sendTicketEscalatedEmailToUser(ticketId, userName, escalateTo, escalationLevel, reason, rowData) {
+  var shortDesc = rowData[COLUMNS.SHORT_DESCRIPTION - 1] || "";
+  var userEmail = rowData[COLUMNS.EMAIL - 1];
+  
+  var subject = 'Ticket Escalated: ' + ticketId + ' - Now with ' + escalationLevel + ' Support';
+  var body = 'Dear ' + userName + ',\n\nYour IT ticket has been escalated for faster resolution.\n\nEscalation Details:\n--------------------------------------------------\nTicket ID: ' + ticketId + '\nDescription: ' + shortDesc + '\nEscalation Level: ' + escalationLevel + '\nAssigned To: ' + escalateTo + '\n' + (reason ? 'Reason: ' + reason : '') + '\n--------------------------------------------------\n\n' + escalateTo + ' from ' + escalationLevel + ' will handle your request.\n\nBest regards,\nIT Support Team';
+  sendEmail([userEmail], subject, body);
+}
+
+function sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationLevel, escalatedBy, reason, rowData) {
+  var escalatedStaffEmail = getITStaffEmail(escalateTo);
+  if (!escalatedStaffEmail) return;
+  
+  var userName = rowData[COLUMNS.NAME - 1] || "";
+  var userEmail = rowData[COLUMNS.EMAIL - 1] || "";
+  var userPhone = rowData[COLUMNS.PHONE - 1] || "";
+  var location = rowData[COLUMNS.LOCATION - 1] || "";
+  var issueType = rowData[COLUMNS.ISSUE_TYPE - 1] || "";
+  var impactArea = rowData[COLUMNS.IMPACT_AREA - 1] || "";
+  var shortDesc = rowData[COLUMNS.SHORT_DESCRIPTION - 1] || "";
+  var additionalDesc = rowData[COLUMNS.ADDITIONAL_DESCRIPTION - 1] || "";
+  var priority = rowData[COLUMNS.PRIORITY - 1] || "Pending";
+  var vipLevel = rowData[COLUMNS.VIP_LEVEL - 1] || "";
+  var criticalFlag = rowData[COLUMNS.CRITICAL_FLAG - 1] || "";
+  
+  var body = 'Hello ' + escalateTo + ',\n\n';
+  body += 'A ticket has been escalated to you by ' + escalatedBy + '.\n\n';
+  body += 'Escalation Information:\n--------------------------------------------------\n';
+  body += 'Ticket ID: ' + ticketId + '\n';
+  body += 'Priority: ' + priority + ' (VIP Level: ' + vipLevel + ')\n';
+  body += 'Escalation Level: ' + escalationLevel + '\n';
+  if (criticalFlag === 'true') body += 'User Marked as: CRITICAL\n';
+  if (reason) body += 'Escalation Reason: ' + reason + '\n';
+  if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
+  body += '\nUser Information:\n';
+  body += 'Name: ' + userName + '\n';
+  body += 'Email: ' + userEmail + '\n';
+  body += 'Phone: ' + userPhone + '\n';
+  body += 'Location: ' + location + '\n';
+  body += '\nIssue:\n';
+  if (issueType) body += 'Issue Type: ' + issueType + '\n';
+  body += 'Description: ' + shortDesc + '\n';
+  if (additionalDesc) body += 'Additional Details: ' + additionalDesc + '\n';
+  body += '--------------------------------------------------\n\n';
+  body += 'Please prioritize this ticket.\n\nIT Support System';
+  
+  var subject = 'ESCALATED Ticket [' + escalationLevel + '] [' + priority + ']: ' + ticketId;
+  sendEmail([escalatedStaffEmail], subject, body);
+}
+
+function sendCriticalEscalationNotification(ticketId, escalateTo, escalationLevel, reason, rowData) {
+  var adminEmails = getAdminEmails();
+  if (!adminEmails.escalation) return;
+  
+  var userName = rowData[COLUMNS.NAME - 1] || "";
+  var shortDesc = rowData[COLUMNS.SHORT_DESCRIPTION - 1] || "";
+  var priority = rowData[COLUMNS.PRIORITY - 1] || "Pending";
+  var criticalFlag = rowData[COLUMNS.CRITICAL_FLAG - 1] || "";
+  
+  var subject = '[CRITICAL ESCALATION] Ticket ' + ticketId + ' escalated to ' + escalationLevel;
+  var body = 'A CRITICAL ticket has been escalated.\n\n';
+  body += 'Ticket ID: ' + ticketId + '\n';
+  body += 'User: ' + userName + '\n';
+  body += 'Priority: ' + priority + '\n';
+  if (criticalFlag === 'true') body += 'User Marked as: CRITICAL\n';
+  body += 'Escalated To: ' + escalateTo + ' (' + escalationLevel + ')\n';
+  body += 'Reason: ' + (reason || 'Not specified') + '\n';
+  body += 'Description: ' + shortDesc + '\n\n';
+  body += 'Please monitor this ticket closely.\n\nIT Support System';
+  
+  sendEmail([adminEmails.escalation], subject, body);
+}
+
+function sendStatusChangeEmail(ticketId, userName, userEmail, oldStatus, newStatus, ticketInfo) {
+  var subject = '';
+  var body = '';
+  
+  var shortDesc = ticketInfo['Short Description'] || "";
+  var assignedTo = ticketInfo['Assigned To'] || "";
+  var resolvedBy = ticketInfo['Resolved By'] || "";
+  
+  switch (newStatus) {
+    case 'In Progress':
+      subject = 'Ticket In Progress: ' + ticketId;
+      body = 'Dear ' + userName + ',\n\nYour IT ticket is now being worked on.\n\nStatus Update:\n--------------------------------------------------\nTicket ID: ' + ticketId + '\nPrevious Status: ' + oldStatus + '\nNew Status: In Progress\n' + (assignedTo ? 'Working On It: ' + assignedTo : '') + '\nUpdated: ' + formatDate(new Date()) + '\n\nDescription: ' + shortDesc + '\n--------------------------------------------------\n\nYou\'ll be notified when resolved.\n\nBest regards,\nIT Support Team';
+      break;
+      
+    case 'Resolved':
+      subject = 'Ticket Resolved: ' + ticketId;
+      body = 'Dear ' + userName + ',\n\nYour IT ticket has been resolved!\n\nResolution Details:\n--------------------------------------------------\nTicket ID: ' + ticketId + '\nStatus: Resolved\nResolved By: ' + (resolvedBy || assignedTo || "IT Support Team") + '\nResolved: ' + formatDate(new Date()) + '\n\nDescription: ' + shortDesc + '\n--------------------------------------------------\n\nIf you still have issues, please reply to this email or submit a new ticket.\n\nBest regards,\nIT Support Team';
+      break;
+      
+    case 'Open':
+      subject = 'Ticket Reopened: ' + ticketId;
+      body = 'Dear ' + userName + ',\n\nYour IT ticket has been reopened.\n\nReopening Details:\n--------------------------------------------------\nTicket ID: ' + ticketId + '\nPrevious Status: ' + oldStatus + '\nNew Status: Open\nReopened: ' + formatDate(new Date()) + '\n--------------------------------------------------\n\nWe\'ll work on it again shortly.\n\nBest regards,\nIT Support Team';
+      break;
+  }
+  
+  if (subject && body && userEmail) {
+    sendEmail([userEmail], subject, body);
+  }
+}
+
+// ==================== CACHE FUNCTIONS ====================
+function clearDashboardCache() {
+  try {
+    var cacheKeys = ['dashboard_tickets', 'dashboard_stats', 'dashboard_config'];
+    cacheKeys.forEach(function(key) {
+      CACHE.remove(key);
+    });
+    Logger.log("Dashboard cache cleared");
+  } catch (e) {
+    Logger.log('Error clearing cache: ' + e.toString());
+  }
+}
+
+function getCachedData(key) {
+  try {
+    var cached = CACHE.get(key);
+    return cached ? JSON.parse(cached) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setCachedData(key, data) {
+  try {
+    CACHE.put(key, JSON.stringify(data), CACHE_DURATION);
+  } catch (e) {
+    Logger.log('Error caching: ' + e.toString());
+  }
+}
+
+// ==================== REPORT GENERATION ====================
+function generateReport(reportType) {
+  try {
+    Logger.log("Generating report: " + reportType);
+    
+    var tickets = getAllTickets();
+    var now = new Date();
+    
+    var reportData;
+    var headers;
+    var reportTitle;
+    
+    switch (reportType) {
+      case 'tickets':
+        reportData = generateTicketsReport(tickets);
+        headers = ['Ticket ID', 'Created Date', 'Name', 'Email', 'Phone', 'Location', 
+                   'Issue Type', 'Impact Area', 'Description', 'Status', 'Priority', 'VIP Level', 
+                   'Marked Critical', 'Assigned To', 'Escalation Level', 'Resolved By', 'Resolved Date'];
+        reportTitle = 'All_Tickets_Report';
+        break;
+        
+      case 'team':
+        reportData = generateTeamReport();
+        headers = ['Staff Name', 'Level', 'Status', 'Tickets Handled', 'Resolved', 'Open', 
+                   'SLA Compliance %', 'Avg Resolution Time'];
+        reportTitle = 'Team_Performance_Report';
+        break;
+        
+      case 'sla':
+        reportData = generateSLAReport(tickets);
+        headers = ['Ticket ID', 'Created Date', 'Priority', 'Status', 'Assigned To', 
+                   'Response Time (hrs)', 'Resolution Time (hrs)', 'SLA Status', 'SLA Threshold (hrs)'];
+        reportTitle = 'SLA_Compliance_Report';
+        break;
+        
+      case 'monthly':
+        reportData = generateMonthlyReport(tickets);
+        headers = ['Metric', 'Value', 'Details'];
+        reportTitle = 'Monthly_Summary_Report';
+        break;
+        
+      case 'notes':
+        reportData = generateNotesReport();
+        headers = ['Ticket ID', 'Timestamp', 'Note Type', 'Added By', 'Note'];
+        reportTitle = 'Ticket_Notes_Report';
+        break;
+        
+      default:
+        return { success: false, error: 'Invalid report type' };
+    }
+    
+    var csvContent = generateCSVContent(headers, reportData);
+    var dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
+    var fileName = reportTitle + '_' + dateStr + '.csv';
+    
+    Logger.log("Report generated: " + fileName);
+    
+    return {
+      success: true,
+      fileName: fileName,
+      csvContent: csvContent,
+      recordCount: reportData.length,
+      reportType: reportType,
+      generatedAt: now.toISOString()
+    };
+    
+  } catch (e) {
+    Logger.log("Error generating report: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function generateCSVContent(headers, data) {
+  try {
+    var csv = headers.map(function(h) { return escapeCSVField(h); }).join(',') + '\n';
+    
+    for (var i = 0; i < data.length; i++) {
+      csv += data[i].map(function(cell) { return escapeCSVField(cell); }).join(',') + '\n';
+    }
+    
+    return csv;
+  } catch (e) {
+    Logger.log("Error generating CSV: " + e.toString());
+    return '';
+  }
+}
+
+function escapeCSVField(field) {
+  if (field === null || field === undefined) return '';
+  
+  var str = field.toString();
+  
+  if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1 || str.indexOf('\r') !== -1) {
+    str = '"' + str.replace(/"/g, '""') + '"';
+  }
+  
+  return str;
+}
+
+function generateTicketsReport(tickets) {
+  return tickets.map(function(t) {
+    return [
+      t['Ticket ID'] || '',
+      t['Created Date'] ? formatDate(new Date(t['Created Date'])) : '',
+      t['Name'] || '',
+      t['Email Address'] || '',
+      t['Phone Number'] || '',
+      t['Location'] || '',
+      t['Issue Type'] || '',
+      t['Impact Area'] || '',
+      t['Short Description'] || '',
+      t['Status'] || '',
+      t['Priority'] || 'Pending',
+      t['VIP Level'] || '',
+      t['Critical Flag'] === 'true' ? 'Yes' : 'No',
+      t['Assigned To'] || '',
+      t['Escalation Level'] || '',
+      t['Resolved By'] || '',
+      t['Resolved Date'] ? formatDate(new Date(t['Resolved Date'])) : ''
+    ];
+  });
+}
+
+function generateTeamReport() {
+  var performance = getTeamPerformance({});
+  return performance.map(function(p) {
+    return [
+      p.name || '',
+      p.level || '',
+      p.status || 'Active',
+      p.ticketsHandled || 0,
+      p.resolved || 0,
+      p.openTickets || 0,
+      p.slaCompliance || 0,
+      p.avgResolutionTime || '--'
+    ];
+  });
+}
+
+function generateSLAReport(tickets) {
+  return tickets.map(function(t) {
+    var createdDate = t['Created Date'] ? new Date(t['Created Date']) : null;
+    var assignedDate = t['Assigned Date'] ? new Date(t['Assigned Date']) : null;
+    var resolvedDate = t['Resolved Date'] ? new Date(t['Resolved Date']) : null;
+    var priority = t['Priority'] || 'Pending';
+    var slaThreshold = SLA_THRESHOLDS[priority] || SLA_THRESHOLDS['Pending'];
+    
+    var responseTime = '--';
+    var resolutionTime = '--';
+    var slaStatus = 'Pending';
+    
+    if (createdDate && assignedDate) {
+      responseTime = ((assignedDate - createdDate) / (1000 * 60 * 60)).toFixed(2);
+    }
+    
+    if (createdDate && resolvedDate) {
+      var resHours = (resolvedDate - createdDate) / (1000 * 60 * 60);
+      resolutionTime = resHours.toFixed(2);
+      slaStatus = resHours <= slaThreshold.resolution ? 'Within SLA' : 'Breached';
+    }
+    
+    return [
+      t['Ticket ID'] || '',
+      createdDate ? formatDate(createdDate) : '',
+      priority,
+      t['Status'] || '',
+      t['Assigned To'] || 'Unassigned',
+      responseTime,
+      resolutionTime,
+      slaStatus,
+      slaThreshold.resolution
+    ];
+  });
+}
+
+function generateMonthlyReport(tickets) {
+  var now = new Date();
+  var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  var monthlyTickets = tickets.filter(function(t) {
+    var created = t['Created Date'] ? new Date(t['Created Date']) : null;
+    return created && created >= startOfMonth;
+  });
+  
+  var stats = getDashboardStats(monthlyTickets);
+  
+  return [
+    ['Total Tickets This Month', monthlyTickets.length, ''],
+    ['Open Tickets', stats.open, ''],
+    ['In Progress', stats.inProgress, ''],
+    ['Resolved', stats.resolved, ''],
+    ['High Priority Tickets', stats.highPriority, 'Critical + High'],
+    ['Pending Priority', stats.pending, 'Awaiting assignment'],
+    ['Marked as Critical', stats.markedCritical, 'User-marked'],
+    ['Unassigned Tickets', stats.unassigned, '']
+  ];
+}
+
+// Generate notes report from separate Ticket_Notes sheet
+function generateNotesReport() {
+  try {
+    var ss = getSpreadsheet();
+    var notesSheet = ss.getSheetByName(NOTES_SHEET);
+    
+    if (!notesSheet || notesSheet.getLastRow() < 2) {
+      return [];
+    }
+    
+    var data = notesSheet.getRange(2, 1, notesSheet.getLastRow() - 1, 5).getValues();
+    
+    return data.map(function(row) {
+      var timestamp = row[0];
+      if (timestamp instanceof Date) {
+        timestamp = formatDate(timestamp);
+      }
+      
+      return [
+        row[1] || '', // Ticket ID
+        timestamp,    // Timestamp
+        row[4] || '', // Note Type
+        row[3] || '', // Added By
+        row[2] || ''  // Note
+      ];
+    });
+    
+  } catch (e) {
+    Logger.log("Error generating notes report: " + e.toString());
+    return [];
+  }
+}
+
+function getTeamPerformance(filters) {
+  try {
+    var tickets = getAllTickets();
+    var itStaff = getITStaffList();
+    
+    if (itStaff.length === 0) return [];
+    
+    var performance = {};
+    itStaff.forEach(function(staff) {
+      performance[staff.name] = {
+        name: staff.name,
+        level: staff.level || 'L1',
+        status: staff.status || 'Online',
+        ticketsHandled: 0,
+        resolved: 0,
+        openTickets: 0,
+        withinSla: 0,
+        breachedSla: 0,
+        totalResolutionHours: 0
+      };
+    });
+    
+    tickets.forEach(function(ticket) {
+      var assignedTo = (ticket['Assigned To'] || '').toString().trim();
+      var status = (ticket['Status'] || 'Open').toString().trim();
+      var priority = (ticket['Priority'] || 'Pending').toString().trim();
+      var createdDate = ticket['Created Date'] ? new Date(ticket['Created Date']) : null;
+      var resolvedDate = ticket['Resolved Date'] ? new Date(ticket['Resolved Date']) : null;
+      
+      if (assignedTo && performance[assignedTo]) {
+        performance[assignedTo].ticketsHandled++;
+        
+        if (status.toLowerCase() === 'resolved') {
+          performance[assignedTo].resolved++;
+          
+          if (resolvedDate && createdDate) {
+            var resolutionHours = (resolvedDate - createdDate) / (1000 * 60 * 60);
+            performance[assignedTo].totalResolutionHours += resolutionHours;
+            
+            var slaThreshold = SLA_THRESHOLDS[priority] || SLA_THRESHOLDS['Pending'];
+            if (resolutionHours <= slaThreshold.resolution) {
+              performance[assignedTo].withinSla++;
+            } else {
+              performance[assignedTo].breachedSla++;
+            }
+          }
+        } else {
+          performance[assignedTo].openTickets++;
+        }
+      }
+    });
+    
+    var result = [];
+    for (var key in performance) {
+      if (performance.hasOwnProperty(key)) {
+        var member = performance[key];
+        var totalProcessed = member.withinSla + member.breachedSla;
+        var slaCompliance = totalProcessed > 0 ? Math.round((member.withinSla / totalProcessed) * 100) : 100;
+        
+        var avgResolutionHours = member.resolved > 0 ? member.totalResolutionHours / member.resolved : 0;
+        
+        var avgResolutionDisplay = '--';
+        if (avgResolutionHours > 0) {
+          if (avgResolutionHours < 1) {
+            avgResolutionDisplay = Math.round(avgResolutionHours * 60) + 'm';
+          } else if (avgResolutionHours < 24) {
+            avgResolutionDisplay = avgResolutionHours.toFixed(1) + 'h';
+          } else {
+            avgResolutionDisplay = (avgResolutionHours / 24).toFixed(1) + 'd';
+          }
+        }
+        
+        result.push({
+          name: member.name,
+          level: member.level,
+          status: member.status,
+          ticketsHandled: member.ticketsHandled,
+          resolved: member.resolved,
+          openTickets: member.openTickets,
+          slaCompliance: slaCompliance,
+          avgResolutionTime: avgResolutionDisplay
+        });
+      }
+    }
+    
+    result.sort(function(a, b) { return b.ticketsHandled - a.ticketsHandled; });
+    return result;
+    
+  } catch (error) {
+    Logger.log("Error in getTeamPerformance: " + error.toString());
+    return [];
+  }
+}
+
+function getSlaSummary(filters) {
+  try {
+    var tickets = getAllTickets();
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    var resolvedToday = 0;
+    var breachedTickets = 0;
+    var withinSlaTickets = 0;
+    var totalResponseTimeHours = 0;
+    var ticketsWithResponse = 0;
+    
+    tickets.forEach(function(ticket) {
+      var priority = (ticket['Priority'] || 'Pending').toString().trim();
+      var createdDate = ticket['Created Date'] ? new Date(ticket['Created Date']) : null;
+      var assignedDate = ticket['Assigned Date'] ? new Date(ticket['Assigned Date']) : null;
+      var resolvedDate = ticket['Resolved Date'] ? new Date(ticket['Resolved Date']) : null;
+      
+      if (resolvedDate) {
+        var resDateOnly = new Date(resolvedDate);
+        resDateOnly.setHours(0, 0, 0, 0);
+        if (resDateOnly.getTime() === today.getTime()) {
+          resolvedToday++;
+        }
+      }
+      
+      if (createdDate && assignedDate) {
+        var responseHours = (assignedDate - createdDate) / (1000 * 60 * 60);
+        totalResponseTimeHours += responseHours;
+        ticketsWithResponse++;
+      }
+      
+      if (resolvedDate && createdDate) {
+        var resolutionHours = (resolvedDate - createdDate) / (1000 * 60 * 60);
+        var slaThreshold = SLA_THRESHOLDS[priority] || SLA_THRESHOLDS['Pending'];
+        if (resolutionHours <= slaThreshold.resolution) {
+          withinSlaTickets++;
+        } else {
+          breachedTickets++;
+        }
+      }
+    });
+    
+    var avgResponseHours = ticketsWithResponse > 0 ? Math.round(totalResponseTimeHours / ticketsWithResponse * 10) / 10 : 0;
+    
+    var totalProcessed = withinSlaTickets + breachedTickets;
+    var slaCompliance = totalProcessed > 0 ? Math.round((withinSlaTickets / totalProcessed) * 100) : 100;
+    
+    var avgResponseDisplay = '--';
+    if (avgResponseHours > 0) {
+      if (avgResponseHours < 1) {
+        avgResponseDisplay = Math.round(avgResponseHours * 60) + 'm';
+      } else if (avgResponseHours < 24) {
+        avgResponseDisplay = avgResponseHours.toFixed(1) + 'h';
+      } else {
+        avgResponseDisplay = (avgResponseHours / 24).toFixed(1) + 'd';
+      }
+    }
+    
+    return {
+      slaCompliance: slaCompliance,
+      avgResponseTime: avgResponseDisplay,
+      breachedTickets: breachedTickets,
+      resolvedToday: resolvedToday,
+      totalTickets: tickets.length
+    };
+    
+  } catch (error) {
+    Logger.log("Error in getSlaSummary: " + error.toString());
+    return { slaCompliance: 0, avgResponseTime: '--', breachedTickets: 0, resolvedToday: 0, totalTickets: 0 };
+  }
+}
+
+// ==================== SYSTEM STATUS ====================
+function getSystemStatus() {
+  var settings = getAllSettings();
+  
+  var spreadsheetInfo = { id: '', name: '', url: '' };
+  try {
+    var ss = getSpreadsheet();
+    spreadsheetInfo = {
+      id: ss.getId(),
+      name: ss.getName(),
+      url: ss.getUrl()
+    };
+  } catch (e) {
+    Logger.log("Could not get spreadsheet info: " + e.toString());
+  }
+  
+  return {
+    formEnabled: FORM_ENABLED,
+    formMessage: FORM_DISABLED_MESSAGE,
+    dashboardEnabled: DASHBOARD_ENABLED,
+    dashboardMessage: DASHBOARD_DISABLED_MESSAGE,
+    autoAssign: settings.AUTO_ASSIGN || false,
+    dryRun: DRY_RUN,
+    version: '7.9.0',
+    settings: settings,
+    adminEmails: getAdminEmails(),
+    spreadsheet: spreadsheetInfo
+  };
+}
+
+// ==================== TEST FUNCTIONS ====================
+function testSetup() {
+  Logger.log("=== TEST SETUP ===");
+  var result = setupSystem();
+  Logger.log("Setup result: " + JSON.stringify(result));
+  return result;
+}
+
+function testGetSpreadsheet() {
+  Logger.log("=== TEST GET SPREADSHEET ===");
+  try {
+    var ss = getSpreadsheet();
+    Logger.log("Spreadsheet found: " + ss.getName());
+    Logger.log("Spreadsheet ID: " + ss.getId());
+    Logger.log("Spreadsheet URL: " + ss.getUrl());
+    return {
+      success: true,
+      name: ss.getName(),
+      id: ss.getId(),
+      url: ss.getUrl()
+    };
+  } catch (e) {
+    Logger.log("Error: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function testGetAllTickets() {
+  Logger.log("=== TEST GET ALL TICKETS ===");
+  clearDashboardCache();
+  var tickets = getAllTickets();
+  Logger.log("Total tickets: " + tickets.length);
+  return tickets;
+}
+
+function testGetDashboardData() {
+  Logger.log("=== TEST GET DASHBOARD DATA ===");
+  clearDashboardCache();
+  var data = getDashboardData(true);
+  Logger.log("Tickets: " + data.tickets.length);
+  Logger.log("IT Staff: " + data.itStaff.length);
+  return data;
+}
+
+function testValidateUser() {
+  Logger.log("=== TEST VALIDATE USER ===");
+  var result = validateUser("admin", "admin123");
+  Logger.log("Login result: " + JSON.stringify(result));
+  return result;
+}
+
+function testLookupEmployee() {
+  Logger.log("=== TEST LOOKUP EMPLOYEE ===");
+  var result = lookupEmployee("alice@example.com");
+  Logger.log("Lookup result: " + JSON.stringify(result));
+  return result;
+}
+
+function testLookupEmployeeSafe() {
+  Logger.log("=== TEST LOOKUP EMPLOYEE SAFE ===");
+  var result = lookupEmployeeSafe("alice@example.com");
+  Logger.log("Lookup result: " + JSON.stringify(result));
+  return result;
+}
+
+function testSubmitTicket() {
+  Logger.log("=== TEST SUBMIT TICKET ===");
+  var testData = {
+    name: 'Test User',
+    email: 'alice@example.com',
+    phone: '(123) 456-7890',
+    location: 'Woodbridge',
+    issueType: 'Login issue',
+    workMode: 'User Productivity',
+    priority: 'P2',
+    criticalFlag: false,
+    shortDescription: 'Test ticket submission',
+    additionalDescription: 'This is a test.'
+  };
+  
+  var result = submitTicket(testData);
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testUpdatePriority() {
+  Logger.log("=== TEST UPDATE PRIORITY ===");
+  var result = updateTicketPriority("SSPTKT-001", "High", "Test User");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testAssignWithPriority() {
+  Logger.log("=== TEST ASSIGN WITH PRIORITY ===");
+  var result = assignTicket("SSPTKT-001", "John Smith", "Test User", "High");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testGenerateReport() {
+  Logger.log("=== TEST GENERATE REPORT ===");
+  var result = generateReport('tickets');
+  Logger.log("Report generated: " + result.fileName);
+  return result;
+}
+
+function testAddNote() {
+  Logger.log("=== TEST ADD NOTE ===");
+  var result = addTicketNote("SSPTKT-001", "Tested the login credentials and reset password.", "John Smith", "Work Done");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testGetNotes() {
+  Logger.log("=== TEST GET NOTES ===");
+  var result = getTicketNotes("SSPTKT-001");
+  Logger.log("Notes found: " + result.length);
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testGetTimeline() {
+  Logger.log("=== TEST GET TIMELINE ===");
+  var result = getTicketTimeline("SSPTKT-001");
+  Logger.log("Timeline entries: " + result.length);
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testUpdateIssueType() {
+  Logger.log("=== TEST UPDATE ISSUE TYPE ===");
+  var result = updateIssueType("SSPTKT-001", "Password reset / MFA issue", "John Smith");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testUpdateImpactArea() {
+  Logger.log("=== TEST UPDATE IMPACT AREA ===");
+  var result = updateImpactArea("SSPTKT-001", "Security / Access", "John Smith");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testUpdatePhoneNumber() {
+  Logger.log("=== TEST UPDATE PHONE NUMBER ===");
+  var result = updatePhoneNumber("SSPTKT-001", "(555) 123-4567", "John Smith");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testUpdateLocation() {
+  Logger.log("=== TEST UPDATE LOCATION ===");
+  var result = updateLocation("SSPTKT-001", "Stafford", "John Smith");
+  Logger.log("Result: " + JSON.stringify(result));
+  return result;
+}
+
+function testEmailConfiguration() {
+  Logger.log("=== TEST EMAIL CONFIGURATION ===");
+  var adminEmails = getAdminEmails();
+  Logger.log("Admin Emails: " + JSON.stringify(adminEmails));
+  Logger.log("IT_TO Array: " + JSON.stringify(IT_TO));
+  return {
+    adminEmails: adminEmails,
+    itTo: IT_TO,
+    dryRun: DRY_RUN
+  };
+}
+
+// ==================== DIAGNOSTIC FUNCTION ====================
+function diagnoseSystem() {
+  Logger.log("========== SYSTEM DIAGNOSTICS v7.9 ==========");
+  
+  var results = {
+    timestamp: new Date().toISOString(),
+    spreadsheet: { status: 'unknown' },
+    sheets: {},
+    configuredId: SPREADSHEET_ID || 'NOT SET',
+    adminEmails: getAdminEmails(),
+    dryRun: DRY_RUN
+  };
+  
+  // Test spreadsheet access
+  try {
+    var ss = getSpreadsheet();
+    results.spreadsheet = {
+      status: 'success',
+      id: ss.getId(),
+      name: ss.getName(),
+      url: ss.getUrl()
+    };
+    Logger.log("✓ Spreadsheet access: OK");
+    Logger.log("  Name: " + ss.getName());
+    Logger.log("  ID: " + ss.getId());
+    
+    // Test each sheet
+    var sheetNames = [FORM_SHEET, USERS_SHEET, IT_STAFF_SHEET, HISTORY_SHEET, DIRECTORY_SHEET, SETTINGS_SHEET, NOTES_SHEET];
+    
+    sheetNames.forEach(function(name) {
+      var sheet = ss.getSheetByName(name);
+      if (sheet) {
+        results.sheets[name] = {
+          exists: true,
+          rows: sheet.getLastRow(),
+          cols: sheet.getLastColumn()
+        };
+        Logger.log("✓ Sheet '" + name + "': OK (" + sheet.getLastRow() + " rows)");
+      } else {
+        results.sheets[name] = { exists: false };
+        Logger.log("✗ Sheet '" + name + "': NOT FOUND");
+      }
+    });
+    
+  } catch (e) {
+    results.spreadsheet = {
+      status: 'error',
+      error: e.toString()
+    };
+    Logger.log("✗ Spreadsheet access: FAILED");
+    Logger.log("  Error: " + e.toString());
+  }
+  
+  // Test email configuration
+  Logger.log("\n=== EMAIL CONFIGURATION ===");
+  Logger.log("Primary: " + results.adminEmails.primary);
+  Logger.log("Secondary: " + results.adminEmails.secondary);
+  Logger.log("Tertiary: " + results.adminEmails.tertiary);
+  Logger.log("Escalation: " + results.adminEmails.escalation);
+  Logger.log("Critical: " + results.adminEmails.critical);
+  Logger.log("DRY_RUN: " + DRY_RUN);
+  
+  Logger.log("========== END DIAGNOSTICS ==========");
+  return results;
+}
+
+// ==================== BULK UPDATE FUNCTIONS ====================
+function bulkUpdateTickets(ticketIds, updateData, updatedBy) {
+  try {
+    Logger.log("Bulk updating " + ticketIds.length + " tickets");
+    
+    if (!ticketIds || ticketIds.length === 0) {
+      return { success: false, error: 'No ticket IDs provided' };
+    }
+    
+    if (!updateData) {
+      return { success: false, error: 'No update data provided' };
+    }
+    
+    var results = [];
+    var successCount = 0;
+    var failCount = 0;
+    
+    for (var i = 0; i < ticketIds.length; i++) {
+      var ticketId = ticketIds[i];
+      var result = { ticketId: ticketId, success: false };
+      
+      try {
+        if (updateData.status) {
+          var statusResult = updateTicketStatus(ticketId, updateData.status, updatedBy);
+          result.statusUpdate = statusResult.success;
+        }
+        
+        if (updateData.priority) {
+          var priorityResult = updateTicketPriority(ticketId, updateData.priority, updatedBy);
+          result.priorityUpdate = priorityResult.success;
+        }
+        
+        if (updateData.assignedTo) {
+          var assignResult = assignTicket(ticketId, updateData.assignedTo, updatedBy, updateData.priority);
+          result.assignUpdate = assignResult.success;
+        }
+        
+        if (updateData.issueType) {
+          var issueResult = updateIssueType(ticketId, updateData.issueType, updatedBy);
+          result.issueTypeUpdate = issueResult.success;
+        }
+        
+        if (updateData.impactArea) {
+          var impactResult = updateImpactArea(ticketId, updateData.impactArea, updatedBy);
+          result.impactAreaUpdate = impactResult.success;
+        }
+        
+        if (updateData.phone) {
+          var phoneResult = updatePhoneNumber(ticketId, updateData.phone, updatedBy);
+          result.phoneUpdate = phoneResult.success;
+        }
+        
+        if (updateData.location) {
+          var locationResult = updateLocation(ticketId, updateData.location, updatedBy);
+          result.locationUpdate = locationResult.success;
+        }
+        
+        result.success = true;
+        successCount++;
+        
+      } catch (e) {
+        result.error = e.toString();
+        failCount++;
+      }
+      
+      results.push(result);
+    }
+    
+    clearDashboardCache();
+    
+    return {
+      success: true,
+      message: 'Bulk update completed: ' + successCount + ' succeeded, ' + failCount + ' failed',
+      successCount: successCount,
+      failCount: failCount,
+      results: results
+    };
+    
+  } catch (error) {
+    Logger.log("Error in bulkUpdateTickets: " + error.toString());
+    return { success: false, error: error.message || 'Bulk update failed' };
+  }
+}
+
+// ==================== EXPORT/IMPORT FUNCTIONS ====================
+function exportTicketData(ticketId) {
+  try {
+    var ticketResult = getTicketByIdForTracking(ticketId);
+    
+    if (!ticketResult.success) {
+      return { success: false, error: ticketResult.error };
+    }
+    
+    var notes = getTicketNotes(ticketId);
+    var history = getTicketHistory(ticketId);
+    
+    return {
+      success: true,
+      data: {
+        ticket: ticketResult.ticket,
+        notes: notes,
+        history: history,
+        exportedAt: new Date().toISOString()
+      }
+    };
+    
+  } catch (e) {
+    Logger.log("Error exporting ticket data: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ==================== CLEANUP FUNCTIONS ====================
+function archiveResolvedTickets(daysOld) {
+  try {
+    var days = daysOld || 90;
+    var cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    var tickets = getAllTickets();
+    var archivedCount = 0;
+    
+    tickets.forEach(function(ticket) {
+      var status = ticket['Status'] || '';
+      var resolvedDate = ticket['Resolved Date'] ? new Date(ticket['Resolved Date']) : null;
+      
+      if (status === 'Resolved' && resolvedDate && resolvedDate < cutoffDate) {
+        // Mark for archival (in production, move to archive sheet)
+        archivedCount++;
+      }
+    });
+    
+    Logger.log("Found " + archivedCount + " tickets eligible for archival (resolved > " + days + " days ago)");
+    
+    return {
+      success: true,
+      archivedCount: archivedCount,
+      cutoffDate: cutoffDate.toISOString()
+    };
+    
+  } catch (e) {
+    Logger.log("Error in archiveResolvedTickets: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ==================== NOTIFICATION FUNCTIONS ====================
+function getUnassignedTickets() {
+  try {
+    var tickets = getAllTickets();
+    
+    var unassigned = tickets.filter(function(ticket) {
+      var status = ticket['Status'] || '';
+      var assignedTo = ticket['Assigned To'] || '';
+      
+      return status !== 'Resolved' && (!assignedTo || assignedTo.trim() === '');
+    });
+    
+    return {
+      success: true,
+      count: unassigned.length,
+      tickets: unassigned
+    };
+    
+  } catch (e) {
+    Logger.log("Error getting unassigned tickets: " + e.toString());
+    return { success: false, error: e.toString(), tickets: [] };
+  }
+}
+
+function getOverdueTickets() {
+  try {
+    var tickets = getAllTickets();
+    var now = new Date();
+    var overdueTickets = [];
+    
+    tickets.forEach(function(ticket) {
+      var status = ticket['Status'] || '';
+      var priority = ticket['Priority'] || 'Pending';
+      var createdDate = ticket['Created Date'] ? new Date(ticket['Created Date']) : null;
+      
+      if (status !== 'Resolved' && createdDate) {
+        var slaThreshold = SLA_THRESHOLDS[priority] || SLA_THRESHOLDS['Pending'];
+        var hoursSinceCreated = (now - createdDate) / (1000 * 60 * 60);
+        
+        if (hoursSinceCreated > slaThreshold.resolution) {
+          ticket.hoursOverdue = Math.round(hoursSinceCreated - slaThreshold.resolution);
+          overdueTickets.push(ticket);
+        }
+      }
+    });
+    
+    // Sort by most overdue first
+    overdueTickets.sort(function(a, b) {
+      return b.hoursOverdue - a.hoursOverdue;
+    });
+    
+    return {
+      success: true,
+      count: overdueTickets.length,
+      tickets: overdueTickets
+    };
+    
+  } catch (e) {
+    Logger.log("Error getting overdue tickets: " + e.toString());
+    return { success: false, error: e.toString(), tickets: [] };
+  }
+}
+
+// ==================== SCHEDULED FUNCTIONS ====================
+function dailyCleanup() {
+  Logger.log("=== DAILY CLEANUP STARTED ===");
+  
+  try {
+    // Clear old cache
+    clearDashboardCache();
+    
+    // Log unassigned tickets
+    var unassigned = getUnassignedTickets();
+    Logger.log("Unassigned tickets: " + unassigned.count);
+    
+    // Log overdue tickets
+    var overdue = getOverdueTickets();
+    Logger.log("Overdue tickets: " + overdue.count);
+    
+    // Send daily summary if needed
+    if (unassigned.count > 0 || overdue.count > 0) {
+      sendDailySummaryEmail(unassigned, overdue);
+    }
+    
+    Logger.log("=== DAILY CLEANUP COMPLETED ===");
+    
+    return {
+      success: true,
+      unassignedCount: unassigned.count,
+      overdueCount: overdue.count
+    };
+    
+  } catch (e) {
+    Logger.log("Error in dailyCleanup: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function sendDailySummaryEmail(unassigned, overdue) {
+  var adminEmails = getAdminEmails();
+  if (!adminEmails.primary) return;
+  
+  var subject = 'IT Support Daily Summary - ' + formatDate(new Date());
+  
+  var body = 'Daily IT Support Summary\n';
+  body += '========================\n\n';
+  body += 'Unassigned Tickets: ' + unassigned.count + '\n';
+  body += 'Overdue Tickets: ' + overdue.count + '\n\n';
+  
+  if (unassigned.count > 0) {
+    body += 'Unassigned Ticket IDs:\n';
+    unassigned.tickets.slice(0, 10).forEach(function(t) {
+      body += '- ' + t['Ticket ID'] + ' (' + t['Priority'] + ')\n';
+    });
+    if (unassigned.count > 10) {
+      body += '... and ' + (unassigned.count - 10) + ' more\n';
+    }
+    body += '\n';
+  }
+  
+  if (overdue.count > 0) {
+    body += 'Overdue Ticket IDs:\n';
+    overdue.tickets.slice(0, 10).forEach(function(t) {
+      body += '- ' + t['Ticket ID'] + ' (' + t.hoursOverdue + ' hours overdue)\n';
+    });
+    if (overdue.count > 10) {
+      body += '... and ' + (overdue.count - 10) + ' more\n';
+    }
+    body += '\n';
+  }
+  
+  body += '\nPlease review and take action.\n\nIT Support System';
+  
+  // Send to all admin emails
+  var recipients = [];
+  if (adminEmails.primary) recipients.push(adminEmails.primary);
+  if (adminEmails.secondary) recipients.push(adminEmails.secondary);
+  if (adminEmails.tertiary) recipients.push(adminEmails.tertiary);
+  
+  // Remove duplicates and empty strings
+  var uniqueRecipients = [];
+  for (var i = 0; i < recipients.length; i++) {
+    if (recipients[i] && recipients[i].trim() !== '' && uniqueRecipients.indexOf(recipients[i]) === -1) {
+      uniqueRecipients.push(recipients[i]);
+    }
+  }
+  
+  sendEmail(uniqueRecipients, subject, body);
+}
+
+// ==================== TRIGGERS SETUP ====================
+function setupTriggers() {
+  try {
+    // Remove existing triggers
+    var triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(function(trigger) {
+      ScriptApp.deleteTrigger(trigger);
+    });
+    
+    // Create daily cleanup trigger (runs at 6 AM)
+    ScriptApp.newTrigger('dailyCleanup')
+      .timeBased()
+      .atHour(6)
+      .everyDays(1)
+      .create();
+    
+    Logger.log("Triggers setup complete");
+    return { success: true, message: 'Triggers configured' };
+    
+  } catch (e) {
+    Logger.log("Error setting up triggers: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+function removeTriggers() {
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(function(trigger) {
+      ScriptApp.deleteTrigger(trigger);
+    });
+    
+    Logger.log("All triggers removed");
+    return { success: true, message: 'All triggers removed' };
+    
+  } catch (e) {
+    Logger.log("Error removing triggers: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ==================== READY ====================
+Logger.log("IT Ticket System v7.9.0 - With Notes, Edit Features, Phone & Location Updates");
+Logger.log("UPDATED: Notes stored in separate Ticket_Notes sheet");
+Logger.log("UPDATED: Notes NOT included in Activity Timeline");
+Logger.log("UPDATED: Issue Type and Impact Area edits show user in timeline");
+Logger.log("UPDATED: Phone Number and Location can be edited from dashboard");
+Logger.log("UPDATED: Added secondary email: " + ADMIN_EMAILS.SECONDARY);
+Logger.log("UPDATED: Added tertiary email support");
+Logger.log("IMPORTANT: Set SPREADSHEET_ID at the top of this file!");
+Logger.log("DRY_RUN mode: " + (DRY_RUN ? "ON (emails disabled)" : "OFF (emails enabled)"));
+Logger.log("Run setupSystem() to initialize all sheets");
+Logger.log("Run diagnoseSystem() to check configuration");

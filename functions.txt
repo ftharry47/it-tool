@@ -1,0 +1,116 @@
+﻿
+function getSpreadsheet() {
+function safeGetSpreadsheet() {
+function setupSystem() {
+function createSheetWithHeaders(ss, sheetName, headers, widths) {
+function addSampleUsers(ss) {
+function addSampleITStaff(ss) {
+function addSampleDirectory(ss) {
+function initializeSettings(ss) {
+function addSampleTickets(ss) {
+function getAdminEmails() {
+function updateAdminEmail(emailType, newEmail, updatedBy) {
+function isValidEmail(email) {
+function getSetting(settingName) {
+function setSetting(settingName, value, updatedBy) {
+function getAutoAssignSetting() {
+function toggleAutoAssign(enabled, updatedBy) {
+function getAllSettings() {
+function doGet(e) {
+function getConfigErrorPageHtml(errorMessage) {
+function getDisabledPageHtml(title, message) {
+function validateUser(employeeId, password) {
+function getAllUsers() {
+function updateUserStatus(employeeId, newStatus) {
+function updateITStaffStatus(staffName, newStatus) {
+function lookupEmployee(email) {
+function lookupEmployeeSafe(email) {
+function submitTicket(formData) {
+function updateTicketPriority(ticketId, newPriority, updatedBy) {
+function updateIssueType(ticketId, newIssueType, updatedBy) {
+function updateImpactArea(ticketId, newImpactArea, updatedBy) {
+function updatePhoneNumber(ticketId, newPhone, updatedBy) {
+function updateLocation(ticketId, newLocation, updatedBy) {
+function addTicketNote(ticketId, noteText, addedBy, noteType) {
+function getTicketNotes(ticketId) {
+function deleteTicketNote(ticketId, timestamp, deletedBy) {
+function getNoteTypes() {
+function searchTickets(searchType, searchValue) {
+function getDashboardData(forceRefresh) {
+function getAllTickets() {
+function getDashboardStats(tickets) {
+function getDashboardConfig() {
+function getITStaffList() {
+function getITStaffEmail(staffName) {
+function getTicketByIdForTracking(ticketId) {
+function updateTicketStatus(ticketId, newStatus, resolvedBy) {
+function assignTicket(ticketId, assignedTo, assignedBy, priority) {
+function escalateTicket(ticketId, escalateTo, escalationLevel, escalatedBy, reason) {
+function autoAssignTicket(ticketId, priority) {
+function getStaffWorkload() {
+function logHistory(ticketId, action, fromValue, toValue, performedBy, notes) {
+function getTicketHistory(ticketId) {
+function getTicketTimeline(ticketId) {
+function findTicketRow(sheet, ticketId) {
+function safeUpdateCell(sheet, row, column, value) {
+function getRowData(sheet, row) {
+function generateTicketId(sheet) {
+function formatHeaderRow(sheet, numColumns) {
+function setColumnWidths(sheet) {
+function formatDataRow(sheet, row, numColumns) {
+function formatDate(date) {
+function sendEmail(to, subject, body, cc) {
+function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData, vipLevel, issueType, impactArea, criticalFlag) {
+function sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, userName, formData, priority, vipLevel, issueType, impactArea, 
+criticalFlag) {
+function sendTicketAssignedEmailToUser(ticketId, userName, assignedTo, rowData) {
+function sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy, rowData) {
+function sendTicketEscalatedEmailToUser(ticketId, userName, escalateTo, escalationLevel, reason, rowData) {
+function sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationLevel, escalatedBy, reason, rowData) {
+function sendCriticalEscalationNotification(ticketId, escalateTo, escalationLevel, reason, rowData) {
+function sendStatusChangeEmail(ticketId, userName, userEmail, oldStatus, newStatus, ticketInfo) {
+function clearDashboardCache() {
+function getCachedData(key) {
+function setCachedData(key, data) {
+function generateReport(reportType) {
+function generateCSVContent(headers, data) {
+function escapeCSVField(field) {
+function generateTicketsReport(tickets) {
+function generateTeamReport() {
+function generateSLAReport(tickets) {
+function generateMonthlyReport(tickets) {
+function generateNotesReport() {
+function getTeamPerformance(filters) {
+function getSlaSummary(filters) {
+function getSystemStatus() {
+function testSetup() {
+function testGetSpreadsheet() {
+function testGetAllTickets() {
+function testGetDashboardData() {
+function testValidateUser() {
+function testLookupEmployee() {
+function testLookupEmployeeSafe() {
+function testSubmitTicket() {
+function testUpdatePriority() {
+function testAssignWithPriority() {
+function testGenerateReport() {
+function testAddNote() {
+function testGetNotes() {
+function testGetTimeline() {
+function testUpdateIssueType() {
+function testUpdateImpactArea() {
+function testUpdatePhoneNumber() {
+function testUpdateLocation() {
+function testEmailConfiguration() {
+function diagnoseSystem() {
+function bulkUpdateTickets(ticketIds, updateData, updatedBy) {
+function exportTicketData(ticketId) {
+function archiveResolvedTickets(daysOld) {
+function getUnassignedTickets() {
+function getOverdueTickets() {
+function dailyCleanup() {
+function sendDailySummaryEmail(unassigned, overdue) {
+function setupTriggers() {
+function removeTriggers() {
+
+

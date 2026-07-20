@@ -1,0 +1,85 @@
+﻿
+> dashboard.html:645:function callGAS(fn, ...args) { return new Promise((res, rej) => { if (typeof google !== 'undefined' && google.script && 
+google.script.run) google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args); else rej(new Error('GAS unavailable')); }); }
+  dashboard.html:646:function updateGreeting() { const h = new Date().getHours(), name = currentUser?.displayName?.split(' ')[0] || 'User'; 
+$('greetingText').textContent = `${h >= 5 && h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening'}, ${escapeHtml(name)}!`; 
+$('currentDate').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+> dashboard.html:661:        const result = await callGAS('validateUser', empId, pwd);
+  dashboard.html:662:        if (result?.success) { currentUser = Validator.validateObject(result); sessionStorage.setItem('user', 
+JSON.stringify(result)); if (rememberMe) saveCredentials(empId, pwd); else localStorage.removeItem(CREDENTIALS_KEY); showDashboard(); }
+> dashboard.html:674:    if (currentUser) callGAS('updateUserStatus', currentUser.employeeId, 'Offline').catch(() => {});
+  dashboard.html:675:    currentUser = null; sessionStorage.removeItem('user');
+> dashboard.html:692:        const data = await callGAS('getDashboardData', !silent);
+  dashboard.html:693:        if (data) {
+> dashboard.html:701:        try { allUsers = Validator.validateArray(await callGAS('getAllUsers')); renderStaffPanel(); }
+  dashboard.html:702:        catch { allUsers = itStaff.map(s => ({ name: s.name, role: s.level, status: s.status || 'Online', displayName: s.name 
+})); }
+> dashboard.html:712:async function saveIssueType() { const s = $('issueTypeSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = 
+getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = 
+await callGAS('updateIssueType', tid, nv, currentUser.displayName); if (r?.success) { $('modalIssueType').textContent = nv; currentTicket['Issue 
+Type'] = nv; toggleEditIssueType(); showToast('Issue type updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 
+'Failed to update', 'error'); } catch { showToast('Error updating issue type', 'error'); } }
+  dashboard.html:713:function toggleEditImpactArea() { const f = $('impactAreaField'), e = $('impactAreaEdit'), s = $('impactAreaSelect'); if 
+(e.classList.contains('hidden')) { s.value = $('modalImpactArea').textContent !== '--' ? $('modalImpactArea').textContent : ''; 
+e.classList.remove('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; } else { e.classList.add('hidden'); 
+f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; } }
+> dashboard.html:714:async function saveImpactArea() { const s = $('impactAreaSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = 
+getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = 
+await callGAS('updateImpactArea', tid, nv, currentUser.displayName); if (r?.success) { $('modalImpactArea').textContent = nv; currentTicket['Impact 
+Area'] = nv; toggleEditImpactArea(); showToast('Impact area updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error 
+|| 'Failed to update', 'error'); } catch { showToast('Error updating impact area', 'error'); } }
+  dashboard.html:715:
+> dashboard.html:741:        const r = await callGAS('updatePhoneNumber', tid, pv.sanitized, currentUser.displayName); 
+  dashboard.html:742:        if (r?.success) { 
+> dashboard.html:773:        const r = await callGAS('updateLocation', tid, lv.sanitized, currentUser.displayName); 
+  dashboard.html:774:        if (r?.success) { 
+> dashboard.html:785:function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = 
+setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const 
+users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await 
+callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && 
+!$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = 
+Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); 
+setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, 
+STATUS_POLLING_INTERVAL); }
+  dashboard.html:786:function stopStatusPolling() { if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; 
+} }
+> dashboard.html:787:async function updateMyStatus() { const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await 
+callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = 
+allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); 
+if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers 
+= Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error 
+updating status', 'error'); } }
+> dashboard.html:788:async function toggleAutoAssign() { const t = $('autoAssignToggle'); autoAssignEnabled = !autoAssignEnabled; 
+t.classList.toggle('active', autoAssignEnabled); try { const r = await callGAS('toggleAutoAssign', autoAssignEnabled, currentUser?.displayName || 
+'User'); if (r?.success) showToast(`Auto-assign ${autoAssignEnabled ? 'enabled' : 'disabled'}`, 'info'); else { autoAssignEnabled = 
+!autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast(r?.error || 'Failed', 'error'); } } catch { autoAssignEnabled = 
+!autoAssignEnabled; t.classList.toggle('active', autoAssignEnabled); showToast('Error toggling auto-assign', 'error'); } }
+  dashboard.html:789:function toggleAutoSignOut() { autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', 
+autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled 
+? 'enabled' : 'disabled'}`, 'info'); }
+> dashboard.html:872:        const perf = await callGAS('getTeamPerformance', {}); const perfData = Validator.validateArray(perf);
+  dashboard.html:873:        const grid = $('teamGrid'), tbody = $('teamTableBody');
+> dashboard.html:901:    if (!currentTicket) { try { const r = await callGAS('getTicketByIdForTracking', ticketId); if (r?.success) currentTicket = 
+Validator.validateObject(r.ticket); } catch {} }
+  dashboard.html:902:    if (!currentTicket) { showToast('Ticket not found', 'error'); return; }
+> dashboard.html:938:        const notes = await callGAS('getTicketNotes', ticketId); currentTicketNotes = Validator.validateArray(notes);
+  dashboard.html:939:        notesCount.textContent = currentTicketNotes.length;
+> dashboard.html:955:        const result = await callGAS('addTicketNote', ticketId, nv.sanitized, currentUser.displayName, noteType);
+  dashboard.html:956:        if (result?.success) { showToast('Note added successfully', 'success'); $('noteText').value = ''; 
+$('noteTypeSelect').value = 'General'; await loadNotes(ticketId); await loadTimeline(ticketId); }
+> dashboard.html:966:        let timeline = await callGAS('getTicketTimeline', ticketId); timeline = Validator.validateArray(timeline);
+  dashboard.html:967:        if (!timeline?.length) { timeline = []; if (getVal(currentTicket,'CREATED_DATE')) timeline.push({ timestamp: 
+getVal(currentTicket,'CREATED_DATE'), action: 'Created', performedBy: getVal(currentTicket,'NAME') || 'User', type: 'history' }); }
+> dashboard.html:1000:        const r = await callGAS('updateTicketStatus', getVal(currentTicket,'TICKET_ID'), newStatus, currentUser.displayName);
+  dashboard.html:1001:        if (r?.success) { showToast('Status updated'); forceCloseModal(); await loadData(); }
+> dashboard.html:1018:        const r = await callGAS('assignTicket', getVal(currentTicket,'TICKET_ID'), assignTo, currentUser.displayName, 
+priorityToSet);
+  dashboard.html:1019:        if (r?.success) { showToast(`Assigned to ${escapeHtml(assignTo)}` + (selectedPriority ? ` with ${selectedPriority} 
+priority` : '')); forceCloseModal(); await loadData(); }
+> dashboard.html:1036:        const r = await callGAS('escalateTicket', getVal(currentTicket,'TICKET_ID'), name, level, currentUser.displayName, 
+rv.sanitized);
+  dashboard.html:1037:        if (r?.success) { showToast(`Escalated to ${level}`); forceCloseModal(); await loadData(); }
+> dashboard.html:1055:    callGAS('generateReport', type).then(r => {
+  dashboard.html:1056:        if (r?.success && r.csvContent) {
+
+
