@@ -982,6 +982,30 @@
       background: rgba(217, 119, 6, 0.1);
       color: #d97706;
     }
+
+    /* Modern entrance animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes softFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    main .bg-white.rounded-lg {
+      animation: fadeInUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .support-info-grid .info-card {
+      animation: fadeInUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .support-info-grid .info-card:nth-child(1) { animation-delay: 0.1s; }
+    .support-info-grid .info-card:nth-child(2) { animation-delay: 0.2s; }
+
+    .ai-bot-btn {
+      animation: softFloat 3s ease-in-out infinite;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">

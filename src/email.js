@@ -102,6 +102,7 @@ async function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData,
   body += 'Submitted: ' + formatDate(timestamp) + '\n';
   body += 'Location: ' + formData.location + '\n';
   body += 'Phone: ' + formData.phone + '\n';
+  if (formData.temporaryEmail) body += 'Temporary Email: ' + formData.temporaryEmail + '\n';
   if (issueType) body += 'Issue Type: ' + issueType + '\n';
   if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
   if (criticalFlag) body += 'Note: Marked as Critical\n';
@@ -134,6 +135,7 @@ async function sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup
   body += 'Employee ID: ' + (employeeLookup.empId || 'Not in directory') + '\n';
   body += 'Name: ' + userName + '\n';
   body += 'Email: ' + formData.email + '\n';
+  if (formData.temporaryEmail) body += 'Temporary Email: ' + formData.temporaryEmail + '\n';
   body += 'Phone: ' + formData.phone + '\n';
   body += 'Location: ' + formData.location + '\n';
   body += '\nIssue Details:\n';

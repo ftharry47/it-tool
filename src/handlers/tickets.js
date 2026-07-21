@@ -77,6 +77,7 @@ function submitTicket(formData) {
       'Employee ID': employeeLookup.empId || '',
       'Name': finalName,
       'Email Address': String(formData.email).trim(),
+      'Temporary Email': String(formData.temporaryEmail || '').trim(),
       'Phone Number': String(formData.phone).trim(),
       'Location': String(formData.location).trim(),
       'Issue Type': issueType,
