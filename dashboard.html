@@ -13,10 +13,10 @@
         * { font-family: 'Outfit', sans-serif; box-sizing: border-box; }
         .font-heading { font-family: 'Space Grotesk', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        
+
         ::-webkit-scrollbar { width: 0px; height: 0px; display: none; }
         * { scrollbar-width: none; -ms-overflow-style: none; }
-        
+
         :root, [data-theme="dark"] {
             --bg-primary: #09090b; --bg-secondary: #18181b; --bg-tertiary: #27272a;
             --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
@@ -26,7 +26,7 @@
             --input-bg: rgba(255,255,255,0.08); --success: #22c55e; --warning: #f59e0b;
             --danger: #ef4444; --info: #06b6d4; --purple: #a855f7;
         }
-        
+
         [data-theme="light"] {
             --bg-primary: #f0f7ff; --bg-secondary: #ffffff; --bg-tertiary: #dbeafe;
             --text-primary: #1e3a5f; --text-secondary: #3b6894; --text-muted: #6b9dc9;
@@ -62,28 +62,28 @@
         [data-theme="light"] .notes-section { background: rgba(30,58,95,0.03); border-color: rgba(30,58,95,0.1); }
         [data-theme="light"] .note-item { background: rgba(30,58,95,0.05); border-color: rgba(30,58,95,0.1); }
         [data-theme="light"] .timeline-section { background: rgba(30,58,95,0.03); border-color: rgba(30,58,95,0.1); }
-        
+
         body { background: var(--bg-primary); color: var(--text-primary); transition: background 0.3s, color 0.3s; }
-        
+
         .glass-card { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--border); transition: all 0.3s ease; }
         .glass-card:hover { background: var(--card-hover); border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
-        
+
         .gradient-text { background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 50%, #ffffff 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: gradient 4s ease infinite; }
-        [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
+        [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #1e40af 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
         @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
         @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes bellShake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(10deg); } 50% { transform: rotate(-10deg); } 75% { transform: rotate(5deg); } }
-        
+
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-float-delayed { animation: float 6s ease-in-out 2s infinite; }
         .animate-spin-slow { animation: spin 20s linear infinite; }
         .animate-bell { animation: bellShake 0.5s ease-in-out; }
         .animate-pulse-live { animation: pulse 2s ease-in-out infinite; }
-        
+
         .login-container { min-height: 100vh; display: flex; background: linear-gradient(135deg, #09090b 0%, #18181b 50%, #27272a 100%); position: relative; overflow: hidden; }
         [data-theme="light"] .login-container { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%); }
         .login-bg-pattern { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 60px 60px; }
@@ -99,35 +99,35 @@
         .login-btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #fafafa 0%, #e4e4e7 100%); color: #09090b; border: none; border-radius: 14px; font-weight: 700; font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.3s; }
         .login-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(255,255,255,0.2); }
         .login-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
-        
+
         .login-icon { color: #1a1a1a; }
         .login-icon-secondary { color: #a8a8a8; }
         [data-theme="light"] .login-icon { color: #1e3a5f; }
         [data-theme="light"] .login-icon-secondary { color: #6b9dc9; }
-        
+
         .feature-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 24px; transition: all 0.3s; }
         .feature-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); transform: translateY(-4px); }
         [data-theme="light"] .feature-card { background: rgba(255,255,255,0.6); border-color: rgba(30,64,175,0.1); }
         [data-theme="light"] .feature-card:hover { background: rgba(255,255,255,0.9); border-color: rgba(30,64,175,0.2); }
-        
+
         .login-decor { border-color: rgba(0,0,0,0.3) !important; }
         .login-decor-silver { border-color: rgba(168,168,168,0.4) !important; }
         [data-theme="light"] .login-decor { border-color: rgba(30,64,175,0.2) !important; }
         [data-theme="light"] .login-decor-silver { border-color: rgba(30,64,175,0.15) !important; }
-        
+
         .icon-gradient-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .icon-gradient-blue { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .icon-gradient-purple { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
         .icon-gradient-orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        
+
         .sidebar { position: fixed; left: 0; top: 0; width: 280px; height: 100vh; background: linear-gradient(180deg, #0a0a0b 0%, #121214 100%); border-right: 1px solid var(--border); z-index: 50; display: flex; flex-direction: column; transition: transform 0.3s ease, background 0.3s; }
         .nav-item { display: flex; align-items: center; gap: 14px; padding: 14px 20px; margin: 3px 12px; border-radius: 12px; color: var(--text-secondary); font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; }
         .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
         .nav-item.active { background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1); }
         .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
-        
+
         .main { margin-left: 280px; min-height: 100vh; padding: 24px; }
-        
+
         .metric-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px; padding: 20px; position: relative; overflow: hidden; transition: all 0.3s; }
         .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(192,192,192,0.5), transparent); opacity: 0; transition: opacity 0.3s; }
         .metric-card:hover::before { opacity: 1; }
@@ -141,12 +141,12 @@
         .metric-icon.sla { background: linear-gradient(135deg, #06b6d4, #0891b2); color: #fff; }
         .metric-icon.high { background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; }
         .metric-value { font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 700; color: var(--text-primary); }
-        
+
         .chart-container { height: 260px; position: relative; }
         .progress-bar { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
         .progress-fill { height: 100%; border-radius: 4px; position: relative; }
         .progress-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite; background-size: 200% 100%; }
-        
+
         .staff-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; transition: all 0.2s; }
         .staff-item:hover { background: rgba(255,255,255,0.05); }
         .staff-item.staff-online { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
@@ -159,10 +159,10 @@
         .status-dot.offline { background: #52525b !important; }
         .status-dot.break { background: #f59e0b !important; box-shadow: 0 0 6px #f59e0b; }
         .status-dot.meeting { background: #a855f7 !important; box-shadow: 0 0 6px #a855f7; }
-        
+
         .live-indicator { display: inline-flex; align-items: center; gap: 6px; }
         .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
-        
+
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th { background: rgba(255,255,255,0.03); padding: 12px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
@@ -170,7 +170,7 @@
         tr:hover td { background: rgba(255,255,255,0.02); }
         .ticket-id { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text-primary); cursor: pointer; }
         .ticket-id:hover { text-decoration: underline; color: var(--info); }
-        
+
         .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
         .badge-open { background: rgba(245,158,11,0.15); color: #fbbf24; }
         .badge-progress { background: rgba(168,85,247,0.15); color: #c084fc; }
@@ -192,10 +192,10 @@
         .badge-note-solution { background: rgba(16,185,129,0.15); color: #34d399; }
         .badge-note-followup { background: rgba(245,158,11,0.15); color: #fbbf24; }
         .badge-note-general { background: rgba(113,113,122,0.15); color: #a1a1aa; }
-        
+
         .notification-btn { position: relative; }
         .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
-        
+
         .modal-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 280px; background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); z-index: 100; display: none; align-items: center; justify-content: center; }
         .modal-overlay.show { display: flex; }
         .modal-content { background: linear-gradient(135deg, #18181b 0%, #0f0f10 100%); border: none; border-radius: 0; width: 100%; height: 100%; display: flex; flex-direction: column; animation: modalIn 0.3s ease; }
@@ -203,10 +203,10 @@
         .modal-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%); flex-shrink: 0; }
         .modal-body { padding: 28px; flex: 1; overflow-y: auto; }
         .modal-footer { padding: 20px 28px; border-top: 1px solid var(--border); background: rgba(255,255,255,0.02); flex-shrink: 0; }
-        
+
         .modal-close { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(239,68,68,0.1) 100%); border: 2px solid rgba(239,68,68,0.5); display: flex; align-items: center; justify-content: center; cursor: pointer; color: #ef4444; transition: all 0.2s; font-size: 24px; }
         .modal-close:hover { background: linear-gradient(135deg, rgba(239,68,68,0.4) 0%, rgba(239,68,68,0.2) 100%); border-color: #ef4444; transform: scale(1.05); box-shadow: 0 0 20px rgba(239,68,68,0.3); }
-        
+
         .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; display: none; align-items: center; justify-content: center; }
         .confirm-overlay.show { display: flex; }
         .confirm-dialog { background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px; max-width: 380px; width: 90%; text-align: center; animation: modalIn 0.2s ease; }
@@ -215,7 +215,7 @@
         .confirm-dialog-message { font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
         .confirm-dialog-buttons { display: flex; gap: 12px; justify-content: center; }
         .confirm-dialog-buttons .btn { min-width: 120px; padding: 14px 28px; font-size: 15px; }
-        
+
         .btn { padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; border: none; position: relative; overflow: hidden; }
         .btn-primary { background: linear-gradient(135deg, #fafafa 0%, #d4d4d8 100%); color: #09090b; }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.15); }
@@ -230,23 +230,23 @@
         .btn-processing .btn-text { opacity: 0; }
         .btn-processing .btn-spinner { display: flex !important; }
         .btn-spinner { display: none !important; position: absolute; width: 18px; height: 18px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        
+
         select { background-color: #27272a !important; color: #fafafa !important; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; }
         select:focus { outline: none; border-color: rgba(255,255,255,0.3); }
-        
+
         .loading-overlay { position: fixed; inset: 0; background: var(--bg-primary); z-index: 300; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 8px; }
         .loading-overlay.show { display: flex; }
         .spinner { width: 50px; height: 50px; border: 3px solid var(--border); border-top-color: var(--text-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
-        
+
         .toast { position: fixed; bottom: 100px; right: 24px; background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; display: none; align-items: center; gap: 10px; z-index: 400; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
         .toast.show { display: flex; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        
+
         .section { display: none; }
         .section.active { display: block; }
         .team-card, .settings-card, .report-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all 0.3s; }
         .team-card:hover, .report-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-4px); }
-        
+
         .toggle-container { position: relative; }
         .toggle-switch-new { position: relative; width: 56px; height: 28px; background: linear-gradient(135deg, #3f3f46 0%, #52525b 100%); border-radius: 14px; cursor: pointer; transition: all 0.3s ease; border: 2px solid rgba(255,255,255,0.1); }
         .toggle-switch-new.active { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-color: rgba(34,197,94,0.5); box-shadow: 0 0 20px rgba(34,197,94,0.3); }
@@ -257,16 +257,16 @@
         .toggle-label-on { left: 8px; color: rgba(255,255,255,0); }
         .toggle-switch-new.active .toggle-label-off { color: rgba(255,255,255,0); }
         .toggle-switch-new.active .toggle-label-on { color: rgba(255,255,255,0.9); }
-        
+
         .format-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-secondary); transition: all 0.2s; }
         .format-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
-        
+
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .hidden { display: none !important; }
-        
+
         .theme-toggle { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
         .theme-toggle:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
-        
+
         /* Priority Dropdown - Same size as status */
         .priority-dropdown { position: relative; }
         .priority-dropdown select {
@@ -282,7 +282,7 @@
         .priority-dropdown select.priority-medium { background-color: rgba(59,130,246,0.2) !important; border-color: rgba(59,130,246,0.5) !important; color: #60a5fa !important; }
         .priority-dropdown select.priority-low { background-color: rgba(34,197,94,0.2) !important; border-color: rgba(34,197,94,0.5) !important; color: #4ade80 !important; }
         .priority-dropdown select.priority-pending { background-color: rgba(113,113,122,0.2) !important; border-color: rgba(113,113,122,0.5) !important; color: #a1a1aa !important; }
-        
+
         .notes-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 16px; padding: 16px; height: 100%; display: flex; flex-direction: column; }
         .notes-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
         .notes-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); }
@@ -303,7 +303,7 @@
         .add-note-form textarea { width: 100%; padding: 12px; border-radius: 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-primary); font-size: 13px; resize: none; margin-bottom: 8px; }
         .add-note-form textarea:focus { outline: none; border-color: rgba(168,85,247,0.5); }
         .add-note-form textarea::placeholder { color: var(--text-muted); }
-        
+
         .timeline-section { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 16px; padding: 16px; height: 100%; display: flex; flex-direction: column; }
         .timeline-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
         .timeline-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); }
@@ -325,7 +325,7 @@
         .timeline-details { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
         .timeline-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); }
         .timeline-user { font-weight: 500; }
-        
+
         .editable-field { display: flex; align-items: center; gap: 8px; }
         .editable-field .edit-btn { width: 24px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); font-size: 12px; transition: all 0.2s; }
         .editable-field .edit-btn:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); color: #60a5fa; }
@@ -338,7 +338,7 @@
         .edit-input .edit-actions button { padding: 4px 10px; font-size: 11px; border-radius: 6px; cursor: pointer; border: none; font-weight: 600; }
         .edit-input .edit-actions .save-btn { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; }
         .edit-input .edit-actions .cancel-btn { background: rgba(255,255,255,0.1); color: var(--text-secondary); border: 1px solid var(--border); }
-        
+
         .ai-bot-btn { position: fixed; bottom: 24px; right: 30px; width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(135deg, #1f1f23 0%, #141417 100%); border: 2px solid rgba(255,255,255,0.1); cursor: pointer; z-index: 500; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: all 0.3s ease; overflow: hidden; }
         .ai-bot-btn:hover { transform: scale(1.1); border-color: rgba(168,85,247,0.5); box-shadow: 0 12px 40px rgba(168,85,247,0.3); }
         .ai-bot-btn .ai-bot-image { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
@@ -354,25 +354,92 @@
         [data-theme="light"] .ai-bot-btn:hover { border-color: rgba(30,64,175,0.4); box-shadow: 0 12px 40px rgba(30,64,175,0.25); }
         [data-theme="light"] .ai-bot-popup { background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-color: rgba(30,64,175,0.15); box-shadow: 0 20px 60px rgba(30,64,175,0.2); }
         [data-theme="light"] .ai-coming-soon-box { background: rgba(30,64,175,0.08); border-color: rgba(30,64,175,0.2); }
-        
+
         .internal-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(239,68,68,0.15); color: #f87171; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
-        
+
         .remember-me { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
         .remember-me input[type="checkbox"] { width: 18px; height: 18px; accent-color: #a855f7; cursor: pointer; }
         .remember-me label { color: #9ca3af; font-size: 14px; cursor: pointer; user-select: none; }
         .remember-me label:hover { color: #e4e4e7; }
         [data-theme="light"] .remember-me label { color: #6b9dc9; }
         [data-theme="light"] .remember-me label:hover { color: #1e3a5f; }
-        
+
         .input-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: none; }
         .input-hint.error { color: #f87171; display: block; }
         .input-hint.success { color: #4ade80; display: block; }
-        
+
         @media (max-width: 1200px) { .modal-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 1024px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main { margin-left: 0; } .login-left { display: none; } .login-right { width: 100%; } .mobile-toggle { display: flex !important; } .modal-overlay { left: 0; } }
         @media (max-width: 768px) { .modal-grid { grid-template-columns: 1fr; } }
-        
+
         .mobile-toggle { display: none; position: fixed; top: 20px; left: 20px; z-index: 60; width: 44px; height: 44px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; align-items: center; justify-content: center; cursor: pointer; color: var(--text-primary); }
+    /* Dashboard UI Enhancements */
+    #greetingText {
+      background: linear-gradient(90deg, var(--text-primary), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    main > header.glass-card {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, var(--card-bg) 50%);
+      border: 1px solid rgba(59, 130, 246, 0.15);
+    }
+
+    .metric-card {
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .metric-card:hover {
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+
+    [data-theme="light"] .metric-card {
+      box-shadow: 0 4px 20px rgba(30, 58, 95, 0.1);
+    }
+
+    [data-theme="light"] .metric-card:hover {
+      box-shadow: 0 12px 40px rgba(30, 58, 95, 0.2);
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(4px);
+    }
+
+    [data-theme="light"] th {
+      background: rgba(30, 58, 95, 0.08);
+    }
+
+    tr:hover td {
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .ticket-id {
+      transition: all 0.2s;
+    }
+
+    .ticket-id:hover {
+      color: #60a5fa;
+      text-decoration: none;
+      text-shadow: 0 0 12px rgba(96, 165, 250, 0.4);
+    }
+
+    .btn-primary {
+      box-shadow: 0 4px 14px rgba(250, 250, 250, 0.15);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(250, 250, 250, 0.25);
+    }
+
+    [data-theme="light"] .btn-primary {
+      box-shadow: 0 4px 14px rgba(30, 64, 175, 0.25);
+    }
     </style>
 </head>
 <body data-theme="dark">
@@ -383,7 +450,7 @@
         <div class="absolute top-20 left-20 w-20 h-20 border login-decor rounded-2xl animate-spin-slow"></div>
         <div class="absolute bottom-32 left-32 w-16 h-16 border login-decor-silver rotate-45 animate-float"></div>
         <div class="absolute top-40 right-40 w-24 h-24 border login-decor rounded-full animate-float-delayed"></div>
-        
+
         <div class="login-left">
             <div class="mb-8">
                 <div class="flex items-center gap-4 mb-8"><span class="font-heading font-bold text-4xl text-white">AlignedCardio</span></div>
@@ -397,7 +464,7 @@
                 <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-bar-chart-grouped-line text-2xl icon-gradient-orange"></i></div><h3 class="font-heading font-semibold text-white mb-2">Analytics</h3><p class="text-sm text-zinc-500">Comprehensive reports and SLA compliance metrics</p></div>
             </div>
         </div>
-        
+
         <div class="login-right">
             <div class="login-card">
                 <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-white mb-3">Welcome Back</h2><p class="text-zinc-300 text-base font-medium">Sign in with your Employee ID</p></div>
@@ -412,10 +479,10 @@
             </div>
         </div>
     </div>
-    
+
     <div id="dashboardPage" class="hidden">
         <button class="mobile-toggle" onclick="toggleSidebar()"><i class="ri-menu-line text-xl"></i></button>
-        
+
         <aside id="sidebar" class="sidebar">
             <div class="p-5 border-b border-white/5"><div class="flex items-center justify-center"><span class="font-heading font-bold text-xl" style="color:var(--text-primary)">AlignedCardio</span></div></div>
             <div class="px-4 py-2"><p class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color:var(--text-muted)">Main Menu</p></div>
@@ -434,7 +501,7 @@
                 <button class="w-full p-2 rounded-xl border text-sm flex items-center justify-center gap-2 transition-all" style="border-color:var(--border);color:var(--text-muted)" onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.color='#ef4444'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'" onclick="confirmLogout()"><i class="ri-logout-box-r-line"></i><span>Sign Out</span></button>
             </div>
         </aside>
-        
+
         <main class="main">
             <header class="glass-card rounded-2xl p-4 mb-5 flex items-center justify-between">
                 <div><h1 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="greetingText">Good Morning</h1><p class="text-sm mt-1" style="color:var(--text-secondary)" id="currentDate"></p></div>
@@ -444,7 +511,7 @@
                     <button class="w-10 h-10 rounded-xl flex items-center justify-center transition-all" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text-muted)" id="refreshBtn" onclick="refreshData()"><i class="ri-refresh-line text-lg"></i></button>
                 </div>
             </header>
-            
+
             <section id="dashboardSection" class="section active">
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5" id="metricsGrid"></div>
                 <div class="grid lg:grid-cols-3 gap-5 mb-5">
@@ -458,32 +525,32 @@
                 </div>
                 <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex items-center justify-between" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Recent Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Latest 10 tickets</p></div><button class="btn btn-primary" onclick="handleNavClick('tickets')">View All <i class="ri-arrow-right-line"></i></button></div><div class="table-container"><table><thead><tr><th>Ticket ID</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="recentTicketsBody"></tbody></table></div></div>
             </section>
-            
+
             <section id="ticketsSection" class="section">
                 <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex flex-wrap items-center justify-between gap-3" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">All Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Manage and track all support tickets</p></div><div class="flex items-center gap-2"><div class="relative"><i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)"></i><input type="text" id="ticketSearch" placeholder="Search..." class="pl-10 pr-3 py-2 rounded-xl text-sm w-48" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" oninput="filterTickets()"></div><select class="px-3 py-2 rounded-xl text-sm" id="statusFilter" onchange="filterTickets()"><option value="">All Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Resolved">Resolved</option></select><select class="px-3 py-2 rounded-xl text-sm" id="priorityFilter" onchange="filterTickets()"><option value="">All Priority</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Pending">Pending</option></select></div></div><div class="table-container" style="max-height:550px;overflow-y:auto;"><table><thead><tr><th>Ticket ID</th><th>Created</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Impact Area</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="allTicketsBody"></tbody></table></div></div>
             </section>
-            
+
             <section id="teamSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Team Performance</h3><p class="text-sm" style="color:var(--text-muted)">Individual metrics and SLA compliance</p></div>
                 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-5" id="teamGrid"></div>
                 <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b" style="border-color:var(--border)"><h3 class="font-heading font-semibold text-base" style="color:var(--text-primary)">Performance Summary</h3></div><div class="table-container"><table><thead><tr><th>Team Member</th><th>Level</th><th>Tickets Handled</th><th>Resolved</th><th>Open</th><th>SLA Compliance</th><th>Avg Resolution</th></tr></thead><tbody id="teamTableBody"></tbody></table></div></div>
             </section>
-            
+
             <section id="slaSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><div class="flex items-center justify-between mb-5"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">SLA Compliance Trends</h3><p class="text-sm" style="color:var(--text-muted)">Monitor service level agreements</p></div><select class="px-3 py-2 rounded-xl text-sm" id="slaTrendPeriod" onchange="renderSlaTrend()"><option value="week">This Week</option><option value="month">This Month</option></select></div><div class="chart-container" id="slaTrendChart"></div><div class="flex justify-center gap-5 mt-3" id="slaTrendLegend"></div></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3"><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-critical">Critical</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">1 hour</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">4 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-high">High</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">4 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">24 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-medium">Medium</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">8 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">48 hours</span></div></div><div class="glass-card rounded-xl p-4"><div class="mb-2"><span class="badge badge-low">Low</span></div><div class="flex justify-between text-xs mb-1"><span style="color:var(--text-muted)">Response</span><span style="color:var(--text-primary)" class="font-semibold">24 hours</span></div><div class="flex justify-between text-xs"><span style="color:var(--text-muted)">Resolution</span><span style="color:var(--text-primary)" class="font-semibold">72 hours</span></div></div></div>
             </section>
-            
+
             <section id="analyticsSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><div class="flex items-center justify-between mb-5"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Ticket Analytics</h3><p class="text-sm" style="color:var(--text-muted)">Analyze patterns and performance</p></div><select class="px-3 py-2 rounded-xl text-sm" id="analyticsTrendPeriod" onchange="renderAnalyticsTrend()"><option value="week">This Week</option><option value="month">This Month</option></select></div><div class="chart-container" id="analyticsTrendChart"></div><div class="flex justify-center gap-5 mt-3" id="analyticsTrendLegend"></div></div>
                 <div class="grid md:grid-cols-3 gap-5"><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Issue Type</h3><div id="issueTypeBars"></div></div><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Escalation Level</h3><div id="escalationBars"></div></div><div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Assignee</h3><div id="assigneeBars"></div></div></div>
             </section>
-            
+
             <section id="reportsSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Reports</h3><p class="text-sm" style="color:var(--text-muted)">Generate and download reports</p></div>
                 <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5"><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-ticket-2-line text-xl text-cyan-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">All Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Complete export</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('tickets','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('tickets','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-team-line text-xl text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Team Performance</h4><p class="text-xs" style="color:var(--text-muted)">Staff metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('team','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('team','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-speed-line text-xl text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">SLA Compliance</h4><p class="text-xs" style="color:var(--text-muted)">SLA metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('sla','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('sla','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 flex items-center justify-center"><i class="ri-calendar-line text-xl text-amber-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Monthly Summary</h4><p class="text-xs" style="color:var(--text-muted)">Statistics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('monthly','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('monthly','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div></div>
             </section>
-            
+
             <section id="settingsSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Settings</h3><p class="text-sm" style="color:var(--text-muted)">Configure your preferences</p></div>
                 <div class="grid md:grid-cols-2 gap-5">
@@ -714,72 +781,72 @@ function toggleEditImpactArea() { const f = $('impactAreaField'), e = $('impactA
 async function saveImpactArea() { const s = $('impactAreaSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateImpactArea', tid, nv, currentUser.displayName); if (r?.success) { $('modalImpactArea').textContent = nv; currentTicket['Impact Area'] = nv; toggleEditImpactArea(); showToast('Impact area updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating impact area', 'error'); } }
 
 // Phone Number Edit Functions
-function toggleEditPhone() { 
-    const f = $('phoneField'), e = $('phoneEdit'), i = $('phoneInput'); 
-    if (e.classList.contains('hidden')) { 
-        i.value = $('modalPhone').textContent !== '--' ? $('modalPhone').textContent : ''; 
-        e.classList.remove('hidden'); 
-        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; 
+function toggleEditPhone() {
+    const f = $('phoneField'), e = $('phoneEdit'), i = $('phoneInput');
+    if (e.classList.contains('hidden')) {
+        i.value = $('modalPhone').textContent !== '--' ? $('modalPhone').textContent : '';
+        e.classList.remove('hidden');
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>';
         i.focus();
-    } else { 
-        e.classList.add('hidden'); 
-        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; 
-    } 
+    } else {
+        e.classList.add('hidden');
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    }
 }
 function cancelEditPhone() {
     $('phoneEdit').classList.add('hidden');
     $('phoneField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
 }
-async function savePhone() { 
-    const i = $('phoneInput'), nv = i.value.trim(); 
-    if (!currentTicket) return; 
+async function savePhone() {
+    const i = $('phoneInput'), nv = i.value.trim();
+    if (!currentTicket) return;
     const pv = Validator.validatePhoneNumber(nv);
     if (!pv.valid) { showToast(pv.message, 'error'); return; }
-    const tid = getVal(currentTicket, 'TICKET_ID'); 
-    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } 
-    try { 
-        const r = await callGAS('updatePhoneNumber', tid, pv.sanitized, currentUser.displayName); 
-        if (r?.success) { 
-            $('modalPhone').textContent = pv.sanitized; 
-            currentTicket['Phone Number'] = pv.sanitized; 
+    const tid = getVal(currentTicket, 'TICKET_ID');
+    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; }
+    try {
+        const r = await callGAS('updatePhoneNumber', tid, pv.sanitized, currentUser.displayName);
+        if (r?.success) {
+            $('modalPhone').textContent = pv.sanitized;
+            currentTicket['Phone Number'] = pv.sanitized;
             cancelEditPhone();
-            showToast('Phone number updated', 'success'); 
-            loadTimeline(tid); 
-            await loadData(true); 
-        } else showToast(r?.error || 'Failed to update', 'error'); 
-    } catch { showToast('Error updating phone number', 'error'); } 
+            showToast('Phone number updated', 'success');
+            loadTimeline(tid);
+            await loadData(true);
+        } else showToast(r?.error || 'Failed to update', 'error');
+    } catch { showToast('Error updating phone number', 'error'); }
 }
 
 // Location Edit Functions
-function toggleEditLocation() { 
-    const f = $('locationField'), e = $('locationEdit'), s = $('locationSelect'); 
-    if (e.classList.contains('hidden')) { 
-        s.value = $('modalLocation').textContent !== '--' ? $('modalLocation').textContent : ''; 
-        e.classList.remove('hidden'); 
-        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; 
-    } else { 
-        e.classList.add('hidden'); 
-        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; 
-    } 
+function toggleEditLocation() {
+    const f = $('locationField'), e = $('locationEdit'), s = $('locationSelect');
+    if (e.classList.contains('hidden')) {
+        s.value = $('modalLocation').textContent !== '--' ? $('modalLocation').textContent : '';
+        e.classList.remove('hidden');
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>';
+    } else {
+        e.classList.add('hidden');
+        f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
+    }
 }
-async function saveLocation() { 
-    const s = $('locationSelect'), nv = s.value; 
-    if (!nv || !currentTicket) return; 
+async function saveLocation() {
+    const s = $('locationSelect'), nv = s.value;
+    if (!nv || !currentTicket) return;
     const lv = Validator.validateLocation(nv);
     if (!lv.valid) { showToast(lv.message, 'error'); return; }
-    const tid = getVal(currentTicket, 'TICKET_ID'); 
-    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } 
-    try { 
-        const r = await callGAS('updateLocation', tid, lv.sanitized, currentUser.displayName); 
-        if (r?.success) { 
-            $('modalLocation').textContent = lv.sanitized; 
-            currentTicket['Location'] = lv.sanitized; 
-            toggleEditLocation(); 
-            showToast('Location updated', 'success'); 
-            loadTimeline(tid); 
-            await loadData(true); 
-        } else showToast(r?.error || 'Failed to update', 'error'); 
-    } catch { showToast('Error updating location', 'error'); } 
+    const tid = getVal(currentTicket, 'TICKET_ID');
+    if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; }
+    try {
+        const r = await callGAS('updateLocation', tid, lv.sanitized, currentUser.displayName);
+        if (r?.success) {
+            $('modalLocation').textContent = lv.sanitized;
+            currentTicket['Location'] = lv.sanitized;
+            toggleEditLocation();
+            showToast('Location updated', 'success');
+            loadTimeline(tid);
+            await loadData(true);
+        } else showToast(r?.error || 'Failed to update', 'error');
+    } catch { showToast('Error updating location', 'error'); }
 }
 
 function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && !$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, STATUS_POLLING_INTERVAL); }

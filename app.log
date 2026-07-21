@@ -74,3 +74,19 @@
 2026-07-21T10:19:54.711Z listening on port 8080
 2026-07-21T10:19:56.429Z app.js starting
 2026-07-21T10:19:56.435Z listening on port 8080
+2026-07-21T12:16:22.328Z app.js starting
+2026-07-21T12:16:22.334Z listening on port 3000
+2026-07-21T12:20:26.340Z app.js starting
+2026-07-21T12:20:26.345Z listen error: listen EADDRINUSE: address already in use :::8080
+2026-07-21T12:22:06.126Z app.js starting
+2026-07-21T12:22:06.130Z listen error: listen EADDRINUSE: address already in use :::8080
+2026-07-21T12:22:07.714Z app.js starting
+2026-07-21T12:22:07.721Z listening on port 3000
+2026-07-21T12:24:46.727Z app.js starting
+2026-07-21T12:24:46.732Z listen error: listen EADDRINUSE: address already in use :::8080
+2026-07-21T12:24:49.445Z app.js starting
+2026-07-21T12:24:49.450Z listening on port 3000
+2026-07-21T12:29:09.624Z app.js starting
+2026-07-21T12:29:09.629Z listen error: listen EADDRINUSE: address already in use :::8080
+2026-07-21T12:30:11.044Z app.js starting
+2026-07-21T12:30:11.048Z listen error: listen EADDRINUSE: address already in use :::8080

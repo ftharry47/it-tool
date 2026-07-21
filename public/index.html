@@ -9,66 +9,66 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * { 
+    * {
       font-family: 'Inter', sans-serif;
     }
-    
+
     html {
       scroll-behavior: smooth;
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
-    
+
     html::-webkit-scrollbar {
       display: none;
     }
-    
+
     body {
       background: #f8fafc;
     }
-    
+
     input, textarea, select {
       transition-property: border-color, box-shadow, background-color;
     }
-    
+
     .form-input {
       transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
     }
-    
+
     .form-input:focus {
       border-color: #2563eb;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
-    
+
     .form-input.valid {
       border-color: #16a34a;
       background-color: #f0fdf4;
     }
-    
+
     .form-input.error {
       border-color: #dc2626;
       background-color: #fef2f2;
     }
-    
+
     .btn-primary {
       background: #1e40af;
       transition: background 0.2s;
     }
-    
+
     .btn-primary:hover:not(:disabled) {
       background: #1e3a8a;
     }
-    
+
     .btn-primary:disabled {
       background: #93c5fd;
       cursor: not-allowed;
     }
-    
+
     .tab-btn {
       transition: all 0.25s ease;
       position: relative;
     }
-    
+
     .tab-btn::after {
       content: '';
       position: absolute;
@@ -80,29 +80,29 @@
       transition: all 0.3s ease;
       transform: translateX(-50%);
     }
-    
+
     .tab-btn.active::after {
       width: 100%;
     }
-    
+
     .tab-btn.active {
       color: #1e40af;
       border-bottom: 2px solid transparent;
     }
-    
+
     .tab-btn:hover:not(.active) {
       color: #3b82f6;
     }
-    
+
     .status-open { background: #fef3c7; color: #92400e; }
     .status-in-progress { background: #dbeafe; color: #1e40af; }
     .status-resolved { background: #dcfce7; color: #166534; }
-    
+
     .priority-critical { background: #fef2f2; color: #991b1b; }
     .priority-high { background: #fff7ed; color: #c2410c; }
     .priority-medium { background: #fefce8; color: #a16207; }
     .priority-low { background: #f0fdf4; color: #166534; }
-    
+
     .validation-icon {
       position: absolute;
       right: 12px;
@@ -114,7 +114,7 @@
       width: 20px;
       height: 20px;
     }
-    
+
     select {
       background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
       background-position: right 12px center;
@@ -123,25 +123,25 @@
       -webkit-appearance: none;
       appearance: none;
     }
-    
+
     .expand-btn {
       transition: all 0.2s;
     }
-    
+
     .expand-btn:hover {
       background: #eff6ff;
     }
-    
+
     .additional-desc-container {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
                   opacity 0.3s ease-out,
                   transform 0.3s ease-out;
       opacity: 0;
       transform: translateY(-10px);
     }
-    
+
     .additional-desc-container.expanded {
       max-height: 800px;
       opacity: 1;
@@ -206,37 +206,37 @@
       transform: translateY(0);
       cursor: pointer;
     }
-    
+
     .impact-card:hover {
       border-color: #93c5fd;
       background: #f0f7ff;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     }
-    
+
     .impact-card:hover .impact-icon {
       transform: scale(1.1);
     }
-    
+
     .impact-icon {
       transition: all 0.25s ease;
     }
-    
+
     .impact-option.selected .impact-card {
       border-color: #2563eb;
       background: #eff6ff;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
       transform: translateY(-2px);
     }
-    
+
     .impact-option.selected .impact-card .impact-icon {
       transform: scale(1.1);
     }
-    
+
     .impact-option.selected .impact-card .card-title {
       color: #1e40af;
     }
-    
+
     .impact-option:active .impact-card {
       transform: translateY(0) scale(0.98);
     }
@@ -245,20 +245,20 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    
+
     .priority-option:hover .priority-badge {
       transform: scale(1.05);
     }
-    
+
     .priority-option.selected .priority-badge {
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
       transform: scale(1.05);
     }
-    
+
     .priority-badge {
       transition: all 0.2s ease;
     }
-    
+
     .priority-p1 { background: #fef2f2; color: #991b1b; border: 2px solid #fecaca; }
     .priority-p1.selected { border-color: #dc2626; }
     .priority-p2 { background: #fff7ed; color: #c2410c; border: 2px solid #fed7aa; }
@@ -271,11 +271,11 @@
     .critical-checkbox {
       transition: all 0.2s ease;
     }
-    
+
     .critical-checkbox:hover {
       background: #fef2f2;
     }
-    
+
     .critical-checkbox.checked {
       background: #fef2f2;
       border-color: #dc2626;
@@ -284,25 +284,25 @@
     .faq-item {
       transition: background 0.25s ease;
     }
-    
+
     .faq-item:hover {
       background: #f9fafb;
     }
-    
+
     .faq-content {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+      transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
                   padding 0.35s ease,
                   opacity 0.25s ease;
       opacity: 0;
     }
-    
+
     .faq-content.open {
       max-height: 150px;
       opacity: 1;
     }
-    
+
     .faq-arrow {
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -314,11 +314,11 @@
     .copy-btn {
       transition: all 0.2s;
     }
-    
+
     .copy-btn:hover {
       background: #eff6ff;
     }
-    
+
     .copy-btn.copied {
       color: #16a34a;
     }
@@ -330,47 +330,47 @@
     .ticket-header {
       background: #1e40af;
     }
-    
+
     section {
       transition: opacity 0.3s ease, transform 0.3s ease;
     }
-    
+
     section.hidden {
       opacity: 0;
       transform: translateY(10px);
       pointer-events: none;
       position: absolute;
     }
-    
+
     section:not(.hidden) {
       opacity: 1;
       transform: translateY(0);
     }
-    
+
     .btn-primary {
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       transform: translateY(0);
     }
-    
+
     .btn-primary:hover:not(:disabled) {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
     }
-    
+
     .btn-primary:active:not(:disabled) {
       transform: translateY(0);
       box-shadow: none;
     }
-    
+
     .expand-btn {
       transition: all 0.25s ease;
     }
-    
+
     .expand-btn:hover {
       background: #eff6ff;
       transform: translateX(2px);
     }
-    
+
     .expand-btn svg {
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -378,19 +378,19 @@
     .success-checkmark {
       animation: checkmarkPop 0.5s ease-out forwards;
     }
-    
+
     @keyframes checkmarkPop {
       0% { transform: scale(0); opacity: 0; }
       50% { transform: scale(1.2); }
       100% { transform: scale(1); opacity: 1; }
     }
-    
+
     .success-checkmark svg {
       animation: drawCheck 0.3s ease-out 0.3s forwards;
       stroke-dasharray: 30;
       stroke-dashoffset: 30;
     }
-    
+
     @keyframes drawCheck {
       to { stroke-dashoffset: 0; }
     }
@@ -399,93 +399,93 @@
       background: #dcfce7 !important;
       border-color: #16a34a !important;
     }
-    
+
     .copy-btn.copied svg {
       color: #16a34a !important;
     }
-    
+
     #successModal,
     #termsModal {
       transition: opacity 0.3s ease;
     }
-    
+
     #successModal > div,
     #termsModal > div {
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
       transform: scale(0.95) translateY(-10px);
       opacity: 0;
     }
-    
+
     #successModal:not(.hidden) > div,
     #termsModal:not(.hidden) > div {
       transform: scale(1) translateY(0);
       opacity: 1;
     }
-    
+
     #loadingOverlay {
       transition: opacity 0.2s ease;
     }
-    
+
     #loadingOverlay > div {
       transition: transform 0.25s ease;
       transform: scale(0.9);
     }
-    
+
     #loadingOverlay:not(.hidden) > div {
       transform: scale(1);
     }
-    
+
     #errorToast {
-      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
                   opacity 0.3s ease;
       transform: translateX(-50%) translateY(20px);
       opacity: 0;
     }
-    
+
     #errorToast:not(.hidden) {
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
-    
+
     .bg-white {
       transition: box-shadow 0.25s ease, transform 0.25s ease;
     }
-    
+
     main .bg-white.rounded-lg {
       transition: box-shadow 0.3s ease;
     }
-    
+
     main .bg-white.rounded-lg:hover {
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
     }
-    
+
     .timeline-item {
       transition: transform 0.2s ease;
     }
-    
+
     .timeline-item:hover {
       transform: translateX(4px);
     }
-    
+
     .status-open {
       animation: subtlePulse 2s ease-in-out infinite;
     }
-    
+
     @keyframes subtlePulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.85; }
     }
-    
+
     .form-input:focus {
       transform: translateY(-1px);
     }
-    
+
     .bg-red-50,
     .bg-blue-50,
     .bg-amber-50 {
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
+
     .bg-red-50:hover,
     .bg-blue-50:hover,
     .bg-amber-50:hover {
@@ -498,46 +498,46 @@
       transform: translateY(10px);
       transition: all 0.5s ease;
     }
-    
+
     .processing-step.active {
       opacity: 1;
       transform: translateY(0);
     }
-    
+
     .processing-step.completed {
       opacity: 0.6;
     }
-    
+
     .processing-step.completed .step-card {
       background: #f0fdf4 !important;
       border-color: #bbf7d0 !important;
     }
-    
+
     .processing-step.completed .step-icon {
       background: #dcfce7 !important;
     }
-    
+
     .processing-step.completed .step-icon svg {
       color: #16a34a !important;
     }
-    
+
     .step-icon {
       animation: pulse 1.5s ease-in-out infinite;
     }
-    
+
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.7; transform: scale(0.95); }
     }
-    
+
     .step-icon.completed {
       animation: none;
     }
-    
+
     .spinner {
       animation: spin 1s linear infinite;
     }
-    
+
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -546,22 +546,22 @@
     .email-verifying {
       animation: emailPulse 1.2s ease-in-out infinite;
     }
-    
+
     @keyframes emailPulse {
-      0%, 100% { 
+      0%, 100% {
         border-color: #93c5fd;
         box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
       }
-      50% { 
+      50% {
         border-color: #3b82f6;
         box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
       }
     }
-    
+
     .validation-spinner {
       animation: validationSpin 0.8s linear infinite;
     }
-    
+
     @keyframes validationSpin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -577,7 +577,7 @@
       border-radius: 12px;
       background: #ffffff;
       border: 1px solid #e5e7eb;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1),
                   0 1px 2px rgba(0, 0, 0, 0.06);
       cursor: pointer;
       transition: all 0.2s ease;
@@ -587,17 +587,17 @@
       justify-content: center;
       overflow: visible;
     }
-    
+
     .ai-bot-btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(30, 64, 175, 0.15);
       border-color: #93c5fd;
     }
-    
+
     .ai-bot-btn:active {
       transform: translateY(0);
     }
-    
+
     .ai-bot-image {
       width: 40px;
       height: 40px;
@@ -605,11 +605,11 @@
       object-fit: cover;
       transition: transform 0.2s ease;
     }
-    
+
     .ai-bot-btn:hover .ai-bot-image {
       transform: scale(1.05);
     }
-    
+
     .ai-bot-popup {
       position: fixed;
       bottom: 88px;
@@ -618,7 +618,7 @@
       border-radius: 12px;
       padding: 16px;
       border: 1px solid #e5e7eb;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
                   0 2px 4px -1px rgba(0, 0, 0, 0.06);
       z-index: 41;
       opacity: 0;
@@ -627,13 +627,13 @@
       transition: all 0.2s ease;
       max-width: 240px;
     }
-    
+
     .ai-bot-popup.show {
       opacity: 1;
       transform: translateY(0);
       pointer-events: auto;
     }
-    
+
     .ai-bot-popup::after {
       content: '';
       position: absolute;
@@ -646,7 +646,7 @@
       border-bottom: 1px solid #e5e7eb;
       transform: rotate(45deg);
     }
-    
+
     .rage-avatar {
       width: 40px;
       height: 40px;
@@ -658,13 +658,13 @@
       overflow: hidden;
       border: 1px solid #e5e7eb;
     }
-    
+
     .rage-avatar img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
-    
+
     .popup-title {
       font-family: 'Inter', sans-serif;
       font-weight: 600;
@@ -679,68 +679,360 @@
         bottom: 16px;
         right: 20px;
       }
-      
+
       .ai-bot-image {
         width: 28px;
         height: 28px;
       }
-      
+
       .ai-bot-status {
         width: 8px;
         height: 8px;
         top: -2px;
         right: -2px;
       }
-      
+
       .ai-bot-popup {
         right: 16px;
         bottom: 72px;
         max-width: calc(100vw - 32px);
       }
-      
+
       header .max-w-3xl {
         padding-left: 16px;
         padding-right: 16px;
       }
-      
+
       main {
         padding-left: 16px;
         padding-right: 16px;
       }
-      
+
       .impact-card {
         padding: 12px 8px;
       }
-      
+
       .impact-card .impact-icon {
         width: 36px;
         height: 36px;
       }
-      
+
       .impact-card .impact-icon svg {
         width: 18px;
         height: 18px;
       }
-      
+
       .priority-badge {
         padding: 8px 4px;
         font-size: 12px;
       }
     }
-    
+
     @media (max-width: 768px) {
       .grid.grid-cols-2.md\\:grid-cols-4 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      
+
       .grid.grid-cols-1.md\\:grid-cols-2 {
         grid-template-columns: 1fr;
       }
     }
+    /* Modern UI Enhancements */
+    body {
+      background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #f0f9ff 100%);
+    }
+
+    header {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    header h1 {
+      background: linear-gradient(90deg, #1e40af, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tabs-bar {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+      position: sticky;
+      top: 57px;
+      z-index: 40;
+    }
+
+    .tab-btn {
+      border-radius: 0;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+    }
+
+    .tab-btn.active {
+      font-weight: 600;
+    }
+
+    .tab-btn::after {
+      background: linear-gradient(90deg, #3b82f6, #1e40af);
+      height: 2.5px;
+      border-radius: 2px;
+    }
+
+    main .bg-white.rounded-lg {
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 10px 40px -10px rgba(30, 64, 175, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border-bottom: none;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .card-header h2,
+    .card-header h3 {
+      color: #ffffff !important;
+    }
+
+    .card-header p {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .card-header .text-red-500 {
+      color: #fecaca !important;
+    }
+
+    .card-header svg {
+      color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .card-header .bg-blue-100,
+    .card-header .bg-red-100,
+    .card-header .bg-amber-100,
+    .card-header .bg-green-100 {
+      background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .form-input {
+      border-radius: 0.625rem;
+      border-color: #e2e8f0;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .form-input:hover {
+      border-color: #cbd5e1;
+    }
+
+    .form-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12), 0 1px 2px rgba(0, 0, 0, 0.03);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      border-radius: 0.625rem;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      background: linear-gradient(135deg, #93c5fd 0%, #bfdbfe 100%);
+      color: #ffffff;
+    }
+
+    .upload-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 0.75rem;
+      background: #f8fafc;
+      transition: all 0.25s ease;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08);
+    }
+
+    .impact-card {
+      border-radius: 0.75rem;
+      border-color: #e2e8f0;
+      background: #ffffff;
+      transition: all 0.25s ease;
+    }
+
+    .impact-card:hover {
+      border-color: #93c5fd;
+      background: #f0f7ff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(30, 64, 175, 0.1);
+    }
+
+    .impact-option.selected .impact-card {
+      border-color: #2563eb;
+      background: #eff6ff;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .critical-checkbox {
+      border-radius: 0.75rem;
+      border-color: #e2e8f0;
+      background: #ffffff;
+      transition: all 0.25s ease;
+    }
+
+    .critical-checkbox:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+
+    .critical-checkbox.checked {
+      background: #fef2f2;
+      border-color: #ef4444;
+    }
+
+    .faq-item {
+      border-radius: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .faq-item:hover {
+      background: #f1f5f9;
+    }
+
+    .bg-red-50, .bg-blue-50, .bg-amber-50 {
+      border-radius: 0.75rem;
+      border: 1px solid;
+      border-left-width: 4px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .bg-red-50 { border-color: rgba(254, 202, 202, 0.5); border-left-color: #ef4444; background: linear-gradient(90deg, #fef2f2 0%, #ffffff 100%); }
+    .bg-blue-50 { border-color: rgba(191, 219, 254, 0.5); border-left-color: #3b82f6; background: linear-gradient(90deg, #eff6ff 0%, #ffffff 100%); }
+    .bg-amber-50 { border-color: rgba(253, 230, 138, 0.5); border-left-color: #f59e0b; background: linear-gradient(90deg, #fffbeb 0%, #ffffff 100%); }
+
+    .bg-red-50:hover, .bg-blue-50:hover, .bg-amber-50:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .ticket-header {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    }
+
+    #successModal > div,
+    #termsModal > div {
+      border-radius: 1rem;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    }
+
+    .support-info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    @media (min-width: 768px) {
+      .support-info-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .info-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      border-radius: 1rem;
+      border: 1px solid;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      transition: all 0.25s ease;
+    }
+    .info-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    }
+    .info-icon {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .info-icon svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    .info-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 0.25rem;
+      line-height: 1.25;
+    }
+    .info-text {
+      font-size: 0.85rem;
+      line-height: 1.5;
+      opacity: 0.9;
+    }
+    .info-card-critical {
+      background: linear-gradient(135deg, #fee2e2 0%, #ffffff 100%);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: #7f1d1d;
+    }
+    .info-card-critical .info-icon {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+    }
+    .info-card-hipaa {
+      background: linear-gradient(135deg, #dbeafe 0%, #ffffff 100%);
+      border-color: rgba(37, 99, 235, 0.2);
+      color: #1e3a8a;
+    }
+    .info-card-hipaa .info-icon {
+      background: rgba(37, 99, 235, 0.1);
+      color: #2563eb;
+    }
+    .info-card-help {
+      background: linear-gradient(135deg, #dbeafe 0%, #ffffff 100%);
+      border-color: rgba(37, 99, 235, 0.2);
+      color: #1e3a8a;
+    }
+    .info-card-help .info-icon {
+      background: rgba(37, 99, 235, 0.1);
+      color: #2563eb;
+    }
+    .info-card-urgent {
+      background: linear-gradient(135deg, #fef3c7 0%, #ffffff 100%);
+      border-color: rgba(217, 119, 6, 0.2);
+      color: #78350f;
+    }
+    .info-card-urgent .info-icon {
+      background: rgba(217, 119, 6, 0.1);
+      color: #d97706;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
-  
+
   <!-- Header -->
   <header class="bg-white border-b border-gray-200">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -767,7 +1059,7 @@
   </header>
 
   <!-- Tabs -->
-  <div class="bg-white border-b border-gray-200">
+  <div class="tabs-bar bg-white border-b border-gray-200">
     <div class="max-w-3xl mx-auto px-4 sm:px-6">
       <nav class="flex gap-4 sm:gap-8">
         <button onclick="showTab('submit')" id="tabSubmit" class="tab-btn active py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent">
@@ -782,15 +1074,15 @@
 
   <!-- Main Content -->
   <main class="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex-1 w-full">
-    
+
     <!-- Submit Form -->
     <section id="submitSection">
       <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+        <div class="card-header px-4 sm:px-6 py-4 border-b border-gray-200">
           <h2 class="text-base font-semibold text-gray-900">New Support Request</h2>
           <p class="text-sm text-gray-500 mt-1">Please provide the details of your IT issue. <span class="text-red-500 font-medium">Do not include patient PHI.</span></p>
         </div>
-        
+
         <form id="ticketForm" class="p-4 sm:p-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
             <div>
@@ -849,12 +1141,13 @@
           </div>
 
           <div class="mt-5 sm:mt-6">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Short Description <span class="text-red-500">*</span></label>
-            <textarea id="shortDescription" name="shortDescription" rows="3" required
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Description <span class="text-red-500">*</span></label>
+            <textarea id="shortDescription" name="shortDescription" rows="4" required maxlength="500"
               class="form-input w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none resize-none"
-              placeholder="Briefly describe your IT issue (no patient names or MRNs)..."></textarea>
-            <div class="flex items-center justify-between mt-1">
-              <p class="text-xs text-gray-400"><span id="shortCharCount">0</span>/300</p>
+              placeholder="Describe your IT issue in detail (no patient names or MRNs)..."></textarea>
+            <div class="flex items-center justify-between mt-1.5">
+              <p class="text-xs text-gray-500"><span id="shortCharCount" class="transition-colors">0</span>/500</p>
+              <p class="text-xs text-gray-400">Minimum 10 characters</p>
             </div>
           </div>
 
@@ -987,13 +1280,6 @@
               <input type="hidden" id="impactArea" name="impactArea" value="">
             </div>
 
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Additional Description</label>
-              <textarea id="additionalDescription" name="additionalDescription" rows="3"
-                class="form-input w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none resize-none"
-                placeholder="Provide additional details, error messages, device ID, room number (no patient PHI)..."></textarea>
-              <p class="text-xs text-gray-400 text-right mt-1"><span id="additionalCharCount">0</span>/500</p>
-            </div>
           </div>
 
           <div class="mt-5 sm:mt-6">
@@ -1016,16 +1302,16 @@
               Submit Request
             </button>
             <p class="text-xs text-gray-400 text-center mt-3">
-              By submitting, you agree to our 
+              By submitting, you agree to our
               <button type="button" onclick="openTermsModal()" class="text-blue-600 hover:underline">IT support terms and conditions</button>
             </p>
           </div>
         </form>
       </div>
-      
+
       <!-- FAQ Section -->
       <div class="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+        <div class="card-header px-4 sm:px-6 py-4 border-b border-gray-200">
           <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
             <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -1080,29 +1366,29 @@
           </div>
         </div>
       </div>
-      
-      <!-- Emergency Contact -->
-      <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-        <div class="flex gap-3">
-          <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-          </svg>
+
+      <!-- Support Info -->
+      <div class="support-info-grid">
+        <div class="info-card info-card-critical">
+          <div class="info-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </div>
           <div>
-            <p class="text-sm font-medium text-red-800">Critical / System Outage?</p>
-            <p class="text-xs text-red-600 mt-1">For system outages or critical issues affecting multiple users, call the IT Helpdesk directly at <strong>(123) 456-7890</strong>. Available 24/7 for emergencies.</p>
+            <h4 class="info-title">Critical / System Outage?</h4>
+            <p class="info-text">For system outages or critical issues affecting multiple users, call the IT Helpdesk directly at <strong>(123) 456-7890</strong>. Available 24/7 for emergencies.</p>
           </div>
         </div>
-      </div>
-      
-      <!-- HIPAA Notice -->
-      <div class="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div class="flex gap-3">
-          <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-          </svg>
+        <div class="info-card info-card-hipaa">
+          <div class="info-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+          </div>
           <div>
-            <p class="text-sm font-medium text-blue-800">HIPAA Reminder</p>
-            <p class="text-xs text-blue-600 mt-1">Do not include patient names, MRNs, or other Protected Health Information (PHI) in your ticket description. Use general terms to describe the issue.</p>
+            <h4 class="info-title">HIPAA Reminder</h4>
+            <p class="info-text">Do not include patient names, MRNs, or other Protected Health Information (PHI) in your ticket description. Use general terms to describe the issue.</p>
           </div>
         </div>
       </div>
@@ -1111,7 +1397,7 @@
     <!-- Track Section -->
     <section id="trackSection" class="hidden">
       <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="px-4 sm:px-6 py-5 border-b border-gray-200">
+        <div class="card-header px-4 sm:px-6 py-5 border-b border-gray-200">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1124,10 +1410,10 @@
             </div>
           </div>
         </div>
-        
+
         <div class="p-4 sm:p-6">
           <div class="flex flex-col sm:flex-row gap-3">
-            <input type="text" id="searchInput" 
+            <input type="text" id="searchInput"
               class="form-input flex-1 px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none"
               placeholder="Enter Ticket ID (e.g. SSPTKT-001)">
             <button onclick="performSearch()" id="searchBtn"
@@ -1138,33 +1424,35 @@
           <p class="text-xs text-gray-400 mt-2">Your ticket ID was sent to your email after submission</p>
         </div>
       </div>
-      
-      <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div class="flex gap-3">
-          <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
+
+      <!-- Support Info -->
+      <div class="support-info-grid">
+        <div class="info-card info-card-help">
+          <div class="info-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
           <div>
-            <p class="text-sm font-medium text-blue-800">Can't find your Ticket ID?</p>
-            <p class="text-xs text-blue-600 mt-1">Check your email inbox for the confirmation message we sent after you submitted your request. The Ticket ID starts with "SSPTKT-" followed by a number.</p>
+            <h4 class="info-title">Can't find your Ticket ID?</h4>
+            <p class="info-text">Check your email inbox for the confirmation message we sent after you submitted your request. The Ticket ID starts with "SSPTKT-" followed by a number.</p>
           </div>
         </div>
-      </div>
-      
-      <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <div class="flex gap-3">
-          <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-          </svg>
+        <div class="info-card info-card-urgent">
+          <div class="info-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+            </svg>
+          </div>
           <div>
-            <p class="text-sm font-medium text-amber-800">Need Immediate Help?</p>
-            <p class="text-xs text-amber-600 mt-1">For urgent issues or if you need to speak with someone directly, call the IT Helpdesk at <strong>(123) 456-7890</strong>.</p>
+            <h4 class="info-title">Need Immediate Help?</h4>
+            <p class="info-text">For urgent issues or if you need to speak with someone directly, call the IT Helpdesk at <strong>(123) 456-7890</strong>.</p>
           </div>
         </div>
       </div>
 
       <div id="trackResult" class="mt-4 hidden"></div>
-      
+
       <div id="noResult" class="mt-4 hidden">
         <div class="bg-white rounded-lg border border-gray-200 p-6 text-center shadow-sm">
           <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1196,7 +1484,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Steps -->
       <div id="processingSteps" class="p-6 space-y-3">
         <div id="step1" class="processing-step">
@@ -1209,7 +1497,7 @@
             <p class="text-sm font-medium text-gray-700">Processing your request...</p>
           </div>
         </div>
-        
+
         <div id="step2" class="processing-step">
           <div class="step-card flex items-center gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
             <div class="step-icon w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1220,7 +1508,7 @@
             <p class="text-sm font-medium text-gray-700">Intimating the IT team...</p>
           </div>
         </div>
-        
+
         <div id="step3" class="processing-step">
           <div class="step-card flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
             <div class="step-icon w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1231,7 +1519,7 @@
             <p class="text-sm font-medium text-gray-700">A user will be assigned shortly...</p>
           </div>
         </div>
-        
+
         <div id="step4" class="processing-step">
           <div class="step-card flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
             <div class="step-icon w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1361,7 +1649,7 @@
   <div class="ai-bot-btn" onclick="toggleBotPopup()">
     <img src="https://lh3.googleusercontent.com/d/1GE0iQqxwIHOpywIeF_X-hNnPBuG1oLtT" alt="AI Assistant" class="ai-bot-image">
   </div>
-  
+
   <!-- AI Bot Popup -->
   <div id="botPopup" class="ai-bot-popup">
     <div class="flex items-center gap-3 mb-3">
@@ -1439,7 +1727,6 @@
         priority: document.getElementById('priority').value,
         criticalFlag: document.getElementById('criticalFlag').value,
         impactArea: document.getElementById('impactArea').value,
-        additionalDescription: document.getElementById('additionalDescription').value,
         timestamp: new Date().toISOString()
       };
       if (formData.phone || formData.shortDescription || formData.name) {
@@ -1475,10 +1762,6 @@
               var impactOpt = document.querySelector('.impact-option[data-value="' + data.impactArea + '"]');
               if (impactOpt) selectImpact(impactOpt);
             }
-            if (data.additionalDescription) {
-              document.getElementById('additionalDescription').value = data.additionalDescription;
-              document.getElementById('additionalCharCount').textContent = data.additionalDescription.length;
-            }
             validateForm();
           }
         } catch (e) { console.log('Could not restore draft'); }
@@ -1493,7 +1776,7 @@
       setTimeout(function() { indicator.style.opacity = '0'; }, 2000);
     }
 
-    ['name', 'phone', 'location', 'shortDescription', 'issueType', 'additionalDescription'].forEach(function(id) {
+    ['name', 'phone', 'location', 'shortDescription', 'issueType'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener('input', triggerAutoSave);
@@ -1735,7 +2018,7 @@
 
     var emailVerified = false;
     var emailCheckTimeout = null;
-    
+
     emailInput.addEventListener('input', function() {
       var value = this.value.trim();
       var regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1766,7 +2049,7 @@
       }
       validateForm();
     });
-    
+
     function verifyEmailInDirectory(email) {
       callAPI('lookupEmployee', email)
         .then(function(result) {
@@ -1851,20 +2134,14 @@
 
     var shortDescription = document.getElementById('shortDescription');
     var shortCharCount = document.getElementById('shortCharCount');
-    var additionalDescription = document.getElementById('additionalDescription');
-    var additionalCharCount = document.getElementById('additionalCharCount');
-    
+
     shortDescription.addEventListener('input', function() {
       var len = this.value.length;
       shortCharCount.textContent = len;
-      if (len > 300) this.value = this.value.slice(0, 300);
-      validateForm();
-    });
-    
-    additionalDescription.addEventListener('input', function() {
-      var len = this.value.length;
-      additionalCharCount.textContent = len;
       if (len > 500) this.value = this.value.slice(0, 500);
+      shortCharCount.classList.remove('text-gray-500', 'text-amber-600', 'text-red-600');
+      shortCharCount.classList.add(len >= 500 ? 'text-red-600' : len >= 450 ? 'text-amber-600' : 'text-gray-500');
+      validateForm();
     });
 
     function validateForm() {
@@ -1887,24 +2164,24 @@ function showProcessingAnimation() {
   serverResponseReceived = false;
   var steps = ['step1', 'step2', 'step3', 'step4'];
   var currentStep = 0;
-  
+
   function showNextStep() {
     if (currentStep > 0) {
       var prevStep = document.getElementById(steps[currentStep - 1]);
       prevStep.classList.remove('active');
       prevStep.classList.add('completed');
       prevStep.querySelector('.step-icon').classList.add('completed');
-      
+
       // Change spinner to checkmark
       var prevIcon = prevStep.querySelector('.step-icon svg');
       prevIcon.outerHTML = '<svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
     }
-    
+
     if (currentStep < steps.length) {
       var step = document.getElementById(steps[currentStep]);
       step.classList.add('active');
       currentStep++;
-      
+
       if (currentStep < steps.length) {
         setTimeout(showNextStep, 1200);
       } else {
@@ -1914,18 +2191,18 @@ function showProcessingAnimation() {
           lastStep.classList.remove('active');
           lastStep.classList.add('completed');
           lastStep.querySelector('.step-icon').classList.add('completed');
-          
+
           // Change last step spinner to checkmark
           var lastIcon = lastStep.querySelector('.step-icon svg');
           lastIcon.outerHTML = '<svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
-          
+
           // Wait for server response
           waitForServerResponse();
         }, 1200);
       }
     }
   }
-  
+
   function waitForServerResponse() {
     if (serverResponseReceived && submissionResult && submissionResult.ticketId) {
       setTimeout(function() {
@@ -1940,13 +2217,13 @@ function showProcessingAnimation() {
       setTimeout(waitForServerResponse, 200);
     }
   }
-  
+
   // Reset all steps
   steps.forEach(function(stepId) {
     var step = document.getElementById(stepId);
     step.classList.remove('active', 'completed');
     step.querySelector('.step-icon').classList.remove('completed');
-    
+
     // Reset icons for steps 1-3 to spinner
     var stepNum = stepId.replace('step', '');
     if (stepNum !== '4') {
@@ -1956,18 +2233,18 @@ function showProcessingAnimation() {
       }
     }
   });
-  
+
   // Reset modal opacity
   modal.style.opacity = '1';
   setTimeout(showNextStep, 300);
 }
- 
+
     function hideProcessingAnimation() {
       var modal = document.getElementById('processingModal');
       modal.classList.add('hidden');
       modal.style.opacity = '1'; // Reset for next time
     }
-    
+
     function showSuccessModal() {
       if (submissionResult && submissionResult.ticketId) {
         document.getElementById('ticketIdDisplay').textContent = submissionResult.ticketId;
@@ -1984,7 +2261,7 @@ function showProcessingAnimation() {
       var selectedPriority = document.getElementById('priority').value;
       var criticalFlag = document.getElementById('criticalFlag').value === 'true';
       var finalPriority = criticalFlag ? 'Critical' : (priorityMap[selectedPriority] || 'Low');
-      
+
       var formData = {
         name: document.getElementById('name').value.trim() || 'Anonymous',
         email: document.getElementById('email').value.trim(),
@@ -1996,7 +2273,6 @@ function showProcessingAnimation() {
         workMode: document.getElementById('impactArea').value || '',
         priority: finalPriority,
         criticalFlag: criticalFlag,
-        additionalDescription: document.getElementById('additionalDescription').value.trim() || '',
         attachments: formAttachments || []
       };
 
@@ -2024,29 +2300,30 @@ function showProcessingAnimation() {
       hideProcessingAnimation();
       showError(error && error.message ? error.message : 'An error occurred');
     }
-    
+
     function resetForm() {
       document.getElementById('ticketForm').reset();
-      document.querySelectorAll('.form-input').forEach(function(f) { 
-        f.classList.remove('valid', 'error', 'email-verifying'); 
+      document.querySelectorAll('.form-input').forEach(function(f) {
+        f.classList.remove('valid', 'error', 'email-verifying');
       });
-      
+
       emailIcon.classList.add('hidden');
       emailIcon.innerHTML = '';
       phoneIcon.classList.add('hidden');
       phoneIcon.innerHTML = '';
-      
+
       emailMsg.classList.add('hidden');
       phoneMsg.classList.add('hidden');
       locationMsg.classList.add('hidden');
       shortCharCount.textContent = '0';
-      additionalCharCount.textContent = '0';
+      shortCharCount.classList.remove('text-amber-600', 'text-red-600');
+      shortCharCount.classList.add('text-gray-500');
       document.getElementById('submitBtn').disabled = true;
       emailVerified = false;
-      
+
       // Reset priority to default P4
       document.getElementById('priority').value = 'P4';
-      
+
       var checkbox = document.getElementById('criticalCheckbox');
       var checkIcon = document.getElementById('criticalCheckIcon');
       checkbox.classList.remove('checked');
@@ -2054,10 +2331,10 @@ function showProcessingAnimation() {
       checkIcon.classList.add('border-gray-300');
       checkIcon.querySelector('svg').classList.add('hidden');
       document.getElementById('criticalFlag').value = 'false';
-      
+
       document.querySelectorAll('.impact-option').forEach(function(opt) { opt.classList.remove('selected'); });
       document.getElementById('impactArea').value = '';
-      
+
       formAttachments = [];
       renderAttachmentPreview();
       hideAttachmentMsg();
@@ -2100,19 +2377,19 @@ function showProcessingAnimation() {
       var assignedTo = getTicketValue(ticket, ['Assigned To', 'assignedTo'], 'Pending Assignment');
       var escalationLevel = getTicketValue(ticket, ['Escalation Level', 'escalationLevel'], 'L1');
       var shortDesc = getTicketValue(ticket, ['Short Description', 'shortDescription'], 'No description provided');
-      var additionalDesc = getTicketValue(ticket, ['Additional Description', 'additionalDescription'], '');
-      
+      var additionalDescHtml = '';
+
       var statusClass = status === 'Resolved' ? 'status-resolved' : status === 'In Progress' ? 'status-in-progress' : 'status-open';
       var priorityClass = 'priority-' + priority.toLowerCase();
       var statusSteps = ['Open', 'In Progress', 'Resolved'];
       var currentStepIndex = statusSteps.indexOf(status);
-      
+
       var statusProgressHtml = '<div class="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">' +
         statusSteps.map(function(step, index) {
           var isCompleted = index <= currentStepIndex;
           var isCurrent = index === currentStepIndex;
           var stepHtml = '<div class="flex items-center gap-1 sm:gap-1.5">' +
-            '<div class="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-medium ' + 
+            '<div class="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-medium ' +
               (isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500') + '">' +
               (isCompleted ? '<svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>' : (index + 1)) +
             '</div>' +
@@ -2123,7 +2400,7 @@ function showProcessingAnimation() {
           }
           return stepHtml;
         }).join('') + '</div>';
-      
+
       var timelineHtml = '';
       if (history && history.length > 0) {
         timelineHtml = history.map(function(item, index) {
@@ -2140,13 +2417,11 @@ function showProcessingAnimation() {
       } else {
         timelineHtml = '<div class="flex gap-3"><div class="flex flex-col items-center"><div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></div></div><div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900">Ticket Created</p><p class="text-xs text-gray-500 mt-0.5 break-words">' + shortDesc + '</p><p class="text-xs text-gray-400 mt-0.5">' + formatDate(createdDate) + ' • ' + userName + '</p></div></div>';
       }
-      
-      var additionalDescHtml = additionalDesc ? '<div class="mt-3 pt-3 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">Additional Details</p><p class="text-sm text-gray-700 break-words">' + additionalDesc + '</p></div>' : '';
-      
-      container.innerHTML = '<div class="bg-white rounded-lg border border-gray-200 shadow-sm"><div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p class="text-base font-semibold text-gray-900">' + ticketId + '</p><p class="text-xs text-gray-500 mt-0.5">Created: ' + formatDate(createdDate) + '</p></div><span class="px-2.5 py-1 rounded-full text-xs font-medium self-start ' + statusClass + '">' + status + '</span></div><div class="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-100">' + statusProgressHtml + '</div><div class="p-4 sm:p-6"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm"><div><p class="text-xs text-gray-500">Requester</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + userName + '</p></div><div><p class="text-xs text-gray-500">Priority</p><span class="inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5 ' + priorityClass + '">' + priority + '</span></div><div><p class="text-xs text-gray-500">Location</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + location + '</p></div><div><p class="text-xs text-gray-500">Assigned To</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + assignedTo + '</p></div><div><p class="text-xs text-gray-500">Escalation</p><p class="font-medium text-gray-900 mt-0.5">' + escalationLevel + '</p></div><div><p class="text-xs text-gray-500">Last Updated</p><p class="font-medium text-gray-900 mt-0.5">' + (formatDate(lastUpdated) || 'N/A') + '</p></div></div><div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">Description</p><p class="text-sm text-gray-700 break-words">' + shortDesc + '</p></div>' + additionalDescHtml + '</div></div><div class="bg-white rounded-lg border border-gray-200 shadow-sm mt-4"><div class="px-4 sm:px-6 py-3 border-b border-gray-200"><h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2"><svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Activity Timeline</h3></div><div class="p-4 sm:p-6">' + timelineHtml + '</div></div><div class="mt-4"><button onclick="showTab(\'submit\')" class="w-full btn-primary py-2.5 rounded-md text-sm font-medium text-white">Submit New Request</button></div>';
+
+      container.innerHTML = '<div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden"><div class="px-4 sm:px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p class="text-base font-semibold text-white">' + ticketId + '</p><p class="text-xs text-blue-100 mt-0.5">Created: ' + formatDate(createdDate) + '</p></div><span class="px-2.5 py-1 rounded-full text-xs font-medium self-start ' + statusClass + '">' + status + '</span></div><div class="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-100">' + statusProgressHtml + '</div><div class="p-4 sm:p-6"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm"><div><p class="text-xs text-gray-500">Requester</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + userName + '</p></div><div><p class="text-xs text-gray-500">Priority</p><span class="inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5 ' + priorityClass + '">' + priority + '</span></div><div><p class="text-xs text-gray-500">Location</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + location + '</p></div><div><p class="text-xs text-gray-500">Assigned To</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + assignedTo + '</p></div><div><p class="text-xs text-gray-500">Escalation</p><p class="font-medium text-gray-900 mt-0.5">' + escalationLevel + '</p></div><div><p class="text-xs text-gray-500">Last Updated</p><p class="font-medium text-gray-900 mt-0.5">' + (formatDate(lastUpdated) || 'N/A') + '</p></div></div><div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">Description</p><p class="text-sm text-gray-700 break-words">' + shortDesc + '</p></div>' + additionalDescHtml + '</div></div><div class="bg-white rounded-lg border border-gray-200 shadow-sm mt-4"><div class="px-4 sm:px-6 py-3 border-b border-gray-200"><h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2"><svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Activity Timeline</h3></div><div class="p-4 sm:p-6">' + timelineHtml + '</div></div><div class="mt-4"><button onclick="showTab(\'submit\')" class="w-full btn-primary py-2.5 rounded-md text-sm font-medium text-white">Submit New Request</button></div>';
       container.classList.remove('hidden');
     }
-    
+
     function getTimelineIcon(action) {
       var icons = {
         'Created': '<svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>',
@@ -2159,7 +2434,7 @@ function showProcessingAnimation() {
       };
       return icons[action] || '<svg class="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
     }
-    
+
     function getTimelineIconBg(action) {
       var bgs = { 'Created': 'bg-blue-100', 'Assigned': 'bg-purple-100', 'Reassigned': 'bg-orange-100', 'Status Changed': 'bg-yellow-100', 'Escalated': 'bg-red-100', 'Resolved': 'bg-green-100', 'Reopened': 'bg-amber-100' };
       return bgs[action] || 'bg-gray-100';
@@ -2176,15 +2451,15 @@ function showProcessingAnimation() {
 
     function showLoading() { document.getElementById('loadingOverlay').classList.remove('hidden'); }
     function hideLoading() { document.getElementById('loadingOverlay').classList.add('hidden'); }
-    
-    function closeModal() { 
+
+    function closeModal() {
       document.getElementById('successModal').classList.add('hidden');
       document.getElementById('nextStepsInfo').classList.add('hidden');
       document.getElementById('ticketIdDisplay').textContent = 'Loading...';
       submissionResult = null;
       serverResponseReceived = false;
     }
-    
+
     function trackNewTicket() {
       var ticketId = document.getElementById('ticketIdDisplay').textContent;
       closeModal();
@@ -2196,7 +2471,7 @@ function showProcessingAnimation() {
         }
       }, 150);
     }
-    
+
     function showError(msg) {
       var toast = document.getElementById('errorToast');
       document.getElementById('errorMsg').textContent = msg;
@@ -2207,7 +2482,7 @@ function showProcessingAnimation() {
     document.getElementById('searchInput').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); performSearch(); }
     });
-    
+
     document.addEventListener('click', function(e) {
       var botBtn = document.querySelector('.ai-bot-btn');
       var popup = document.getElementById('botPopup');
