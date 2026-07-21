@@ -23,7 +23,7 @@ module.exports = {
   HEADERS: [
     'Created Date', 'Ticket ID', 'Employee ID', 'Name', 'Email Address',
     'Phone Number', 'Location', 'Issue Type', 'Impact Area',
-    'Short Description', 'Additional Description',
+    'Short Description', 'Additional Description', 'Attachments',
     'Status', 'Priority', 'VIP Level', 'Critical Flag', 'Assigned To', 'Assigned Date', 'Escalation Level',
     'Escalated To', 'Escalation Date', 'Last Updated', 'Resolved By', 'Resolved Date'
   ],
@@ -37,9 +37,9 @@ module.exports = {
 
   COLUMNS: {
     CREATED_DATE: 1, TICKET_ID: 2, EMPLOYEE_ID: 3, NAME: 4, EMAIL: 5, PHONE: 6, LOCATION: 7,
-    ISSUE_TYPE: 8, IMPACT_AREA: 9, SHORT_DESCRIPTION: 10, ADDITIONAL_DESCRIPTION: 11,
-    STATUS: 12, PRIORITY: 13, VIP_LEVEL: 14, CRITICAL_FLAG: 15, ASSIGNED_TO: 16, ASSIGNED_DATE: 17,
-    ESCALATION_LEVEL: 18, ESCALATED_TO: 19, ESCALATION_DATE: 20, LAST_UPDATED: 21, RESOLVED_BY: 22, RESOLVED_DATE: 23
+    ISSUE_TYPE: 8, IMPACT_AREA: 9, SHORT_DESCRIPTION: 10, ADDITIONAL_DESCRIPTION: 11, ATTACHMENTS: 12,
+    STATUS: 13, PRIORITY: 14, VIP_LEVEL: 15, CRITICAL_FLAG: 16, ASSIGNED_TO: 17, ASSIGNED_DATE: 18,
+    ESCALATION_LEVEL: 19, ESCALATED_TO: 20, ESCALATION_DATE: 21, LAST_UPDATED: 22, RESOLVED_BY: 23, RESOLVED_DATE: 24
   },
 
   VIP_PRIORITY_MAP: { High: 'Critical', Middle: 'High', Low: 'Medium' },

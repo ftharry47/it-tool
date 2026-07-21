@@ -2,6 +2,40 @@ const db = require('../db');
 const utils = require('../utils');
 const email = require('../email');
 const config = require('../config');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const UPLOAD_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
+
+function ensureUploadDir() {
+  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+function saveBase64Attachment(dataUrl) {
+  const match = String(dataUrl).match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) return null;
+  let ext = match[1].replace('image/', '');
+  if (ext === 'jpeg') ext = 'jpg';
+  const buffer = Buffer.from(match[2], 'base64');
+  if (buffer.length > 5 * 1024 * 1024) return null; // max 5 MB per file
+  const filename = crypto.randomUUID() + '.' + ext;
+  ensureUploadDir();
+  const filePath = path.join(UPLOAD_DIR, filename);
+  fs.writeFileSync(filePath, buffer);
+  return '/uploads/' + filename;
+}
+
+function processAttachments(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return '';
+  const saved = [];
+  for (const a of attachments) {
+    if (typeof a !== 'string') continue;
+    const url = saveBase64Attachment(a);
+    if (url) saved.push(url);
+  }
+  return JSON.stringify(saved);
+}
 
 function logHistory(d, ticketId, action, fromValue, toValue, performedBy, notes) {
   d.history.push({
@@ -60,7 +94,8 @@ function submitTicket(formData) {
       'Escalation Date': '',
       'Last Updated': timestamp.toISOString(),
       'Resolved By': '',
-      'Resolved Date': ''
+      'Resolved Date': '',
+      'Attachments': processAttachments(formData.attachments)
     };
 
     db.withDb(d => { d.tickets.push(row); });
@@ -134,7 +169,7 @@ function getDashboardConfig() {
     escalationLevels: config.escalationLevels,
     userStatuses: ['Online', 'Offline', 'Break', 'In Meeting'],
     noteTypes: config.NOTE_TYPES,
-    version: '7.9.0',
+    version: '8.1.0',
     lastUpdated: new Date().toISOString()
   };
 }

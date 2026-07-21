@@ -148,6 +148,59 @@
       transform: translateY(0);
     }
 
+    .upload-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      text-align: center;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      background: #f8fafc;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .upload-input {
+      display: none;
+    }
+    .upload-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .upload-thumb {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 0.5rem;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+    }
+    .upload-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .upload-remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.9);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+
     .impact-card {
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       transform: translateY(0);
@@ -805,17 +858,7 @@
             </div>
           </div>
 
-          <div class="mt-3">
-            <button type="button" id="expandBtn" onclick="toggleAdditionalDescription()"
-              class="expand-btn inline-flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 font-medium rounded-md border border-blue-200 hover:border-blue-300">
-              <svg id="expandIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-              </svg>
-              <span id="expandText">Add More Details</span>
-            </button>
-          </div>
-
-          <div id="additionalDescContainer" class="additional-desc-container mt-4">
+          <div id="additionalDescContainer" class="additional-desc-container expanded mt-5 sm:mt-6">
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1.5">Issue Type</label>
               <select id="issueType" name="issueType"
@@ -951,6 +994,20 @@
                 placeholder="Provide additional details, error messages, device ID, room number (no patient PHI)..."></textarea>
               <p class="text-xs text-gray-400 text-right mt-1"><span id="additionalCharCount">0</span>/500</p>
             </div>
+          </div>
+
+          <div class="mt-5 sm:mt-6">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Attach Screenshots or Photos <span class="text-xs font-normal text-gray-500 ml-1">(optional, max 3)</span></label>
+            <div class="upload-zone" id="attachmentUpload" onclick="document.getElementById('attachmentInput').click()">
+              <input type="file" id="attachmentInput" class="upload-input" accept="image/*" multiple onchange="handleAttachments(this.files)">
+              <svg class="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              <p class="text-sm text-gray-600 font-medium">Click or drag images here</p>
+              <p class="text-xs text-gray-400 mt-1">JPEG, PNG, GIF • up to 3 images, auto-compressed</p>
+            </div>
+            <div id="attachmentPreview" class="upload-preview"></div>
+            <p id="attachmentMsg" class="text-xs mt-1 hidden"></p>
           </div>
 
           <div class="mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-gray-200">
@@ -1327,14 +1384,14 @@
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-2">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-gray-500">
         <p>&copy; 2025 Srihari. All rights reserved.</p>
-        <p>IT Support Portal v5.0 | Powered by Solid State Practice</p>
+        <p>IT Support Portal v8.1.0 | Powered by Solid State Practice</p>
       </div>
     </div>
   </footer>
 
   <script>
     // State
-    let isAdditionalDescExpanded = false;
+    let formAttachments = [];
     let autoSaveTimeout = null;
     const AUTO_SAVE_KEY = 'itSupportDraft';
     let submissionResult = null;
@@ -1409,7 +1466,6 @@
             }
             if (data.issueType) {
               document.getElementById('issueType').value = data.issueType;
-              if (!isAdditionalDescExpanded) toggleAdditionalDescription();
             }
             if (data.priority) {
               document.getElementById('priority').value = data.priority;
@@ -1418,12 +1474,10 @@
             if (data.impactArea) {
               var impactOpt = document.querySelector('.impact-option[data-value="' + data.impactArea + '"]');
               if (impactOpt) selectImpact(impactOpt);
-              if (!isAdditionalDescExpanded) toggleAdditionalDescription();
             }
             if (data.additionalDescription) {
               document.getElementById('additionalDescription').value = data.additionalDescription;
               document.getElementById('additionalCharCount').textContent = data.additionalDescription.length;
-              if (!isAdditionalDescExpanded) toggleAdditionalDescription();
             }
             validateForm();
           }
@@ -1566,20 +1620,81 @@
       }
     }
 
-    function toggleAdditionalDescription() {
-      var container = document.getElementById('additionalDescContainer');
-      var expandIcon = document.getElementById('expandIcon');
-      var expandText = document.getElementById('expandText');
-      isAdditionalDescExpanded = !isAdditionalDescExpanded;
-      if (isAdditionalDescExpanded) {
-        container.classList.add('expanded');
-        expandIcon.style.transform = 'rotate(45deg)';
-        expandText.textContent = 'Hide Additional Details';
-      } else {
-        container.classList.remove('expanded');
-        expandIcon.style.transform = 'rotate(0deg)';
-        expandText.textContent = 'Add More Details';
+    function showAttachmentMsg(msg, type) {
+      var el = document.getElementById('attachmentMsg');
+      el.textContent = msg;
+      el.className = 'text-xs mt-1 ' + (type === 'error' ? 'text-red-600' : type === 'success' ? 'text-green-600' : 'text-gray-500');
+      el.classList.remove('hidden');
+    }
+
+    function hideAttachmentMsg() { document.getElementById('attachmentMsg').classList.add('hidden'); }
+
+    function renderAttachmentPreview() {
+      var container = document.getElementById('attachmentPreview');
+      container.innerHTML = formAttachments.map(function(a, i) {
+        return '<div class="upload-thumb"><img src="' + a + '" alt=""><div class="upload-remove" onclick="removeAttachment(' + i + ')">&times;</div></div>';
+      }).join('');
+    }
+
+    function removeAttachment(index) {
+      formAttachments.splice(index, 1);
+      renderAttachmentPreview();
+    }
+
+    function compressImage(file, maxWidth, quality) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var img = new Image();
+          img.onload = function() {
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            var scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleAttachments(files) {
+      hideAttachmentMsg();
+      if (!files || !files.length) return;
+      if (formAttachments.length + files.length > 3) {
+        showAttachmentMsg('You can attach up to 3 images.', 'error');
+        return;
       }
+      var allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        if (!allowedTypes.includes(file.type)) {
+          showAttachmentMsg('Only JPEG, PNG, GIF, or WebP images are allowed.', 'error');
+          return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          showAttachmentMsg('Each image must be smaller than 10 MB.', 'error');
+          return;
+        }
+        try {
+          var compressed = await compressImage(file, 1280, 0.82);
+          if (formAttachments.length < 3) formAttachments.push(compressed);
+        } catch (e) { showAttachmentMsg('Could not process image.', 'error'); }
+      }
+      renderAttachmentPreview();
+      if (formAttachments.length) showAttachmentMsg(formAttachments.length + ' image(s) attached', 'success');
+    }
+
+    var attachmentUpload = document.getElementById('attachmentUpload');
+    if (attachmentUpload) {
+      attachmentUpload.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+      attachmentUpload.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('dragover'); });
+      attachmentUpload.addEventListener('drop', function(e) { e.preventDefault(); this.classList.remove('dragover'); handleAttachments(e.dataTransfer.files); });
     }
 
     function callAPI(fn, ...args) {
@@ -1881,7 +1996,8 @@ function showProcessingAnimation() {
         workMode: document.getElementById('impactArea').value || '',
         priority: finalPriority,
         criticalFlag: criticalFlag,
-        additionalDescription: document.getElementById('additionalDescription').value.trim() || ''
+        additionalDescription: document.getElementById('additionalDescription').value.trim() || '',
+        attachments: formAttachments || []
       };
 
       try {
@@ -1942,7 +2058,9 @@ function showProcessingAnimation() {
       document.querySelectorAll('.impact-option').forEach(function(opt) { opt.classList.remove('selected'); });
       document.getElementById('impactArea').value = '';
       
-      if (isAdditionalDescExpanded) toggleAdditionalDescription();
+      formAttachments = [];
+      renderAttachmentPreview();
+      hideAttachmentMsg();
     }
 
     function handleTrackSuccess(result) {

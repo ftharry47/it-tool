@@ -109,7 +109,7 @@ function getSystemStatus() {
     dashboardEnabled: settings.DASHBOARD_ENABLED !== false && settings.DASHBOARD_ENABLED !== 'false',
     autoAssign: utils.getAutoAssignSetting(),
     dryRun: dryRunSetting !== null ? !!dryRunSetting : config.DRY_RUN,
-    version: '8.0.0',
+    version: '8.1.0',
     settings,
     adminEmails: utils.getAdminEmails(d),
     dbPath: db.DB_PATH

@@ -1,6 +1,6 @@
 {
   "name": "it-support-portal",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "description": "IT Support Portal migrated from Google Apps Script to Node.js/Express for Azure",
   "main": "app.js",
   "scripts": {
