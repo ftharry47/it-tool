@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.WEBSITE_SITE_NAME ? '/home/site/data/uploads' : path.join(__dirname, '..', '..', 'public', 'uploads'));
 
 function ensureUploadDir() {
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });

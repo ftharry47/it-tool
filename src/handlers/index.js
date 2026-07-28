@@ -31,5 +31,7 @@ module.exports = {
   testUpdatePhoneNumber: tickets.updatePhoneNumber,
   testUpdateLocation: tickets.updateLocation,
   testEmailConfiguration: () => ({ success: true, message: 'Email configured via SMTP env vars' }),
-  diagnoseSystem: core.getSystemStatus
+  diagnoseSystem: core.getSystemStatus,
+  addDirectory: core.addDirectory,
+  bulkImportDirectory: core.bulkImportDirectory
 };

@@ -2376,6 +2376,8 @@
     function removeAttachment(index) {
       formAttachments.splice(index, 1);
       renderAttachmentPreview();
+      if (formAttachments.length) showAttachmentMsg(formAttachments.length + ' image(s) attached', 'success');
+      else hideAttachmentMsg();
     }
 
     function compressImage(file, maxWidth, quality) {

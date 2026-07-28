@@ -2,7 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const DB_DIR = process.env.DB_DIR || path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'it-tool');
+function getDefaultDbDir() {
+  if (process.env.DB_DIR) return process.env.DB_DIR;
+  // Azure App Service Linux persistent path
+  if (process.env.WEBSITE_SITE_NAME) return '/home/site/data';
+  if (process.env.LOCALAPPDATA) return path.join(process.env.LOCALAPPDATA, 'it-tool');
+  return path.join(os.tmpdir(), 'it-tool');
+}
+
+const DB_DIR = getDefaultDbDir();
 const DB_PATH = process.env.DB_PATH || path.join(DB_DIR, 'db.json');
 
 function ensureDir() {

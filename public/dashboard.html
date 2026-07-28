@@ -467,10 +467,10 @@
 
         <div class="login-right">
             <div class="login-card">
-                <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-white mb-3">Welcome Back</h2><p class="text-zinc-300 text-base font-medium">Sign in with your Employee ID</p></div>
+                <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-white mb-3">Welcome Back</h2><p class="text-zinc-300 text-base font-medium">Sign in with your Email ID</p></div>
                 <form id="loginForm">
                     <div id="loginError" class="hidden mb-5 p-4 rounded-xl bg-red-500/15 border border-red-500/30"><p id="loginErrorText" class="text-red-400 text-sm text-center font-medium">Invalid credentials</p></div>
-                    <div class="mb-5 relative"><i class="ri-user-3-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="text" id="employeeId" class="login-input" placeholder="Employee ID" required autocomplete="off" maxlength="20"><p id="employeeIdHint" class="input-hint"></p></div>
+                    <div class="mb-5 relative"><i class="ri-user-3-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="email" id="employeeId" class="login-input" placeholder="Email ID" required autocomplete="off"><p id="employeeIdHint" class="input-hint"></p></div>
                     <div class="mb-5 relative"><i class="ri-lock-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="password" id="password" class="login-input" placeholder="Password" required autocomplete="off" maxlength="50"><button type="button" class="absolute right-5 top-1/2 -translate-y-1/2 login-icon-secondary hover:text-white transition-colors" onclick="togglePassword()"><i id="pwdToggleIcon" class="ri-eye-line text-xl"></i></button><p id="passwordHint" class="input-hint"></p></div>
                     <div class="remember-me"><input type="checkbox" id="rememberMe"><label for="rememberMe">Remember my credentials</label></div>
                     <button type="submit" id="loginBtn" class="login-btn"><span>Sign In</span><i class="ri-arrow-right-line text-lg"></i></button>
@@ -671,12 +671,11 @@ const Validator = {
             return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[m];
         }).trim();
     },
-    validateEmployeeId: function(empId) {
-        if (!empId || typeof empId !== 'string') return { valid: false, message: 'Employee ID is required' };
-        empId = empId.trim();
-        if (empId.length < 2) return { valid: false, message: 'Employee ID must be at least 2 characters' };
-        if (empId.length > 20) return { valid: false, message: 'Employee ID must be less than 20 characters' };
-        if (!/^[a-zA-Z0-9_-]+$/.test(empId)) return { valid: false, message: 'Only letters, numbers, underscore and hyphen allowed' };
+    validateEmployeeId: function(value) {
+        if (!value || typeof value !== 'string') return { valid: false, message: 'Email is required' };
+        value = value.trim();
+        if (value.length < 5) return { valid: false, message: 'Email is too short' };
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { valid: false, message: 'Enter a valid email address' };
         return { valid: true, message: '' };
     },
     validatePassword: function(pwd) {

@@ -12,12 +12,12 @@ process.on('unhandledRejection', (e) => { log('unhandled: ' + e); console.error(
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || (process.env.WEBSITE_SITE_NAME ? '/home/site/data/uploads' : path.join(__dirname, 'public', 'uploads'));
 
-app.use(express.json({ limit: '15mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOAD_DIR));
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use(express.json({ limit: '15mb' }));
+app.use('/uploads', express.static(UPLOAD_DIR));
+app.use(express.static(path.join(__dirname, 'public')));
 
 function disabledPage(title, message) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#111827;color:#fff;text-align:center}</style></head><body><div><h1>${title}</h1><p>${message}</p></div></body></html>`;
