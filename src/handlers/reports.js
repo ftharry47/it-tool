@@ -4,14 +4,28 @@ const config = require('../config');
 
 function getTeamPerformance(filters) {
   try {
-    const tickets = utils.getAllTickets();
+    const now = new Date();
+    const month = filters && filters.month ? parseInt(filters.month, 10) : now.getMonth() + 1;
+    const year = filters && filters.year ? parseInt(filters.year, 10) : now.getFullYear();
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1);
+    const monthLabel = start.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+    const allTickets = utils.getAllTickets();
+    const tickets = allTickets.filter(t => {
+      const cd = t['Created Date'] ? new Date(t['Created Date']) : null;
+      return cd && cd >= start && cd < end;
+    });
+
     const staff = require('./tickets').getITStaffList();
     if (!staff.length) return [];
     const performance = {};
     staff.forEach(s => {
       performance[s.name] = {
         name: s.name, level: s.level || 'L1', status: s.status || 'Online',
-        ticketsHandled: 0, resolved: 0, openTickets: 0, withinSla: 0, breachedSla: 0, totalResolutionHours: 0
+        month: monthLabel,
+        ticketsHandled: 0, resolved: 0, openTickets: 0, currentLoad: 0, criticalTickets: 0, highTickets: 0,
+        withinSla: 0, breachedSla: 0, totalResolutionHours: 0, totalResponseHours: 0
       };
     });
 
@@ -22,8 +36,12 @@ function getTeamPerformance(filters) {
       const priority = String(t['Priority'] || 'Pending').trim();
       const created = t['Created Date'] ? new Date(t['Created Date']) : null;
       const resolved = t['Resolved Date'] ? new Date(t['Resolved Date']) : null;
+      const assigned = t['Assigned Date'] ? new Date(t['Assigned Date']) : null;
       const p = performance[assignedTo];
       p.ticketsHandled++;
+      if (status === 'open' || status === 'in progress') p.currentLoad++;
+      if (priority === 'Critical') p.criticalTickets++;
+      if (priority === 'High') p.highTickets++;
       if (status === 'resolved') {
         p.resolved++;
         if (resolved && created) {
@@ -34,6 +52,9 @@ function getTeamPerformance(filters) {
         }
       } else {
         p.openTickets++;
+      }
+      if (assigned && created) {
+        p.totalResponseHours += (assigned - created) / (1000 * 60 * 60);
       }
     });
 
@@ -50,7 +71,20 @@ function getTeamPerformance(filters) {
         else if (avgHours < 24) avgDisplay = avgHours.toFixed(1) + 'h';
         else avgDisplay = (avgHours / 24).toFixed(1) + 'd';
       }
-      result.push({ name: m.name, level: m.level, status: m.status, ticketsHandled: m.ticketsHandled, resolved: m.resolved, openTickets: m.openTickets, slaCompliance, avgResolutionTime: avgDisplay });
+      const avgResponse = m.ticketsHandled > 0 ? m.totalResponseHours / m.ticketsHandled : 0;
+      let avgResponseDisplay = '--';
+      if (avgResponse > 0) {
+        if (avgResponse < 1) avgResponseDisplay = Math.round(avgResponse * 60) + 'm';
+        else if (avgResponse < 24) avgResponseDisplay = avgResponse.toFixed(1) + 'h';
+        else avgResponseDisplay = (avgResponse / 24).toFixed(1) + 'd';
+      }
+      const resolutionRate = m.ticketsHandled > 0 ? Math.round((m.resolved / m.ticketsHandled) * 100) : 0;
+      result.push({
+        name: m.name, level: m.level, status: m.status,
+        ticketsHandled: m.ticketsHandled, resolved: m.resolved, openTickets: m.openTickets,
+        currentLoad: m.currentLoad, criticalTickets: m.criticalTickets, highTickets: m.highTickets,
+        resolutionRate, slaCompliance, avgResolutionTime: avgDisplay, avgResponseTime: avgResponseDisplay
+      });
     }
     result.sort((a, b) => b.ticketsHandled - a.ticketsHandled);
     return result;
@@ -101,7 +135,6 @@ function generateTicketsReport(tickets) {
     t['Short Description'] || '',
     t['Status'] || '',
     t['Priority'] || 'Pending',
-    t['VIP Level'] || '',
     t['Critical Flag'] === 'true' ? 'Yes' : 'No',
     t['Assigned To'] || '',
     t['Escalation Level'] || '',
@@ -111,8 +144,10 @@ function generateTicketsReport(tickets) {
 }
 
 function generateTeamReport() {
-  return getTeamPerformance({}).map(p => [
-    p.name || '', p.level || '', p.status || 'Active', p.ticketsHandled || 0, p.resolved || 0, p.openTickets || 0, p.slaCompliance || 0, p.avgResolutionTime || '--'
+  const perf = getTeamPerformance({});
+  const month = perf.length ? perf[0].month || '' : new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  return perf.map(p => [
+    month, p.name || '', p.level || '', p.status || 'Active', p.ticketsHandled || 0, p.resolved || 0, p.openTickets || 0, p.currentLoad || 0, p.criticalTickets || 0, p.highTickets || 0, p.resolutionRate || 0, p.slaCompliance || 0, p.avgResolutionTime || '--', p.avgResponseTime || '--'
   ]);
 }
 
@@ -168,13 +203,13 @@ function generateReport(reportType) {
     switch (reportType) {
       case 'tickets':
         reportData = generateTicketsReport(tickets);
-        headers = ['Ticket ID', 'Created Date', 'Name', 'Email', 'Phone', 'Location', 'Issue Type', 'Impact Area', 'Description', 'Status', 'Priority', 'VIP Level', 'Marked Critical', 'Assigned To', 'Escalation Level', 'Resolved By', 'Resolved Date'];
+        headers = ['Ticket ID', 'Created Date', 'Name', 'Email', 'Phone', 'Location', 'Issue Type', 'Impact Area', 'Description', 'Status', 'Priority', 'Marked Critical', 'Assigned To', 'Escalation Level', 'Resolved By', 'Resolved Date'];
         reportTitle = 'All_Tickets_Report';
         break;
       case 'team':
         reportData = generateTeamReport();
-        headers = ['Staff Name', 'Level', 'Status', 'Tickets Handled', 'Resolved', 'Open', 'SLA Compliance %', 'Avg Resolution Time'];
-        reportTitle = 'Team_Performance_Report';
+        headers = ['Month', 'Staff Name', 'Level', 'Status', 'Tickets Handled', 'Resolved', 'Open', 'Current Load', 'Critical', 'High', 'Resolution Rate %', 'SLA Compliance %', 'Avg Resolution Time', 'Avg Response Time'];
+        reportTitle = 'Team_Performance_Report_' + new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }).replace(/\s+/g, '_');
         break;
       case 'sla':
         reportData = generateSLAReport(tickets);

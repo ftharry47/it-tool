@@ -63,11 +63,11 @@ function submitTicket(formData) {
     if (employeeLookup.found && employeeLookup.name) { finalName = employeeLookup.name; nameSource = 'StaffDirectory'; }
     else if (formData.name && String(formData.name).trim() !== '') { finalName = String(formData.name).trim(); nameSource = 'Form'; }
 
-    const vipLevel = (employeeLookup.found && employeeLookup.vipLevel) ? employeeLookup.vipLevel : 'Low';
     const issueType = (formData.issueType || '').toString().trim();
     const impactArea = (formData.workMode || formData.impactArea || '').toString().trim();
     const criticalFlag = formData.criticalFlag === true || formData.criticalFlag === 'true';
-    const priority = 'Pending';
+    const providedPriority = (formData.priority || '').toString().trim();
+    const priority = config.VALID_PRIORITIES.includes(providedPriority) ? providedPriority : (criticalFlag ? 'Critical' : 'Pending');
     const ticketId = utils.generateTicketId();
     const timestamp = new Date();
 
@@ -86,7 +86,6 @@ function submitTicket(formData) {
       'Additional Description': String(formData.additionalDescription || '').trim(),
       'Status': 'Open',
       'Priority': priority,
-      'VIP Level': vipLevel,
       'Critical Flag': criticalFlag ? 'true' : 'false',
       'Assigned To': '',
       'Assigned Date': '',
@@ -107,12 +106,12 @@ function submitTicket(formData) {
     if (impactArea) historyNotes += ' - Impact: ' + impactArea;
     db.withDb(d => logHistory(d, ticketId, 'Created', '', 'Open', finalName, historyNotes));
 
-    email.sendTicketSubmittedEmail(ticketId, timestamp, finalName, formData, vipLevel, issueType, impactArea, criticalFlag).catch(() => {});
-    email.sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, finalName, formData, priority, vipLevel, issueType, impactArea, criticalFlag).catch(() => {});
+    email.sendTicketSubmittedEmail(ticketId, timestamp, finalName, formData, issueType, impactArea, criticalFlag).catch(() => {});
+    email.sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, finalName, formData, priority, issueType, impactArea, criticalFlag).catch(() => {});
 
     return {
       success: true, ticketId, message: 'Ticket created successfully', timestamp: timestamp.toISOString(),
-      priority, vipLevel, impactArea, issueType, criticalFlag, employeeName: finalName, nameSource, employeeFound: employeeLookup.found
+      priority, impactArea, issueType, criticalFlag, employeeName: finalName, nameSource, employeeFound: employeeLookup.found
     };
   } catch (error) {
     return { success: false, error: error.message || 'Failed to create ticket' };
@@ -123,7 +122,7 @@ function getDashboardStats(tickets) {
   const stats = {
     total: tickets.length, open: 0, inProgress: 0, resolved: 0, unassigned: 0,
     highPriority: 0, critical: 0, pending: 0, markedCritical: 0, resolvedToday: 0,
-    byLocation: {}, byVipLevel: {}, byAssignee: {}, byEscalationLevel: { L1: 0, L2: 0, L3: 0 },
+    byLocation: {}, byAssignee: {}, byEscalationLevel: { L1: 0, L2: 0, L3: 0 },
     byIssueType: {}, byImpactArea: {}
   };
   const today = new Date().toDateString();
@@ -131,7 +130,6 @@ function getDashboardStats(tickets) {
   tickets.forEach(t => {
     const status = utils.ticketValue(t, 'Status') || 'Open';
     const location = utils.ticketValue(t, 'Location') || 'Unknown';
-    const vipLevel = utils.ticketValue(t, 'VIP Level') || 'Low';
     const assignedTo = utils.ticketValue(t, 'Assigned To') || 'Unassigned';
     const priority = utils.ticketValue(t, 'Priority') || 'Pending';
     const escalationLevel = utils.ticketValue(t, 'Escalation Level') || 'L1';
@@ -150,7 +148,6 @@ function getDashboardStats(tickets) {
     if (criticalFlag) stats.markedCritical++;
     if (resolvedDate) { try { if (new Date(resolvedDate).toDateString() === today) stats.resolvedToday++; } catch (e) {} }
     stats.byLocation[location] = (stats.byLocation[location] || 0) + 1;
-    stats.byVipLevel[vipLevel] = (stats.byVipLevel[vipLevel] || 0) + 1;
     stats.byAssignee[assignedTo] = (stats.byAssignee[assignedTo] || 0) + 1;
     if (stats.byEscalationLevel.hasOwnProperty(escalationLevel)) stats.byEscalationLevel[escalationLevel]++;
     if (issueType) stats.byIssueType[issueType] = (stats.byIssueType[issueType] || 0) + 1;
@@ -164,7 +161,6 @@ function getDashboardConfig() {
     locations: config.locations,
     issueTypes: config.issueTypes,
     impactAreas: config.impactAreas,
-    vipLevels: config.vipLevels,
     statuses: config.statuses,
     priorities: config.priorities,
     escalationLevels: config.escalationLevels,
@@ -177,9 +173,18 @@ function getDashboardConfig() {
 
 function getITStaffList() {
   const data = db.readDb();
-  return data.itStaff.map(s => ({
-    name: s.name,
-    email: s.email,
+  const supportLevels = ['L1', 'L2', 'L3'];
+  const users = Array.isArray(data.users) ? data.users.filter(u => supportLevels.includes(u.supportLevel || u.role)).map(u => ({
+    name: String(u.displayName || '').trim() || String(u.email || '').trim(),
+    email: String(u.email || '').trim(),
+    level: u.supportLevel || u.role || 'L1',
+    status: u.status || 'Online',
+    isAvailable: ['Online', 'Active', 'Break', 'In Meeting'].includes(u.status || 'Online')
+  })) : [];
+  if (users.length) return users;
+  return (data.itStaff || []).map(s => ({
+    name: String(s.name || '').trim(),
+    email: String(s.email || '').trim(),
     level: s.level || 'L1',
     status: s.status || 'Online',
     isAvailable: ['Online', 'Active', 'Break', 'In Meeting'].includes(s.status || 'Online')

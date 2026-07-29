@@ -73,7 +73,7 @@ function updateITStaffStatus(staffName, newStatus) {
 }
 
 function lookupEmployee(email) {
-  const result = { found: false, empId: '', name: '', vipLevel: 'Low' };
+  const result = { found: false, empId: '', name: '' };
   if (!email || typeof email !== 'string' || String(email).trim() === '') return result;
   const search = String(email).toLowerCase().trim();
   const data = db.readDb();
@@ -82,8 +82,7 @@ function lookupEmployee(email) {
     return {
       found: true,
       empId: String(row.employeeId || '').trim(),
-      name: String(row.name || '').trim(),
-      vipLevel: String(row.vipLevel || 'Low').trim()
+      name: String(row.name || '').trim()
     };
   }
   return result;
@@ -94,8 +93,7 @@ function lookupEmployeeSafe(email) {
   return {
     found: r.found === true,
     empId: String(r.empId || ''),
-    name: String(r.name || ''),
-    vipLevel: String(r.vipLevel || 'Low')
+    name: String(r.name || '')
   };
 }
 
@@ -160,13 +158,12 @@ function addDirectory(entry) {
   const email = typeof entry === 'string' ? entry.trim() : String(entry.email || '').trim();
   if (!email) return { success: false, error: 'Email is required' };
   const name = typeof entry === 'object' && entry.name ? String(entry.name).trim() : normalizeNameFromEmail(email);
-  const vipLevel = (typeof entry === 'object' && entry.vipLevel ? String(entry.vipLevel) : 'Low');
 
   return db.withDb(d => {
     const exists = d.directory.find(r => String(r.email).toLowerCase().trim() === email.toLowerCase());
     if (exists) return { success: false, skipped: true, email, message: 'Email already exists' };
     const employeeId = nextEmployeeId(d.directory);
-    d.directory.push({ employeeId, name, email, vipLevel });
+    d.directory.push({ employeeId, name, email });
     return { success: true, email, employeeId, name };
   });
 }
@@ -211,6 +208,10 @@ function addUser(user) {
     );
     if (exists) return { success: false, error: 'User already exists' };
     d.users.push({ email, employeeId, displayName, password, role, status });
+    if (['L1', 'L2', 'L3'].includes(role)) {
+      if (!Array.isArray(d.itStaff)) d.itStaff = [];
+      d.itStaff.push({ name: displayName, email, level: role, status });
+    }
     return { success: true, email, employeeId, displayName, role, status };
   });
 }
@@ -225,6 +226,10 @@ function removeUser(employeeId) {
     );
     if (idx === -1) return { success: false, error: 'User not found' };
     const removed = d.users.splice(idx, 1)[0];
+    if (Array.isArray(d.itStaff) && removed) {
+      const sIdx = d.itStaff.findIndex(s => String(s.name || '').toLowerCase() === String(removed.displayName || '').toLowerCase());
+      if (sIdx !== -1) d.itStaff.splice(sIdx, 1);
+    }
     return { success: true, employeeId: removed.employeeId, email: removed.email, displayName: removed.displayName };
   });
 }

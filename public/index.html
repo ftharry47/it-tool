@@ -8,7 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
   <style>
+
+
     * {
       font-family: 'Inter', sans-serif;
     }
@@ -369,8 +372,17 @@
     }
 
     .status-connector {
-      transition: background-color 0.3s ease;
-    }
+  transition: background-color 0.4s ease, transform 0.4s ease;
+  transform-origin: left;
+  border-radius: 9999px;
+}
+.status-connector.bg-green-500 {
+  animation: connectorGrow 0.5s ease-out forwards;
+}
+@keyframes connectorGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
 
     .ticket-header {
       background: #1e40af;
@@ -421,24 +433,11 @@
     }
 
     .success-checkmark {
-      animation: checkmarkPop 0.5s ease-out forwards;
-    }
-
-    @keyframes checkmarkPop {
-      0% { transform: scale(0); opacity: 0; }
-      50% { transform: scale(1.2); }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .success-checkmark svg {
-      animation: drawCheck 0.3s ease-out 0.3s forwards;
-      stroke-dasharray: 30;
-      stroke-dashoffset: 30;
-    }
-
-    @keyframes drawCheck {
-      to { stroke-dashoffset: 0; }
-    }
+  /* No animation */
+}
+.success-checkmark svg {
+  /* No draw animation */
+}
 
     .copy-btn.copied {
       background: #dcfce7 !important;
@@ -604,13 +603,8 @@
     }
 
     .validation-spinner {
-      animation: validationSpin 0.8s linear infinite;
-    }
-
-    @keyframes validationSpin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
+  animation: none;
+}
 
     /* AI Bot Button Styles */
     .ai-bot-btn {
@@ -1117,20 +1111,11 @@
       transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
     }
     .success-checkmark {
-      animation: checkmarkPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-    }
-    .success-checkmark path {
-      stroke-dasharray: 24;
-      stroke-dashoffset: 24;
-      animation: checkmarkDraw 0.45s ease-out 0.2s forwards;
-    }
-    @keyframes checkmarkPop {
-      from { opacity: 0; transform: scale(0.5); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    @keyframes checkmarkDraw {
-      to { stroke-dashoffset: 0; }
-    }
+  /* No animation */
+}
+.success-checkmark path {
+  /* No draw animation */
+}
     /* === Blue Theme & Spacing Polish === */
     :root {
       --primary-50: #eff6ff;
@@ -1301,7 +1286,7 @@
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 3;
-      font-size: 2.35rem;
+      font-size: 1.95rem;
       font-weight: 200;
       color: rgba(255, 255, 255, 0.95);
       letter-spacing: -0.03em;
@@ -1327,27 +1312,29 @@
       margin-bottom: 2.5rem;
     }
     .processing-timeline {
-      position: relative;
-      z-index: 1;
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.875rem;
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
     }
     .processing-stage {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
       color: rgba(255, 255, 255, 0.35);
       font-size: 0.9rem;
       font-weight: 400;
       transition: color 0.45s ease, transform 0.45s ease;
     }
     .processing-stage.active {
-      color: rgba(255, 255, 255, 0.95);
-      transform: translateX(4px);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateX(0);
     }
     .processing-stage.completed {
       color: rgba(255, 255, 255, 0.7);
@@ -1401,28 +1388,38 @@
 
     /* Next steps redesign */
     .next-steps-card {
-      margin-top: 1.25rem;
-      padding: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  text-align: left;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
       background: linear-gradient(135deg, var(--primary-50) 0%, #ffffff 100%);
       border: 1px solid var(--primary-100);
       border-radius: 0.75rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
     .next-steps-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--primary-800);
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary-800);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
     }
     .next-step-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      padding: 0.35rem 0;
-      font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  font-size: 0.875rem;
       color: #334155;
     }
     .next-step-number {
@@ -1440,19 +1437,17 @@
     }
 
     /* Terms modal */
-    .terms-content { display: flex; flex-direction: column; gap: 0.5rem; }
-    .terms-updated { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; }
-    .terms-list { display: flex; flex-direction: column; }
-    .terms-item { display: flex; gap: 1rem; padding: 1rem 1.25rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.75rem; margin-bottom: 0.75rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .terms-content { display: flex; flex-direction: column; gap: 1rem; padding: 0.5rem; }
+    .terms-updated { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem; }
+    .terms-list { display: flex; flex-direction: column; gap: 1rem; }
+    .terms-item { display: flex; gap: 1.25rem; padding: 1.25rem 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.75rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .terms-item:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-    .terms-item:last-child { margin-bottom: 0; }
-    .terms-number { width: 2rem; height: 2rem; border-radius: 50%; background: var(--primary-100); color: var(--primary-700); display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 700; flex-shrink: 0; }
-    .terms-item h4 { color: #1e293b; font-size: 0.95rem; font-weight: 600; margin: 0 0 0.35rem 0; }
-    .terms-item p, .terms-item ul { color: #475569; font-size: 0.875rem; line-height: 1.5; margin: 0; }
-    .terms-item ul { list-style: none; padding-left: 0; }
-    .terms-item ul li { position: relative; padding-left: 1.25rem; margin-bottom: 0.35rem; }
+    .terms-number { width: 2.25rem; height: 2.25rem; border-radius: 50%; background: var(--primary-100); color: var(--primary-700); display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 700; flex-shrink: 0; }
+    .terms-item h4 { color: #1e293b; font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+    .terms-item p, .terms-item ul { color: #475569; font-size: 0.9rem; line-height: 1.6; margin: 0; }
+    .terms-item ul { list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    .terms-item ul li { position: relative; padding-left: 1.25rem; }
     .terms-item ul li::before { content: '•'; position: absolute; left: 0.25rem; color: var(--primary-500); font-weight: 700; }
-    .terms-item ul li:last-child { margin-bottom: 0; }
 
     /* Spacing polish */
     main.max-w-3xl {
@@ -1478,95 +1473,729 @@
     .info-card {
       padding: 1.25rem !important;
     }
-  </style>
-</head>
-<body class="min-h-screen flex flex-col">
+  
 
-  <!-- Header -->
-  <header class="bg-white border-b border-gray-200">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2 sm:gap-3">
-        <img src="https://lh3.googleusercontent.com/d/1n9zWSCv4u-nq9KV5O4YHCbDr4xXBbfwa" alt="Aligned Cardio" class="h-7 sm:h-8">
-        <div class="border-l border-gray-300 pl-2 sm:pl-3">
-          <h1 class="text-lg sm:text-xl font-semibold text-gray-900 tracking-wide">IT Support Portal</h1>
-          <p class="text-xs text-gray-500 hidden sm:block">Aligned Cardio</p>
+/* Enterprise ITSM overrides */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+*, html, body.itsm-body {
+  font-family: 'Michroma', 'Bank Gothic', 'Eurostile Extended', 'Microgramma', 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif !important;
+}
+body.itsm-body {
+  background: #F8FAFC !important;
+  color: #1F2937 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.itsm-toolbar {
+  height: 72px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E7EB;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.itsm-toolbar-inner {
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.itsm-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.itsm-brand img {
+  height: 32px;
+  width: auto;
+}
+.itsm-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.itsm-portal {
+  font-family: 'Michroma', 'Bank Gothic', 'Eurostile Extended', 'Microgramma', sans-serif !important;
+  font-size: 16px;
+  font-weight: 400;
+  color: #1F2937;
+  letter-spacing: 0.015em;
+  line-height: 1.2;
+}
+.itsm-org {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.2;
+}
+.itsm-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.itsm-toolbar-btn {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 6px;
+  border: none;
+  background: #2563EB;
+  color: #FFFFFF;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.itsm-toolbar-btn:hover {
+  background: #1D4ED8;
+}
+.itsm-toolbar-btn-secondary {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 6px;
+  border: 1px solid #D1D5DB;
+  background: #FFFFFF;
+  color: #374151;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.itsm-toolbar-btn-secondary:hover {
+  background: #F3F4F6;
+  border-color: #9CA3AF;
+}
+.itsm-toolbar-btn.active {
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+.itsm-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.itsm-container {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  padding: 24px;
+}
+
+.itsm-page-header {
+  margin-bottom: 24px;
+}
+.itsm-caption {
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748B;
+  margin-bottom: 8px;
+}
+.itsm-main-title {
+  font-family: 'Michroma', 'Bank Gothic', 'Eurostile Extended', 'Microgramma', sans-serif !important;
+  font-size: 26px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.015em;
+  color: #1F2937;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
+}
+.itsm-desc {
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: #6B7280;
+  margin: 0;
+  line-height: 22px;
+}
+.itsm-phi {
+  color: #C62828;
+  font-weight: 600;
+}
+
+.itsm-section {
+  margin-bottom: 24px;
+}
+.itsm-section:last-child {
+  margin-bottom: 0;
+}
+.itsm-section-title {
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6B7280;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.itsm-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  .itsm-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.itsm-field {
+  margin-bottom: 16px;
+}
+.itsm-field:last-child {
+  margin-bottom: 0;
+}
+
+.itsm-label {
+  display: block;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+.itsm-required {
+  color: #C62828;
+}
+
+.itsm-input,
+.itsm-select,
+.itsm-textarea {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #D1D5DB !important;
+  border-radius: 6px !important;
+  background: #FFFFFF !important;
+  color: #1F2937 !important;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  padding: 13px 14px !important;
+  outline: none;
+  transition: all 150ms;
+  line-height: 1.25;
+}
+.itsm-textarea {
+  height: 140px;
+  padding: 16px !important;
+  font-size: 15px;
+  line-height: 26px;
+  resize: none;
+}
+.itsm-input::placeholder,
+.itsm-textarea::placeholder {
+  color: #9CA3AF;
+}
+.itsm-input:focus,
+.itsm-select:focus,
+.itsm-textarea:focus {
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+}
+.itsm-input.valid,
+.itsm-select.valid,
+.itsm-textarea.valid {
+  border-color: #16A34A !important;
+  background: #F0FDF4 !important;
+}
+.itsm-input.error,
+.itsm-select.error,
+.itsm-textarea.error {
+  border-color: #DC2626 !important;
+  background: #FEF2F2 !important;
+}
+
+.itsm-select {
+  height: 46px !important;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236B7280' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px !important;
+}
+
+.itsm-char-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.itsm-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 12px;
+}
+@media (min-width: 640px) {
+  .itsm-impact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .itsm-impact-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.itsm-impact {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: #374151;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms;
+  text-align: left;
+}
+.itsm-impact:hover {
+  background: #EFF6FF;
+}
+.itsm-impact.selected {
+  border-color: #2563EB;
+  background: #EFF6FF;
+  color: #2563EB;
+}
+.itsm-impact svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.itsm-priority-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+.itsm-priority {
+  flex: 1 1 auto;
+  min-width: 60px;
+  height: 34px;
+  padding: 0 10px;
+  border: none;
+  border-right: 1px solid #D1D5DB;
+  background: #FFFFFF;
+  color: #374151;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.itsm-priority:last-child {
+  border-right: none;
+}
+.itsm-priority:hover {
+  background: #F3F4F6;
+}
+.itsm-priority.selected {
+  color: #FFFFFF;
+}
+.itsm-priority[data-value="P4"].selected { background: #6B7280; }
+.itsm-priority[data-value="P3"].selected { background: #2563EB; }
+.itsm-priority[data-value="P2"].selected { background: #F59E0B; }
+.itsm-priority[data-value="P1"].selected { background: #C62828; }
+
+.itsm-grid > .itsm-field {
+  margin-bottom: 0;
+}
+
+.itsm-critical {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 16px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+  transition: all 150ms;
+  box-sizing: border-box;
+}
+.itsm-critical:hover {
+  background: #F3F4F6;
+}
+.itsm-critical.checked {
+  border-color: #C62828;
+  background: #FEF2F2;
+  color: #C62828;
+}
+.itsm-cb-hint {
+  display: none;
+}
+.itsm-cb-box {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms;
+  flex-shrink: 0;
+}
+.itsm-critical.checked .itsm-cb-box {
+  background: #C62828;
+  border-color: #C62828;
+}
+.itsm-cb-check {
+  width: 12px;
+  height: 12px;
+  color: #FFFFFF;
+}
+.itsm-cb-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.itsm-upload {
+  border: 2px dashed #CBD5E1;
+  border-radius: 8px;
+  background: #F8FAFC;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.itsm-upload:hover,
+.itsm-upload.dragover {
+  background: #EFF6FF;
+  border-color: #2563EB;
+}
+.itsm-upload-title {
+  font-size: 14px;
+  color: #64748B;
+  margin: 8px 0 4px;
+  font-weight: 500;
+}
+.itsm-upload-hint {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin: 0;
+}
+.itsm-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#itsm-app .itsm-submit {
+  width: 100%;
+  height: 46px;
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+  box-shadow: none !important;
+  transform: none !important;
+}
+#itsm-app .itsm-submit:hover:not(:disabled) {
+  background: #1D4ED8 !important;
+  transform: translateY(-1px) !important;
+}
+#itsm-app .itsm-submit:disabled {
+  background: #93C5FD !important;
+  color: #FFFFFF !important;
+  cursor: not-allowed;
+}
+
+.itsm-terms-line {
+  text-align: center;
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 16px;
+}
+.itsm-terms-link {
+  color: #2563EB;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.itsm-terms-link:hover {
+  color: #1D4ED8;
+}
+
+.itsm-track-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.itsm-track-input {
+  flex: 1 1 220px;
+}
+.itsm-track-btn {
+  flex: 0 0 160px;
+  width: auto !important;
+  min-width: 160px !important;
+  height: 44px !important;
+}
+
+
+
+
+.itsm-msg {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.itsm-msg.text-green-600 { color: #16A34A; }
+.itsm-msg.text-red-600 { color: #DC2626; }
+
+.itsm-help-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 32px;
+}
+@media (min-width: 768px) {
+  .itsm-help-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.itsm-help-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  padding: 20px;
+}
+.itsm-help-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+  margin-bottom: 16px;
+}
+.itsm-help-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #E5E7EB;
+  cursor: pointer;
+}
+.itsm-help-item:last-child {
+  border-bottom: none;
+}
+.itsm-help-q {
+  font-size: 14px;
+  color: #374151;
+  margin: 0;
+}
+.itsm-help-a {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 20px;
+  margin: 8px 0 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.itsm-help-item.open .itsm-help-a {
+  max-height: 200px;
+}
+.itsm-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.itsm-info-row:last-child {
+  margin-bottom: 0;
+}
+.itsm-info-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #EFF6FF;
+  color: #2563EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.itsm-info-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.itsm-info-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+  margin: 0 0 4px;
+}
+.itsm-info-text {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 20px;
+  margin: 0;
+}
+
+#itsm-app section {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+#itsm-app section.hidden {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+
+
+.itsm-footer {
+  border-top: 1px solid #E5E7EB;
+  background: #FFFFFF;
+  padding: 16px 24px;
+  margin-top: 24px;
+}
+.itsm-footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6B7280;
+}
+.itsm-footer-inner p {
+  margin: 0;
+  line-height: 1.4;
+}
+@media (min-width: 640px) {
+  .itsm-footer-inner {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+
+.itsm-footer {
+  border-top: 1px solid #E5E7EB;
+  background: #FFFFFF;
+  padding: 16px 24px;
+  margin-top: 24px;
+}
+.itsm-footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6B7280;
+}
+.itsm-footer-inner p {
+  margin: 0;
+  line-height: 1.4;
+}
+@media (min-width: 640px) {
+  .itsm-footer-inner {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+#autoSaveIndicator {
+  display: none !important;
+}
+
+  
+
+
+</style>
+</head>
+<body class="itsm-body">
+
+  <header class="itsm-toolbar">
+    <div class="itsm-toolbar-inner">
+      <div class="itsm-brand">
+        <img src="https://lh3.googleusercontent.com/d/1n9zWSCv4u-nq9KV5O4YHCbDr4xXBbfwa" alt="Aligned Cardio">
+        <div class="itsm-brand-text">
+          <div class="itsm-portal">IT Support Portal</div>
+          <div class="itsm-org">Aligned Cardio</div>
         </div>
       </div>
-      <div class="flex items-center gap-2 sm:gap-4">
-        <div id="autoSaveIndicator" class="auto-save-indicator opacity-0 flex items-center gap-1.5 text-xs text-gray-500">
-          <svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-          </svg>
-          <span class="hidden sm:inline">Draft saved</span>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-          <span class="w-2 h-2 bg-green-500 rounded-full"></span>
-          <span class="hidden sm:inline">Online</span>
-        </div>
+      <div class="itsm-toolbar-actions">
+        <button id="tabSubmit" class="itsm-toolbar-btn active" onclick="showTab('submit')">Submit</button>
+        <button id="tabTrack" class="itsm-toolbar-btn-secondary" onclick="showTab('track')">Track Request</button>
       </div>
     </div>
   </header>
 
-  <!-- Tabs -->
-  <div class="tabs-bar bg-white border-b border-gray-200">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6">
-      <nav class="flex gap-4 sm:gap-8">
-        <button onclick="showTab('submit')" id="tabSubmit" class="tab-btn active py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent">
-          Submit Request
-        </button>
-        <button onclick="showTab('track')" id="tabTrack" class="tab-btn py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent">
-          Track Status
-        </button>
-      </nav>
-    </div>
-  </div>
+  <main id="itsm-app" class="itsm-page">
 
-  <!-- Main Content -->
-  <main class="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex-1 w-full">
-
-    <!-- Submit Form -->
     <section id="submitSection">
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="card-header px-4 sm:px-6 py-4 border-b border-gray-200">
-          <h2 class="text-base font-semibold text-gray-900">New Support Request</h2>
-          <p class="text-sm text-gray-500 mt-1">Please provide the details of your IT issue. <span class="text-red-500 font-medium">Do not include patient PHI.</span></p>
+      <div class="itsm-container">
+        <div class="itsm-page-header">
+          <div class="itsm-caption">NEW INCIDENT</div>
+          <h1 class="itsm-main-title">Report an IT Issue</h1>
+          <p class="itsm-desc">Provide details so the IT team can respond quickly. <span class="itsm-phi">Do not include patient PHI.</span></p>
         </div>
 
-        <form id="ticketForm" class="p-4 sm:p-6">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
-              <input type="text" id="name" name="name"
-                class="form-input w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none"
-                placeholder="Enter your full name (optional)">
-            </div>
+        <form id="ticketForm" class="itsm-form">
 
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Email Address <span class="text-red-500">*</span></label>
-              <div class="relative">
-                <input type="email" id="email" name="email" required
-                  class="form-input w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-md text-sm focus:outline-none"
-                  placeholder="you@company.com">
-                <span id="emailIcon" class="validation-icon hidden"></span>
+          <section class="itsm-section">
+            <h2 class="itsm-section-title">Requester Details</h2>
+            <div class="itsm-grid">
+              <div class="itsm-field">
+                <label class="itsm-label">Full Name</label>
+                <input type="text" id="name" name="name" class="form-input itsm-input" placeholder="Enter your full name (optional)">
               </div>
-              <p id="emailMsg" class="text-xs mt-1 hidden"></p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone Number <span class="text-red-500">*</span></label>
-              <div class="relative">
-                <input type="tel" id="phone" name="phone" required
-                  class="form-input w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-md text-sm focus:outline-none"
-                  placeholder="(123) 456-7890">
-                <span id="phoneIcon" class="validation-icon hidden"></span>
+              <div class="itsm-field">
+                <label class="itsm-label">Email Address <span class="itsm-required">*</span></label>
+                <div class="relative">
+                  <input type="email" id="email" name="email" required class="form-input itsm-input" placeholder="you@company.com">
+                  <span id="emailIcon" class="validation-icon hidden"></span>
+                </div>
+                <p id="emailMsg" class="itsm-msg hidden"></p>
               </div>
-              <p id="phoneMsg" class="text-xs mt-1 hidden"></p>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Location <span class="text-red-500">*</span></label>
-              <select id="location" name="location" required
-                class="form-input w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-md text-sm focus:outline-none bg-white">
+              <div class="itsm-field">
+                <label class="itsm-label">Phone Number <span class="itsm-required">*</span></label>
+                <div class="relative">
+                  <input type="tel" id="phone" name="phone" required class="form-input itsm-input" placeholder="(123) 456-7890">
+                  <span id="phoneIcon" class="validation-icon hidden"></span>
+                </div>
+                <p id="phoneMsg" class="itsm-msg hidden"></p>
+              </div>
+              <div class="itsm-field">
+                <label class="itsm-label">Location <span class="itsm-required">*</span></label>
+                <select id="location" name="location" required
+                class="form-input itsm-input itsm-select">
                 <option value="">Select location</option>
                 <option value="ACP - Corporate">Aligned Cardio Partners - Corporate Office - Richmond, Va </option>
                 <option value="ASC - Colonial Heights">Aligned Surgical Center - Colonial Heights, Va </option>
@@ -1585,26 +2214,23 @@
                 <option value="Solid State Practice">Solid State Practice</option>
                 <option value="SWVC - Salem">Southwest Virginia Cardiology - Salem, Va</option>
               </select>
-              <p id="locationMsg" class="text-xs mt-1 hidden"></p>
+                <p id="locationMsg" class="itsm-msg hidden"></p>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="mt-5 sm:mt-6">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Description <span class="text-red-500">*</span></label>
-            <textarea id="shortDescription" name="shortDescription" rows="4" required maxlength="500"
-              class="form-input w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none resize-none"
-              placeholder="Describe your IT issue in detail (no patient names or MRNs)..."></textarea>
-            <div class="flex items-center justify-between mt-1.5">
-              <p class="text-xs text-gray-500"><span id="shortCharCount" class="transition-colors">0</span>/500</p>
-              <p class="text-xs text-gray-400">Minimum 10 characters</p>
+          <section class="itsm-section">
+            <h2 class="itsm-section-title">Incident Details</h2>
+            <div class="itsm-field">
+              <label class="itsm-label">Description <span class="itsm-required">*</span></label>
+              <textarea id="shortDescription" name="shortDescription" required maxlength="500" class="form-input itsm-input itsm-textarea" placeholder="Describe your IT issue in detail (no patient names or MRNs)"></textarea>
+              <div class="itsm-char-bar"><span id="shortCharCount">0</span>/500</div>
             </div>
-          </div>
-
-          <div id="additionalDescContainer" class="additional-desc-container expanded mt-5 sm:mt-6">
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1.5">Issue Type</label>
-              <select id="issueType" name="issueType"
-                class="form-input w-full px-3 py-2.5 pr-10 border border-gray-300 rounded-md text-sm focus:outline-none bg-white">
+            <div class="itsm-grid" style="margin-top:20px;">
+              <div class="itsm-field">
+                <label class="itsm-label">Issue Type</label>
+                <select id="issueType" name="issueType"
+                class="form-input itsm-input itsm-select">
                 <option value="">Select issue type</option>
                 <optgroup label="Microsoft 365 - Access & Account">
                   <option value="Login / Sign-in issue">Login issue</option>
@@ -1658,265 +2284,88 @@
                   <option value="Not listed above">Not listed above</option>
                 </optgroup>
               </select>
+              </div>
+              <div class="itsm-field">
+                <label class="itsm-label">Urgency</label>
+                <label id="criticalCheckbox" class="critical-checkbox itsm-critical" onclick="toggleCritical()">
+                  <div class="itsm-cb-box" id="criticalCheckIcon">
+                    <svg class="itsm-cb-check hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                  </div>
+                  <div>
+                    <div class="itsm-cb-label">Mark as Critical</div>
+                    <div class="itsm-cb-hint">Requires immediate attention</div>
+                  </div>
+                </label>
+                <input type="hidden" id="criticalFlag" name="criticalFlag" value="false">
+              </div>
             </div>
-
-            <!-- Hidden priority input with default value -->
-            <input type="hidden" id="priority" name="priority" value="P4">
-
-            <div class="mb-4">
-              <label id="criticalCheckbox" onclick="toggleCritical()" class="critical-checkbox flex items-center gap-3 p-3 border-2 border-gray-200 rounded-lg cursor-pointer">
-                <div class="w-5 h-5 border-2 border-gray-300 rounded flex items-center justify-center flex-shrink-0" id="criticalCheckIcon">
-                  <svg class="w-3.5 h-3.5 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                </div>
-                <div>
-                  <p class="text-sm font-medium text-gray-700">Should be treated as critical</p>
-                  <p class="text-xs text-gray-500">Mark if this issue requires immediate attention</p>
-                </div>
-              </label>
-              <input type="hidden" id="criticalFlag" name="criticalFlag" value="false">
-            </div>
-
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">Impact Area</label>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-                <div class="impact-option" data-value="System Outage" onclick="selectImpact(this)">
-                  <div class="impact-card p-2 sm:p-3 border-2 border-gray-200 rounded-lg text-center">
-                    <div class="impact-icon w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-1.5 sm:mb-2 bg-red-100 rounded-full flex items-center justify-center">
-                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                      </svg>
-                    </div>
-                    <p class="card-title text-xs font-medium text-gray-700">System Outage</p>
-                    <p class="text-xs text-gray-400 mt-0.5 hidden sm:block">App / server down</p>
-                  </div>
-                </div>
-                <div class="impact-option" data-value="User Productivity" onclick="selectImpact(this)">
-                  <div class="impact-card p-2 sm:p-3 border-2 border-gray-200 rounded-lg text-center">
-                    <div class="impact-icon w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-1.5 sm:mb-2 bg-amber-100 rounded-full flex items-center justify-center">
-                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                      </svg>
-                    </div>
-                    <p class="card-title text-xs font-medium text-gray-700">User Productivity</p>
-                    <p class="text-xs text-gray-400 mt-0.5 hidden sm:block">Login / slow system</p>
-                  </div>
-                </div>
-                <div class="impact-option" data-value="Security / Access" onclick="selectImpact(this)">
-                  <div class="impact-card p-2 sm:p-3 border-2 border-gray-200 rounded-lg text-center">
-                    <div class="impact-icon w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-1.5 sm:mb-2 bg-purple-100 rounded-full flex items-center justify-center">
-                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                      </svg>
-                    </div>
-                    <p class="card-title text-xs font-medium text-gray-700">Security / Access</p>
-                    <p class="text-xs text-gray-400 mt-0.5 hidden sm:block">Lock / permissions</p>
-                  </div>
-                </div>
-                <div class="impact-option" data-value="Service Request" onclick="selectImpact(this)">
-                  <div class="impact-card p-2 sm:p-3 border-2 border-gray-200 rounded-lg text-center">
-                    <div class="impact-icon w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-1.5 sm:mb-2 bg-blue-100 rounded-full flex items-center justify-center">
-                      <svg class="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                      </svg>
-                    </div>
-                    <p class="card-title text-xs font-medium text-gray-700">Service Request</p>
-                    <p class="text-xs text-gray-400 mt-0.5 hidden sm:block">New / setup</p>
-                  </div>
-                </div>
+            <div class="itsm-field" style="margin-top:20px;">
+              <label class="itsm-label">Business Impact</label>
+              <div class="itsm-impact-grid">
+                <button type="button" class="impact-option itsm-impact" data-value="System Outage" onclick="selectImpact(this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                  System Outage
+                </button>
+                <button type="button" class="impact-option itsm-impact" data-value="User Productivity" onclick="selectImpact(this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  User Productivity
+                </button>
+                <button type="button" class="impact-option itsm-impact" data-value="Security / Access" onclick="selectImpact(this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                  Security / Access
+                </button>
+                <button type="button" class="impact-option itsm-impact" data-value="Service Request" onclick="selectImpact(this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"></path></svg>
+                  Service Request
+                </button>
               </div>
               <input type="hidden" id="impactArea" name="impactArea" value="">
             </div>
 
-          </div>
 
-          <div class="mt-5 sm:mt-6">
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">Attach Screenshots or Photos <span class="text-xs font-normal text-gray-500 ml-1">(optional, max 3)</span></label>
-            <div class="upload-zone" id="attachmentUpload" onclick="document.getElementById('attachmentInput').click()">
+            <input type="hidden" id="priority" name="priority" value="P4">
+          </section>
+
+          <section class="itsm-section">
+            <h2 class="itsm-section-title">Attachments</h2>
+            <div class="upload-zone itsm-upload" id="attachmentUpload" onclick="document.getElementById('attachmentInput').click()">
               <input type="file" id="attachmentInput" class="upload-input" accept="image/*" multiple onchange="handleAttachments(this.files)">
-              <svg class="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-              </svg>
-              <p class="text-sm text-gray-600 font-medium">Click or drag images here</p>
-              <p class="text-xs text-gray-400 mt-1">JPEG, PNG, GIF • up to 3 images, auto-compressed</p>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <p class="itsm-upload-title">Click or drag images here</p>
+              <p class="itsm-upload-hint">JPEG, PNG, GIF • up to 3 images, auto-compressed</p>
             </div>
-            <div id="attachmentPreview" class="upload-preview"></div>
-            <p id="attachmentMsg" class="text-xs mt-1 hidden"></p>
-          </div>
+            <div id="attachmentPreview" class="itsm-preview"></div>
+            <p id="attachmentMsg" class="itsm-msg hidden"></p>
+          </section>
 
-          <div class="mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-gray-200">
-            <button type="submit" id="submitBtn" disabled
-              class="btn-primary w-full py-2.5 text-white text-sm font-medium rounded-md">
-              Submit Request
-            </button>
-            <p class="text-xs text-gray-400 text-center mt-3">
-              By submitting, you agree to our
-              <button type="button" onclick="openTermsModal()" class="text-blue-600 hover:underline">IT support terms and conditions</button>
-            </p>
-          </div>
+          <button type="submit" id="submitBtn" disabled class="btn-primary itsm-submit">Submit Incident</button>
+          <p class="itsm-terms-line">By submitting, you agree to our <button type="button" onclick="openTermsModal()" class="itsm-terms-link">IT support terms and conditions</button>.</p>
         </form>
-      </div>
-
-      <!-- FAQ Section -->
-      <div class="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="card-header px-4 sm:px-6 py-4 border-b border-gray-200">
-          <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Quick Help
-          </h3>
-        </div>
-        <div class="divide-y divide-gray-100">
-          <div class="faq-item cursor-pointer" onclick="toggleFaq(0)">
-            <div class="px-4 sm:px-6 py-3 flex items-center justify-between">
-              <p class="text-sm text-gray-700">How do I reset my password?</p>
-              <svg class="w-4 h-4 text-gray-400 faq-arrow transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-            <div class="faq-content px-4 sm:px-6">
-              <p class="text-sm text-gray-500 pb-3">Click "Forgot Password" on the login screen or submit a ticket with Issue Type "Password reset". For urgent access, call the IT Helpdesk for priority assistance.</p>
-            </div>
-          </div>
-          <div class="faq-item cursor-pointer" onclick="toggleFaq(1)">
-            <div class="px-4 sm:px-6 py-3 flex items-center justify-between">
-              <p class="text-sm text-gray-700">My computer is running slow - what should I do?</p>
-              <svg class="w-4 h-4 text-gray-400 faq-arrow transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-            <div class="faq-content px-4 sm:px-6">
-              <p class="text-sm text-gray-500 pb-3">Try restarting your computer first. Close unnecessary applications and browser tabs. If the issue persists, submit a ticket with "Laptop / desktop issue" as the issue type.</p>
-            </div>
-          </div>
-          <div class="faq-item cursor-pointer" onclick="toggleFaq(2)">
-            <div class="px-4 sm:px-6 py-3 flex items-center justify-between">
-              <p class="text-sm text-gray-700">I can't connect to VPN - help?</p>
-              <svg class="w-4 h-4 text-gray-400 faq-arrow transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-            <div class="faq-content px-4 sm:px-6">
-              <p class="text-sm text-gray-500 pb-3">Check your internet connection first. Restart the VPN client and try connecting again. Make sure your credentials are correct. If issues persist, submit a ticket under "VPN issue".</p>
-            </div>
-          </div>
-          <div class="faq-item cursor-pointer" onclick="toggleFaq(3)">
-            <div class="px-4 sm:px-6 py-3 flex items-center justify-between">
-              <p class="text-sm text-gray-700">How do I report a security concern?</p>
-              <svg class="w-4 h-4 text-gray-400 faq-arrow transition-transform flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-            <div class="faq-content px-4 sm:px-6">
-              <p class="text-sm text-gray-500 pb-3">Report any suspected security breach immediately. Select "Phishing / suspicious email" or "Malware concern" as the issue type. Do not share details via unsecured email.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Support Info -->
-      <div class="support-info-grid">
-        <div class="info-card info-card-critical">
-          <div class="info-icon">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-            </svg>
-          </div>
-          <div>
-            <h4 class="info-title">Critical / System Outage?</h4>
-            <p class="info-text">For system outages or critical issues affecting multiple users, call the IT Helpdesk directly at <strong>(123) 456-7890</strong>. Available 24/7 for emergencies.</p>
-          </div>
-        </div>
-        <div class="info-card info-card-hipaa">
-          <div class="info-icon">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-            </svg>
-          </div>
-          <div>
-            <h4 class="info-title">HIPAA Reminder</h4>
-            <p class="info-text">Do not include patient names, MRNs, or other Protected Health Information (PHI) in your ticket description. Use general terms to describe the issue.</p>
-          </div>
-        </div>
       </div>
     </section>
 
-    <!-- Track Section -->
     <section id="trackSection" class="hidden">
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="card-header px-4 sm:px-6 py-5 border-b border-gray-200">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-base font-semibold text-gray-900">Track Your Request</h2>
-              <p class="text-sm text-gray-500">Enter your Ticket ID to view status</p>
-            </div>
-          </div>
+      <div class="itsm-container">
+        <div class="itsm-page-header">
+          <div class="itsm-caption">TRACK INCIDENT</div>
+          <h1 class="itsm-main-title">Ticket Status</h1>
+          <p class="itsm-desc">Enter your ticket ID to view real-time updates.</p>
         </div>
-
-        <div class="p-4 sm:p-6">
-          <div class="flex flex-col sm:flex-row gap-3">
-            <input type="text" id="searchInput"
-              class="form-input flex-1 px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none"
-              placeholder="Enter Ticket ID (e.g. SSPTKT-001)">
-            <button onclick="performSearch()" id="searchBtn"
-              class="btn-primary px-5 py-2.5 text-white text-sm font-medium rounded-md w-full sm:w-auto">
-              Search
-            </button>
-          </div>
-          <p class="text-xs text-gray-400 mt-2">Your ticket ID was sent to your email after submission</p>
+        <div class="itsm-track-row">
+          <input type="text" id="searchInput" class="form-input itsm-input itsm-track-input" placeholder="e.g. SSPTKT-001">
+          <button onclick="performSearch()" id="searchBtn" class="btn-primary itsm-submit itsm-track-btn">Search</button>
         </div>
-      </div>
-
-      <!-- Support Info -->
-      <div class="support-info-grid">
-        <div class="info-card info-card-help">
-          <div class="info-icon">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-          </div>
-          <div>
-            <h4 class="info-title">Can't find your Ticket ID?</h4>
-            <p class="info-text">Check your email inbox for the confirmation message we sent after you submitted your request. The Ticket ID starts with "SSPTKT-" followed by a number.</p>
-          </div>
-        </div>
-        <div class="info-card info-card-urgent">
-          <div class="info-icon">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-            </svg>
-          </div>
-          <div>
-            <h4 class="info-title">Need Immediate Help?</h4>
-            <p class="info-text">For urgent issues or if you need to speak with someone directly, call the IT Helpdesk at <strong>(123) 456-7890</strong>.</p>
-          </div>
-        </div>
-      </div>
-
-      <div id="trackResult" class="mt-4 hidden"></div>
-
-      <div id="noResult" class="mt-4 hidden">
-        <div class="bg-white rounded-lg border border-gray-200 p-6 text-center shadow-sm">
-          <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </div>
-          <p class="text-sm font-medium text-gray-900">Ticket Not Found</p>
+        <p class="itsm-upload-hint">Your ticket ID was sent to your email after submission</p>
+        <div id="trackResult" class="hidden mt-6"></div>
+        <div id="noResult" class="hidden mt-6 text-center py-8">
+          <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <p class="text-sm font-medium text-gray-900">Ticket not found</p>
           <p class="text-xs text-gray-500 mt-1">Please check your ticket ID and try again</p>
         </div>
       </div>
     </section>
   </main>
-
-  <!-- Processing Modal -->
+<!-- Processing Modal -->
   <div id="processingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 processing-backdrop">
     <div class="processing-orb"></div>
     <div id="processingCard" class="processing-glass opacity-0 scale-95">
@@ -2122,14 +2571,14 @@
   </div>
 
   <!-- Footer -->
-  <footer class="bg-white border-t border-gray-200 mt-auto">
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-2">
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-gray-500">
-        <p>&copy; 2025 Srihari. All rights reserved.</p>
-        <p>IT Support Portal v8.1.0 | Powered by Solid State Practice</p>
-      </div>
+      <footer class="itsm-footer">
+    <div class="itsm-footer-inner">
+      <p>&copy; 2025-2026 Srihari. All rights reserved.</p>
+      <p>IT Support Portal v8.1.0 | Powered by Solid State Practice</p>
     </div>
   </footer>
+
+
 
   <script>
     // State
@@ -2468,7 +2917,7 @@
     var phoneMsg = document.getElementById('phoneMsg');
     var locationMsg = document.getElementById('locationMsg');
 
-    var validIcon = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#22c55e"></circle><path stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+    var validIcon = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"></path></svg>';
     var errorIcon = '<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#ef4444"></circle><path stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
     var verifyingIcon = '<svg class="w-5 h-5 validation-spinner" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#3b82f6"></circle><circle cx="12" cy="12" r="10" stroke="white" stroke-width="2" stroke-dasharray="40" stroke-dashoffset="10" fill="none"></circle></svg>';
 
@@ -2869,7 +3318,7 @@ function showProcessingAnimation() {
             '<span class="text-xs font-medium ' + (isCurrent ? 'text-green-600' : isCompleted ? 'text-gray-700' : 'text-gray-400') + '">' + step + '</span>' +
           '</div>';
           if (index < statusSteps.length - 1) {
-            stepHtml += '<div class="w-4 sm:w-8 h-0.5 ' + (index < currentStepIndex ? 'bg-green-500' : 'bg-gray-200') + '"></div>';
+            stepHtml += '<div class="w-4 sm:w-8 h-0.5 status-connector ' + (index < currentStepIndex ? 'bg-green-500' : 'bg-gray-200') + '"></div>';
           }
           return stepHtml;
         }).join('') + '</div>';
@@ -2962,5 +3411,7 @@ function showProcessingAnimation() {
       if (!botBtn.contains(e.target) && !popup.contains(e.target)) hideBotPopup();
     });
   </script>
+
+
 </body>
 </html>

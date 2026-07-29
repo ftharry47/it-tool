@@ -92,7 +92,7 @@ function formatDate(date) {
   }
 }
 
-async function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData, vipLevel, issueType, impactArea, criticalFlag) {
+async function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData, issueType, impactArea, criticalFlag) {
   const subject = 'Ticket Submitted: ' + ticketId + ' - ' + (formData.shortDescription || '').substring(0, 50);
   let body = 'Dear ' + userName + ',\n\n';
   body += 'Thank you for submitting your IT support request.\n\n';
@@ -115,19 +115,18 @@ async function sendTicketSubmittedEmail(ticketId, timestamp, userName, formData,
   return sendEmail([formData.email], subject, body);
 }
 
-async function sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, userName, formData, priority, vipLevel, issueType, impactArea, criticalFlag) {
+async function sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, userName, formData, priority, issueType, impactArea, criticalFlag) {
   let urgencyTag = '';
   if (criticalFlag) urgencyTag = ' [MARKED CRITICAL]';
   else if (impactArea === 'System Outage') urgencyTag = ' [SYSTEM OUTAGE]';
   else if (impactArea === 'Security / Access') urgencyTag = ' [SECURITY]';
 
-  const subject = 'NEW IT Ticket [VIP:' + vipLevel + ']' + urgencyTag + ': ' + ticketId;
+  const subject = 'NEW IT Ticket' + urgencyTag + ': ' + ticketId;
   let body = 'A new IT ticket has been submitted.\n\n';
   body += 'Ticket Information:\n';
   body += '--------------------------------------------------\n';
   body += 'Ticket ID: ' + ticketId + '\n';
   body += 'Priority: ' + priority + ' (Awaiting assignment)\n';
-  body += 'VIP Level: ' + vipLevel + '\n';
   if (criticalFlag) body += 'User Marked as: CRITICAL\n';
   if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
   body += 'Submitted: ' + formatDate(timestamp) + '\n\n';
@@ -165,7 +164,9 @@ async function sendTicketAssignedEmailToUser(ticketId, userName, assignedTo, tic
 }
 
 async function sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy, ticket) {
-  const staff = db.readDb().itStaff.find(s => s.name === assignedTo);
+  const data = db.readDb();
+  let staff = (data.users || []).find(u => (u.displayName || '').toLowerCase() === String(assignedTo || '').toLowerCase());
+  if (!staff) staff = (data.itStaff || []).find(s => s.name === assignedTo);
   if (!staff || !staff.email) return;
 
   const userName = ticket['Name'] || '';
@@ -177,14 +178,13 @@ async function sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy, 
   const shortDesc = ticket['Short Description'] || '';
   const additionalDesc = ticket['Additional Description'] || '';
   const priority = ticket['Priority'] || 'Pending';
-  const vipLevel = ticket['VIP Level'] || '';
   const criticalFlag = ticket['Critical Flag'] === 'true';
 
   let body = 'Hello ' + assignedTo + ',\n\n';
   body += 'You have been assigned a ticket by ' + assignedBy + '.\n\n';
   body += 'Ticket Details:\n--------------------------------------------------\n';
   body += 'Ticket ID: ' + ticketId + '\n';
-  body += 'Priority: ' + priority + ' (VIP Level: ' + vipLevel + ')\n';
+  body += 'Priority: ' + priority + '\n';
   if (criticalFlag) body += 'User Marked as: CRITICAL\n';
   if (impactArea) body += 'Impact Area: ' + impactArea + '\n';
   body += '\nUser Information:\n';
@@ -213,7 +213,9 @@ async function sendTicketEscalatedEmailToUser(ticketId, userName, escalateTo, es
 }
 
 async function sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationLevel, escalatedBy, reason, ticket) {
-  const staff = db.readDb().itStaff.find(s => s.name === escalateTo);
+  const data = db.readDb();
+  let staff = (data.users || []).find(u => (u.displayName || '').toLowerCase() === String(escalateTo || '').toLowerCase());
+  if (!staff) staff = (data.itStaff || []).find(s => s.name === escalateTo);
   if (!staff || !staff.email) return;
 
   const userName = ticket['Name'] || '';
@@ -225,14 +227,13 @@ async function sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationL
   const shortDesc = ticket['Short Description'] || '';
   const additionalDesc = ticket['Additional Description'] || '';
   const priority = ticket['Priority'] || 'Pending';
-  const vipLevel = ticket['VIP Level'] || '';
   const criticalFlag = ticket['Critical Flag'] === 'true';
 
   let body = 'Hello ' + escalateTo + ',\n\n';
   body += 'A ticket has been escalated to you by ' + escalatedBy + '.\n\n';
   body += 'Escalation Information:\n--------------------------------------------------\n';
   body += 'Ticket ID: ' + ticketId + '\n';
-  body += 'Priority: ' + priority + ' (VIP Level: ' + vipLevel + ')\n';
+  body += 'Priority: ' + priority + '\n';
   body += 'Escalation Level: ' + escalationLevel + '\n';
   if (criticalFlag) body += 'User Marked as: CRITICAL\n';
   if (reason) body += 'Escalation Reason: ' + reason + '\n';

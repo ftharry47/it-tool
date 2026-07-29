@@ -4,9 +4,11 @@ const fs = require('fs');
 const api = require('./src/handlers');
 const config = require('./src/config');
 const utils = require('./src/utils');
+const { seedAdminUsers } = require('./src/seed');
 
 const log = (msg) => fs.appendFileSync('app.log', new Date().toISOString() + ' ' + msg + '\n');
 log('app.js starting');
+seedAdminUsers();
 process.on('uncaughtException', (e) => { log('uncaught: ' + e.message + '\n' + e.stack); console.error('uncaught:', e); process.exit(1); });
 process.on('unhandledRejection', (e) => { log('unhandled: ' + e); console.error('unhandled:', e); });
 

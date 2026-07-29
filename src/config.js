@@ -24,25 +24,24 @@ module.exports = {
     'Created Date', 'Ticket ID', 'Employee ID', 'Name', 'Email Address',
     'Phone Number', 'Location', 'Issue Type', 'Impact Area',
     'Short Description', 'Additional Description', 'Attachments',
-    'Status', 'Priority', 'VIP Level', 'Critical Flag', 'Assigned To', 'Assigned Date', 'Escalation Level',
+    'Status', 'Priority', 'Critical Flag', 'Assigned To', 'Assigned Date', 'Escalation Level',
     'Escalated To', 'Escalation Date', 'Last Updated', 'Resolved By', 'Resolved Date'
   ],
 
   HISTORY_HEADERS: ['Timestamp', 'Ticket ID', 'Action', 'From', 'To', 'Performed By', 'Notes'],
   USERS_HEADERS: ['Employee ID', 'Password', 'Display Name', 'Role', 'Status'],
   IT_STAFF_HEADERS: ['Name', 'Email', 'Level', 'Status'],
-  DIRECTORY_HEADERS: ['Employee ID', 'Name', 'Email', 'VIP Level'],
+  DIRECTORY_HEADERS: ['Employee ID', 'Name', 'Email'],
   SETTINGS_HEADERS: ['Setting Name', 'Value', 'Last Updated', 'Updated By'],
   NOTES_HEADERS: ['Timestamp', 'Ticket ID', 'Note', 'Added By', 'Note Type'],
 
   COLUMNS: {
     CREATED_DATE: 1, TICKET_ID: 2, EMPLOYEE_ID: 3, NAME: 4, EMAIL: 5, PHONE: 6, LOCATION: 7,
     ISSUE_TYPE: 8, IMPACT_AREA: 9, SHORT_DESCRIPTION: 10, ADDITIONAL_DESCRIPTION: 11, ATTACHMENTS: 12,
-    STATUS: 13, PRIORITY: 14, VIP_LEVEL: 15, CRITICAL_FLAG: 16, ASSIGNED_TO: 17, ASSIGNED_DATE: 18,
-    ESCALATION_LEVEL: 19, ESCALATED_TO: 20, ESCALATION_DATE: 21, LAST_UPDATED: 22, RESOLVED_BY: 23, RESOLVED_DATE: 24
+    STATUS: 13, PRIORITY: 14, CRITICAL_FLAG: 15, ASSIGNED_TO: 16, ASSIGNED_DATE: 17,
+    ESCALATION_LEVEL: 18, ESCALATED_TO: 19, ESCALATION_DATE: 20, LAST_UPDATED: 21, RESOLVED_BY: 22, RESOLVED_DATE: 23
   },
 
-  VIP_PRIORITY_MAP: { High: 'Critical', Middle: 'High', Low: 'Medium' },
   PRIORITY_MAP: { P1: 'Critical', P2: 'High', P3: 'Medium', P4: 'Low', Critical: 'Critical', High: 'High', Medium: 'Medium', Low: 'Low', Pending: 'Pending' },
   VALID_PRIORITIES: ['Pending', 'Low', 'Medium', 'High', 'Critical'],
   VALID_USER_STATUSES: ['Online', 'Offline', 'Break', 'In Meeting', 'Active', 'Inactive'],
@@ -75,7 +74,6 @@ module.exports = {
   },
 
   impactAreas: ['System Outage', 'User Productivity', 'Security / Access', 'Service Request'],
-  vipLevels: ['High', 'Middle', 'Low'],
   statuses: ['Open', 'In Progress', 'Resolved'],
   priorities: ['Pending', 'Low', 'Medium', 'High', 'Critical'],
   escalationLevels: ['L1', 'L2', 'L3']

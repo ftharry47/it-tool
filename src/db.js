@@ -57,9 +57,9 @@ function initDb() {
       { name: 'Mike Johnson', email: 'mike@example.com', level: 'L3', status: 'Online' }
     ],
     directory: [
-      { employeeId: 'EMP001', name: 'Alice Brown', email: 'alice@example.com', vipLevel: 'High' },
-      { employeeId: 'EMP002', name: 'Bob Wilson', email: 'bob@example.com', vipLevel: 'Middle' },
-      { employeeId: 'EMP003', name: 'Carol Davis', email: 'carol@example.com', vipLevel: 'Low' }
+      { employeeId: 'EMP001', name: 'Alice Brown', email: 'alice@example.com' },
+      { employeeId: 'EMP002', name: 'Bob Wilson', email: 'bob@example.com' },
+      { employeeId: 'EMP003', name: 'Carol Davis', email: 'carol@example.com' }
     ],
     history: [],
     notes: [],
@@ -81,16 +81,16 @@ function initDb() {
   const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
   db.tickets = [
-    buildTicket(now, 'SSPTKT-001', 'EMP001', 'Alice Brown', 'alice@example.com', '555-0101', 'Cath Lab', 'Login issue', 'User Productivity', 'Cannot access patient records', 'Error message appears when trying to open charts', 'Open', 'Pending', 'High', true, '', '', 'L1', '', '', now, '', ''),
-    buildTicket(yesterday, 'SSPTKT-002', 'EMP002', 'Bob Wilson', 'bob@example.com', '555-0102', 'Echo Lab', 'Laptop / desktop issue', 'User Productivity', 'Computer running slow', 'Takes 5 minutes to boot up', 'In Progress', 'High', 'Middle', false, 'John Smith', yesterday, 'L1', '', '', yesterday, '', ''),
-    buildTicket(twoDaysAgo, 'SSPTKT-003', 'EMP003', 'Carol Davis', 'carol@example.com', '555-0103', 'Administration', 'Printer / scanner', 'Service Request', 'Printer not working', 'Paper jam error', 'Resolved', 'Medium', 'Low', false, 'Jane Doe', twoDaysAgo, 'L1', '', '', now, 'Jane Doe', now)
+    buildTicket(now, 'SSPTKT-001', 'EMP001', 'Alice Brown', 'alice@example.com', '555-0101', 'Cath Lab', 'Login issue', 'User Productivity', 'Cannot access patient records', 'Error message appears when trying to open charts', 'Open', 'Pending', true, '', '', 'L1', '', '', now, '', ''),
+    buildTicket(yesterday, 'SSPTKT-002', 'EMP002', 'Bob Wilson', 'bob@example.com', '555-0102', 'Echo Lab', 'Laptop / desktop issue', 'User Productivity', 'Computer running slow', 'Takes 5 minutes to boot up', 'In Progress', 'High', false, 'John Smith', yesterday, 'L1', '', '', yesterday, '', ''),
+    buildTicket(twoDaysAgo, 'SSPTKT-003', 'EMP003', 'Carol Davis', 'carol@example.com', '555-0103', 'Administration', 'Printer / scanner', 'Service Request', 'Printer not working', 'Paper jam error', 'Resolved', 'Medium', false, 'Jane Doe', twoDaysAgo, 'L1', '', '', now, 'Jane Doe', now)
   ];
 
   saveDb(db);
   return db;
 }
 
-function buildTicket(created, ticketId, empId, name, email, phone, location, issueType, impactArea, shortDesc, additionalDesc, status, priority, vipLevel, criticalFlag, assignedTo, assignedDate, escalationLevel, escalatedTo, escalationDate, lastUpdated, resolvedBy, resolvedDate) {
+function buildTicket(created, ticketId, empId, name, email, phone, location, issueType, impactArea, shortDesc, additionalDesc, status, priority, criticalFlag, assignedTo, assignedDate, escalationLevel, escalatedTo, escalationDate, lastUpdated, resolvedBy, resolvedDate) {
   return {
     'Created Date': created.toISOString(),
     'Ticket ID': ticketId,
@@ -105,7 +105,6 @@ function buildTicket(created, ticketId, empId, name, email, phone, location, iss
     'Additional Description': additionalDesc,
     'Status': status,
     'Priority': priority,
-    'VIP Level': vipLevel,
     'Critical Flag': criticalFlag ? 'true' : 'false',
     'Assigned To': assignedTo,
     'Assigned Date': assignedDate ? assignedDate.toISOString() : '',
