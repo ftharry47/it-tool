@@ -18,7 +18,7 @@
 param(
     [string]$ResourceGroup = 'it-support-rg',
     [string]$PlanName = 'it-support-plan',
-    [string]$AppName = 'it-support-portal',
+    [string]$AppName = 'alignedcardio-it-portal-bge7gud8huhsazcd',
     [string]$Location = 'eastus',
     [string]$ZipFile = 'tools\deploy.zip'
 )

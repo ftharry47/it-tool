@@ -120,7 +120,7 @@ function submitTicket(formData) {
 
 function getDashboardStats(tickets) {
   const stats = {
-    total: tickets.length, open: 0, inProgress: 0, resolved: 0, unassigned: 0,
+    total: tickets.length, open: 0, inProgress: 0, onHold: 0, differ: 0, resolved: 0, unassigned: 0,
     highPriority: 0, critical: 0, pending: 0, markedCritical: 0, resolvedToday: 0,
     byLocation: {}, byAssignee: {}, byEscalationLevel: { L1: 0, L2: 0, L3: 0 },
     byIssueType: {}, byImpactArea: {}
@@ -140,6 +140,8 @@ function getDashboardStats(tickets) {
 
     if (status.toLowerCase() === 'open') stats.open++;
     else if (status.toLowerCase() === 'in progress') stats.inProgress++;
+    else if (status.toLowerCase() === 'on hold') stats.onHold++;
+    else if (status.toLowerCase() === 'differ') stats.differ++;
     else if (status.toLowerCase() === 'resolved') stats.resolved++;
     if (!t['Assigned To'] || t['Assigned To'] === '') stats.unassigned++;
     if (priority === 'High' || priority === 'Critical') stats.highPriority++;
@@ -374,7 +376,7 @@ function searchTickets(searchType, searchValue) {
 
 function updateTicketStatus(ticketId, newStatus, resolvedBy) {
   if (!ticketId) return { success: false, error: 'Ticket ID is required' };
-  if (!newStatus || !['Open', 'In Progress', 'Resolved'].includes(newStatus)) return { success: false, error: 'Invalid status' };
+  if (!newStatus || !['Open', 'In Progress', 'On Hold', 'Differ', 'Resolved'].includes(newStatus)) return { success: false, error: 'Invalid status' };
   return db.withDb(d => {
     const t = utils.findTicket(d, ticketId);
     if (!t) return { success: false, error: 'Ticket not found' };
@@ -409,8 +411,8 @@ function assignTicket(ticketId, assignedTo, assignedBy, priority) {
   return db.withDb(d => {
     const t = utils.findTicket(d, ticketId);
     if (!t) return { success: false, error: 'Ticket not found' };
+    const previousAssignee = (t['Assigned To'] || '').trim() || 'Unassigned';
     const now = new Date().toISOString();
-    const previousAssignee = t['Assigned To'] || 'Unassigned';
     const currentStatus = t['Status'];
     const oldPriority = t['Priority'] || 'Pending';
     t['Assigned To'] = assignedTo;
@@ -428,7 +430,8 @@ function assignTicket(ticketId, assignedTo, assignedBy, priority) {
     email.sendTicketAssignedEmailToUser(ticketId, t['Name'], assignedTo, t).catch(() => {});
     email.sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy || 'Dashboard', t).catch(() => {});
 
-    return { success: true, message: 'Ticket assigned to ' + assignedTo + (prioritySet ? ' with priority ' + priority : ''), ticketId, assignedTo, priority: prioritySet ? priority : oldPriority, assignedDate: now };
+    const actionLabel = (actionType === 'Reassigned') ? 'reassigned to ' : 'assigned to ';
+    return { success: true, message: 'Ticket ' + actionLabel + assignedTo + (prioritySet ? ' with priority ' + priority : ''), ticketId, assignedTo, priority: prioritySet ? priority : oldPriority, assignedDate: now };
   });
 }
 

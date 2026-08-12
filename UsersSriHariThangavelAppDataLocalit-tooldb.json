@@ -1,0 +1,237 @@
+{
+  "tickets": [
+    {
+      "Created Date": "2026-08-03T10:52:29.324Z",
+      "Ticket ID": "SSPTKT-001",
+      "Employee ID": "EMP001",
+      "Name": "Alice Brown",
+      "Email Address": "alice@example.com",
+      "Phone Number": "555-0101",
+      "Location": "Cath Lab",
+      "Issue Type": "Login issue",
+      "Impact Area": "User Productivity",
+      "Short Description": "Cannot access patient records",
+      "Additional Description": "Error message appears when trying to open charts",
+      "Status": "Open",
+      "Priority": "Pending",
+      "Critical Flag": "true",
+      "Assigned To": "",
+      "Assigned Date": "",
+      "Escalation Level": "L1",
+      "Escalated To": "",
+      "Escalation Date": "",
+      "Last Updated": "2026-08-03T10:52:29.324Z",
+      "Resolved By": "",
+      "Resolved Date": ""
+    },
+    {
+      "Created Date": "2026-08-02T10:52:29.324Z",
+      "Ticket ID": "SSPTKT-002",
+      "Employee ID": "EMP002",
+      "Name": "Bob Wilson",
+      "Email Address": "bob@example.com",
+      "Phone Number": "555-0102",
+      "Location": "Echo Lab",
+      "Issue Type": "Laptop / desktop issue",
+      "Impact Area": "User Productivity",
+      "Short Description": "Computer running slow",
+      "Additional Description": "Takes 5 minutes to boot up",
+      "Status": "In Progress",
+      "Priority": "High",
+      "Critical Flag": "false",
+      "Assigned To": "John Smith",
+      "Assigned Date": "2026-08-02T10:52:29.324Z",
+      "Escalation Level": "L1",
+      "Escalated To": "",
+      "Escalation Date": "",
+      "Last Updated": "2026-08-02T10:52:29.324Z",
+      "Resolved By": "",
+      "Resolved Date": ""
+    },
+    {
+      "Created Date": "2026-08-01T10:52:29.324Z",
+      "Ticket ID": "SSPTKT-003",
+      "Employee ID": "EMP003",
+      "Name": "Carol Davis",
+      "Email Address": "carol@example.com",
+      "Phone Number": "555-0103",
+      "Location": "Administration",
+      "Issue Type": "Printer / scanner",
+      "Impact Area": "Service Request",
+      "Short Description": "Printer not working",
+      "Additional Description": "Paper jam error",
+      "Status": "Resolved",
+      "Priority": "Medium",
+      "Critical Flag": "false",
+      "Assigned To": "Jane Doe",
+      "Assigned Date": "2026-08-01T10:52:29.324Z",
+      "Escalation Level": "L1",
+      "Escalated To": "",
+      "Escalation Date": "",
+      "Last Updated": "2026-08-03T10:52:29.324Z",
+      "Resolved By": "Jane Doe",
+      "Resolved Date": "2026-08-03T10:52:29.324Z"
+    }
+  ],
+  "users": [
+    {
+      "employeeId": "admin",
+      "password": "admin123",
+      "displayName": "IT Administrator",
+      "role": "Admin",
+      "status": "Online"
+    },
+    {
+      "employeeId": "user1",
+      "password": "password1",
+      "displayName": "John Smith",
+      "role": "L1",
+      "status": "Online"
+    },
+    {
+      "employeeId": "user2",
+      "password": "password2",
+      "displayName": "Jane Doe",
+      "role": "L2",
+      "status": "Online"
+    },
+    {
+      "employeeId": "user3",
+      "password": "password3",
+      "displayName": "Mike Johnson",
+      "role": "L3",
+      "status": "Online"
+    },
+    {
+      "email": "rick.barlow@alignedcardio.com",
+      "employeeId": "rbarlow",
+      "password": "Rbarlow89",
+      "displayName": "Rick Barlow",
+      "role": "Admin",
+      "supportLevel": "L3",
+      "status": "Online"
+    },
+    {
+      "email": "srihari.thangavel@alignedcardio.com",
+      "employeeId": "Shari47",
+      "password": "Shari47",
+      "displayName": "SriHari Thangavel",
+      "role": "L3",
+      "supportLevel": "L3",
+      "status": "Online"
+    },
+    {
+      "email": "monapuri.pranay@alignedcardio.com",
+      "employeeId": "Mpranay55",
+      "password": "Mpranay55",
+      "displayName": "Monapuri Pranay",
+      "role": "L2",
+      "supportLevel": "L2",
+      "status": "Online"
+    }
+  ],
+  "itStaff": [
+    {
+      "name": "John Smith",
+      "email": "john@example.com",
+      "level": "L1",
+      "status": "Online"
+    },
+    {
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "level": "L2",
+      "status": "Online"
+    },
+    {
+      "name": "Mike Johnson",
+      "email": "mike@example.com",
+      "level": "L3",
+      "status": "Online"
+    },
+    {
+      "name": "Rick Barlow",
+      "email": "rick.barlow@alignedcardio.com",
+      "level": "L3",
+      "status": "Online"
+    },
+    {
+      "name": "SriHari Thangavel",
+      "email": "srihari.thangavel@alignedcardio.com",
+      "level": "L3",
+      "status": "Online"
+    },
+    {
+      "name": "Monapuri Pranay",
+      "email": "monapuri.pranay@alignedcardio.com",
+      "level": "L2",
+      "status": "Online"
+    }
+  ],
+  "directory": [
+    {
+      "employeeId": "EMP001",
+      "name": "Alice Brown",
+      "email": "alice@example.com"
+    },
+    {
+      "employeeId": "EMP002",
+      "name": "Bob Wilson",
+      "email": "bob@example.com"
+    },
+    {
+      "employeeId": "EMP003",
+      "name": "Carol Davis",
+      "email": "carol@example.com"
+    }
+  ],
+  "history": [],
+  "notes": [],
+  "settings": {
+    "AUTO_ASSIGN": {
+      "value": "false",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "DRY_RUN": {
+      "value": "false",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "FORM_ENABLED": {
+      "value": "true",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "DASHBOARD_ENABLED": {
+      "value": "true",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "PRIMARY_ADMIN_EMAIL": {
+      "value": "rick.barlow@alignedcardio.com",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "SECONDARY_ADMIN_EMAIL": {
+      "value": "srihari.thangavel@alignedcardio.com",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "TERTIARY_ADMIN_EMAIL": {
+      "value": "monapuri.pranay@alignedcardio.com",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "ESCALATION_EMAIL": {
+      "value": "rick.barlow@alignedcardio.com",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    },
+    "CRITICAL_EMAIL": {
+      "value": "rick.barlow@alignedcardio.com",
+      "lastUpdated": "2026-08-03T10:52:29.324Z",
+      "updatedBy": "System"
+    }
+  }
+}

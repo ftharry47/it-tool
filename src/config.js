@@ -56,7 +56,7 @@ module.exports = {
   },
 
   get locations() {
-    return ['ACP - Corporate', 'ASC - Colonial Heights', 'CH - Williamsburg', 'HRA - Greenville', 'JRC - Ashlake', 'JRC - Colonial Heights', 'JRC - Discovery', 'JRC - Discovery - AIC', 'JRC - Emporia', 'JRC - Franklin', 'JRC - Lawrenceville', 'NCC - Stafford', 'NCC - Woodbridge', 'PCC - Potomac', 'Solid State Practice', 'SWVC - Salem'];
+    return ['ACP - Corporate', 'ASC - Colonial Heights', 'CH - Williamsburg', 'HRA - Greenville', 'JRC - Ashlake', 'JRC - Colonial Heights', 'JRC - Discovery', 'JRC - Discovery - AIC', 'JRC - Emporia', 'JRC - Franklin', 'JRC - Lawrenceville', 'NCC - Stafford', 'NCC - Woodbridge', 'PCC - Potomac', 'Solid State Practice - Banglore, IND', 'Solid State Practice - Coimbatore, IND', 'SWVC - Salem'];
   },
 
   get issueTypes() {
@@ -74,7 +74,7 @@ module.exports = {
   },
 
   impactAreas: ['System Outage', 'User Productivity', 'Security / Access', 'Service Request'],
-  statuses: ['Open', 'In Progress', 'Resolved'],
+  statuses: ['Open', 'In Progress', 'On Hold', 'Differ', 'Resolved'],
   priorities: ['Pending', 'Low', 'Medium', 'High', 'Critical'],
   escalationLevels: ['L1', 'L2', 'L3']
 };

@@ -4,11 +4,15 @@ const fs = require('fs');
 const api = require('./src/handlers');
 const config = require('./src/config');
 const utils = require('./src/utils');
-const { seedAdminUsers } = require('./src/seed');
+const { seedAdminUsers, seedL1Users, seedL2Users, seedViewerUsers } = require('./src/seed');
 
 const log = (msg) => fs.appendFileSync('app.log', new Date().toISOString() + ' ' + msg + '\n');
 log('app.js starting');
 seedAdminUsers();
+seedL1Users();
+seedL2Users();
+seedViewerUsers();
+utils.migrateToIncidentNumbers();
 process.on('uncaughtException', (e) => { log('uncaught: ' + e.message + '\n' + e.stack); console.error('uncaught:', e); process.exit(1); });
 process.on('unhandledRejection', (e) => { log('unhandled: ' + e); console.error('unhandled:', e); });
 
@@ -50,10 +54,21 @@ app.get('/status', (req, res) => {
   res.json(api.diagnoseSystem());
 });
 
+const VIEWER_ALLOWED = new Set([
+  'validateUser', 'getDashboardData', 'getAllUsers', 'getAllSettings', 'getSetting',
+  'getAutoAssignSetting', 'getAdminEmails', 'getTicketByIdForTracking', 'getTicketNotes',
+  'getTicketTimeline', 'getAllTickets', 'generateReport', 'lookupEmployee', 'lookupEmployeeSafe',
+  'getSystemStatus', 'setupSystem', 'diagnoseSystem'
+]);
+
 app.post('/api/:fn', (req, res) => {
   const fn = req.params.fn;
   if (typeof api[fn] !== 'function') {
     return res.status(404).json({ success: false, error: 'Function not found: ' + fn });
+  }
+  const user = req.body && req.body.user;
+  if (user && String(user.role).toLowerCase() === 'viewer' && !VIEWER_ALLOWED.has(fn)) {
+    return res.status(403).json({ success: false, error: 'Viewers are not allowed to perform this action.' });
   }
   const args = req.body && Array.isArray(req.body.args) ? req.body.args : [];
   try {
@@ -69,7 +84,8 @@ app.post('/api/:fn', (req, res) => {
 });
 
 const server = app.listen(PORT, () => {
-  log('listening on port ' + PORT);
-  console.log('IT Support Portal running at http://localhost:' + PORT);
+  const actualPort = server.address().port;
+  log('listening on port ' + actualPort);
+  console.log('IT Support Portal running at http://localhost:' + actualPort);
 });
-server.on('error', (e) => { log('listen error: ' + e.message); console.error('listen error:', e); });
+server.on('error', (e) => { log('listen error: ' + e.message); console.error('listen error:', e); process.exit(1); });

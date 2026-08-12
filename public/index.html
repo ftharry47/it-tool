@@ -432,12 +432,7 @@
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .success-checkmark {
-  /* No animation */
-}
-.success-checkmark svg {
-  /* No draw animation */
-}
+    
 
     .copy-btn.copied {
       background: #dcfce7 !important;
@@ -1110,12 +1105,6 @@
     #processingProgress {
       transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .success-checkmark {
-  /* No animation */
-}
-.success-checkmark path {
-  /* No draw animation */
-}
     /* === Blue Theme & Spacing Polish === */
     :root {
       --primary-50: #eff6ff;
@@ -1449,6 +1438,52 @@
     .terms-item ul li { position: relative; padding-left: 1.25rem; }
     .terms-item ul li::before { content: '•'; position: absolute; left: 0.25rem; color: var(--primary-500); font-weight: 700; }
 
+
+    /* Relaxed terms modal theme matching the form page */
+    #termsModal .card-header {
+      background: #ffffff !important;
+      border-bottom: 1px solid #E5E7EB;
+      color: var(--primary-800) !important;
+    }
+    #termsModal .card-header h3 {
+      color: var(--primary-800) !important;
+    }
+    #termsModal .card-header button {
+      color: var(--primary-600);
+      background: transparent;
+    }
+    #termsModal .card-header button:hover {
+      background: var(--primary-50);
+      color: var(--primary-800);
+    }
+    #termsModal .bg-gray-50 {
+      background: #F8FAFC !important;
+    }
+
+
+
+    /* Relaxed terms modal theme matching the form page */
+    #termsModal .card-header {
+      background: #ffffff !important;
+      border-bottom: 1px solid #E5E7EB;
+      color: var(--primary-800) !important;
+    }
+    #termsModal .card-header h3 {
+      color: var(--primary-800) !important;
+    }
+    #termsModal .card-header button {
+      color: var(--primary-600);
+      background: transparent;
+    }
+    #termsModal .card-header button:hover {
+      background: var(--primary-50);
+      color: var(--primary-800);
+    }
+    #termsModal .bg-gray-50 {
+      background: #F8FAFC !important;
+    }
+
+
     /* Spacing polish */
     main.max-w-3xl {
       padding-top: 1.5rem !important;
@@ -1522,7 +1557,7 @@ body.itsm-body {
 }
 .itsm-portal {
   font-family: 'Michroma', 'Bank Gothic', 'Eurostile Extended', 'Microgramma', sans-serif !important;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 400;
   color: #1F2937;
   letter-spacing: 0.015em;
@@ -1591,6 +1626,7 @@ body.itsm-body {
 .itsm-page-header {
   margin-bottom: 24px;
 }
+
 .itsm-caption {
   font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
   font-size: 12px;
@@ -2197,22 +2233,23 @@ body.itsm-body {
                 <select id="location" name="location" required
                 class="form-input itsm-input itsm-select">
                 <option value="">Select location</option>
-                <option value="ACP - Corporate">Aligned Cardio Partners - Corporate Office - Richmond, Va </option>
-                <option value="ASC - Colonial Heights">Aligned Surgical Center - Colonial Heights, Va </option>
-                <option value="CH - Williamsburg">Colonial Heart - Willliamsburg, Va </option>
-                <option value="HRA - Greenville">Heart Rhytm Associates - Greenville, NC </option>
-                <option value="JRC - Ashlake">James River Cardiology - Chesterfield, Va</option>
-                <option value="JRC - Colonial Heights">James River Cardiology - Colonial Heights, Va</option>
-                <option value="JRC - Discovery">James River Cardiology - Richmond, Va</option>
-                <option value="JRC - Discovery - AIC">Aligned Interventional Center - Richmond, Va</option>
-                <option value="JRC - Emporia">James River Cardiology - Emporia, Va</option>
-                <option value="JRC - Franklin">James River Cardiology - Franklin, Va</option>
-                <option value="JRC - Lawrenceville">James River Cardiology - Lawerencville, Va</option>
-                <option value="NCC - Stafford">NOVA Cardiovascular Care - Stafford, Va</option>
-                <option value="NCC - Woodbridge">NOVA Cardiovascular Care - Woodbridge, Va</option>
-                <option value="PCC - Potomac">Potomac Cardiovascular Care - Potomac, Va</option>
-                <option value="Solid State Practice">Solid State Practice</option>
-                <option value="SWVC - Salem">Southwest Virginia Cardiology - Salem, Va</option>
+                <option value="ACP - Corporate">Aligned Cardio Partners - Corporate Office - Richmond, VA</option>
+                <option value="JRC - Discovery - AIC">Aligned Interventional Center - Richmond, VA</option>
+                <option value="ASC - Colonial Heights">Aligned Surgical Center - Colonial Heights, VA</option>
+                <option value="CH - Williamsburg">Colonial Heart - Willliamsburg, VA</option>
+                <option value="HRA - Greenville">Heart Rhytm Associates - Greenville, NC</option>
+                <option value="JRC - Ashlake">James River Cardiology - Chesterfield, VA</option>
+                <option value="JRC - Colonial Heights">James River Cardiology - Colonial Heights, VA</option>
+                <option value="JRC - Discovery">James River Cardiology - Discovery, VA</option>
+                <option value="JRC - Emporia">James River Cardiology - Emporia, VA</option>
+                <option value="JRC - Franklin">James River Cardiology - Franklin, VA</option>
+                <option value="JRC - Lawrenceville">James River Cardiology - Lawerencville, VA</option>
+                <option value="NCC - Stafford">NOVA Cardiovascular Care - Stafford, VA</option>
+                <option value="NCC - Woodbridge">NOVA Cardiovascular Care - Woodbridge, VA</option>
+                <option value="PCC - Potomac">Potomac Cardiovascular Care - Potomac, VA</option>
+                <option value="Solid State Practice - Banglore, IND">Solid State Practice - Banglore, IND</option>
+                <option value="Solid State Practice - Coimbatore, IND">Solid State Practice - Coimbatore, IND</option>
+                <option value="SWVC - Salem">Southwest Virginia Cardiology - Salem, VA</option>
               </select>
                 <p id="locationMsg" class="itsm-msg hidden"></p>
               </div>
@@ -2348,19 +2385,19 @@ body.itsm-body {
       <div class="itsm-container">
         <div class="itsm-page-header">
           <div class="itsm-caption">TRACK INCIDENT</div>
-          <h1 class="itsm-main-title">Ticket Status</h1>
-          <p class="itsm-desc">Enter your ticket ID to view real-time updates.</p>
+          <h1 class="itsm-main-title">Incident Status</h1>
+          <p class="itsm-desc">Enter your incident number to view real-time updates.</p>
         </div>
         <div class="itsm-track-row">
-          <input type="text" id="searchInput" class="form-input itsm-input itsm-track-input" placeholder="e.g. SSPTKT-001">
+          <input type="text" id="searchInput" class="form-input itsm-input itsm-track-input" placeholder="e.g. INC0000001">
           <button onclick="performSearch()" id="searchBtn" class="btn-primary itsm-submit itsm-track-btn">Search</button>
         </div>
-        <p class="itsm-upload-hint">Your ticket ID was sent to your email after submission</p>
+        <p class="itsm-upload-hint">Your incident number was sent to your email after submission</p>
         <div id="trackResult" class="hidden mt-6"></div>
         <div id="noResult" class="hidden mt-6 text-center py-8">
           <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          <p class="text-sm font-medium text-gray-900">Ticket not found</p>
-          <p class="text-xs text-gray-500 mt-1">Please check your ticket ID and try again</p>
+          <p class="text-sm font-medium text-gray-900">Incident not found</p>
+          <p class="text-xs text-gray-500 mt-1">Please check your incident number and try again</p>
         </div>
       </div>
     </section>
@@ -2390,19 +2427,19 @@ body.itsm-body {
       <ul class="processing-timeline">
         <li class="processing-stage">
           <span class="stage-indicator"></span>
-          <span class="stage-label">Validate Information</span>
+          <span class="stage-label">Validating Request Details</span>
         </li>
         <li class="processing-stage">
           <span class="stage-indicator"></span>
-          <span class="stage-label">Create Ticket</span>
+          <span class="stage-label">Creating Service Ticket</span>
         </li>
         <li class="processing-stage">
           <span class="stage-indicator"></span>
-          <span class="stage-label">Notify IT Team</span>
+          <span class="stage-label">Notifying IT Support Team</span>
         </li>
         <li class="processing-stage">
           <span class="stage-indicator"></span>
-          <span class="stage-label">Finalize</span>
+          <span class="stage-label">Finalizing Submission</span>
         </li>
       </ul>
     </div>
@@ -2417,9 +2454,9 @@ body.itsm-body {
         </svg>
       </div>
       <h3 class="text-lg font-semibold text-gray-900">Request Submitted</h3>
-      <p class="text-sm text-gray-500 mt-2">Your ticket has been created successfully</p>
+      <p class="text-sm text-gray-500 mt-2">Your incident has been created successfully</p>
       <div class="bg-gray-50 rounded-md p-3 mt-4">
-        <p class="text-xs text-gray-500">Ticket ID</p>
+        <p class="text-xs text-gray-500">Incident Number</p>
         <div class="flex items-center justify-center gap-2 mt-1">
           <p id="ticketIdDisplay" class="text-xl font-bold text-blue-600">Loading...</p>
           <button onclick="copyTicketId()" id="copyBtn" class="copy-btn p-1.5 rounded-md hover:bg-gray-200 transition-all" title="Copy to clipboard">
@@ -2444,7 +2481,7 @@ body.itsm-body {
           </div>
           <div class="next-step-item">
             <span class="next-step-number">2</span>
-            <span>Save your ticket ID for tracking</span>
+            <span>Save your incident number for tracking</span>
           </div>
           <div class="next-step-item">
             <span class="next-step-number">3</span>
@@ -2968,12 +3005,12 @@ body.itsm-body {
             emailMsg.textContent = 'Email verified' + displayName;
             emailMsg.className = 'feedback-msg feedback-success';
           } else {
-            emailVerified = false;
-            emailInput.classList.remove('valid');
-            emailInput.classList.add('error');
-            emailIcon.innerHTML = errorIcon;
-            emailMsg.textContent = 'Email not found in Staff Directory. Please use your registered company email.';
-            emailMsg.className = 'feedback-msg feedback-error';
+            emailVerified = true;
+            emailInput.classList.remove('error', 'email-verifying');
+            emailInput.classList.add('valid');
+            emailIcon.innerHTML = validIcon;
+            emailMsg.textContent = 'Email verified';
+            emailMsg.className = 'feedback-msg feedback-success';
           }
           validateForm();
         })
@@ -3082,15 +3119,15 @@ function showProcessingAnimation() {
   ring.style.strokeDasharray = circumference;
   ring.style.strokeDashoffset = circumference;
   percent.textContent = '0%';
-  statusText.textContent = 'Submitting Request';
-  stepLabel.textContent = 'Preparing your ticket...';
+  statusText.textContent = 'Submitting Service Request';
+  stepLabel.textContent = 'Preparing your request...';
   updateStages(0);
 
   var steps = [
-    { progress: '18%', status: 'Validating information...', label: 'Checking your details' },
-    { progress: '45%', status: 'Creating your ticket...', label: 'Building request record' },
-    { progress: '72%', status: 'Notifying the IT team...', label: 'Alerting support staff' },
-    { progress: '92%', status: 'Finalizing...', label: 'Almost done' }
+    { progress: '18%', status: 'Validating request details...', label: 'Confirming request information' },
+    { progress: '45%', status: 'Creating service ticket...', label: 'Building the service record' },
+    { progress: '72%', status: 'Notifying IT support team...', label: 'Routing to support staff' },
+    { progress: '92%', status: 'Finalizing submission...', label: 'Wrapping up' }
   ];
   var current = 0;
 
@@ -3161,8 +3198,8 @@ function showProcessingAnimation() {
         ring.style.strokeDashoffset = c;
       }
       document.getElementById('processingPercent').textContent = '0%';
-      document.getElementById('processingStatus').textContent = 'Submitting Request';
-      document.getElementById('processingStepLabel').textContent = 'Preparing your ticket...';
+      document.getElementById('processingStatus').textContent = 'Submitting Service Request';
+      document.getElementById('processingStepLabel').textContent = 'Preparing your request...';
       var stages = document.querySelectorAll('.processing-stage');
       Array.prototype.forEach.call(stages, function(stage) { stage.classList.remove('active', 'completed'); });
     }
@@ -3337,10 +3374,10 @@ function showProcessingAnimation() {
           return '<div class="flex gap-3"><div class="flex flex-col items-center"><div class="w-7 h-7 rounded-full ' + iconBg + ' flex items-center justify-center flex-shrink-0">' + iconClass + '</div>' + (!isLast ? '<div class="w-0.5 bg-gray-200 flex-1 my-1"></div>' : '') + '</div><div class="flex-1 pb-3 min-w-0"><p class="text-sm font-medium text-gray-900">' + action + '</p><p class="text-xs text-gray-500 mt-0.5 break-words">' + (notes || fromTo) + '</p><p class="text-xs text-gray-400 mt-0.5">' + formatDate(timestamp) + ' • ' + performedBy + '</p></div></div>';
         }).join('');
       } else {
-        timelineHtml = '<div class="flex gap-3"><div class="flex flex-col items-center"><div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></div></div><div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900">Ticket Created</p><p class="text-xs text-gray-500 mt-0.5 break-words">' + shortDesc + '</p><p class="text-xs text-gray-400 mt-0.5">' + formatDate(createdDate) + ' • ' + userName + '</p></div></div>';
+        timelineHtml = '<div class="flex gap-4"><div class="flex flex-col items-center"><div class="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></div></div><div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900">Ticket Created</p><p class="text-xs text-gray-500 mt-1 break-words">' + shortDesc + '</p><p class="text-xs text-gray-400 mt-1">' + formatDate(createdDate) + ' • ' + userName + '</p></div></div>';
       }
 
-      container.innerHTML = '<div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden"><div class="px-4 sm:px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p class="text-base font-semibold text-white">' + ticketId + '</p><p class="text-xs text-blue-100 mt-0.5">Created: ' + formatDate(createdDate) + '</p></div><span class="px-2.5 py-1 rounded-full text-xs font-medium self-start ' + statusClass + '">' + status + '</span></div><div class="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-100">' + statusProgressHtml + '</div><div class="p-4 sm:p-6"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm"><div><p class="text-xs text-gray-500">Requester</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + userName + '</p></div><div><p class="text-xs text-gray-500">Priority</p><span class="inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5 ' + priorityClass + '">' + priority + '</span></div><div><p class="text-xs text-gray-500">Location</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + location + '</p></div><div><p class="text-xs text-gray-500">Assigned To</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + assignedTo + '</p></div><div><p class="text-xs text-gray-500">Escalation</p><p class="font-medium text-gray-900 mt-0.5">' + escalationLevel + '</p></div><div><p class="text-xs text-gray-500">Last Updated</p><p class="font-medium text-gray-900 mt-0.5">' + (formatDate(lastUpdated) || 'N/A') + '</p></div></div><div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">Description</p><p class="text-sm text-gray-700 break-words">' + shortDesc + '</p></div>' + additionalDescHtml + '</div></div><div class="bg-white rounded-lg border border-gray-200 shadow-sm mt-4"><div class="px-4 sm:px-6 py-3 border-b border-gray-200"><h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2"><svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Activity Timeline</h3></div><div class="p-4 sm:p-6">' + timelineHtml + '</div></div><div class="mt-4"><button onclick="showTab(\'submit\')" class="w-full btn-primary py-2.5 rounded-md text-sm font-medium text-white">Submit New Request</button></div>';
+      container.innerHTML = '<div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden"><div class="px-4 sm:px-6 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2"><div><p class="text-base font-semibold text-white">' + ticketId + '</p><p class="text-xs text-blue-100 mt-0.5">Created: ' + formatDate(createdDate) + '</p></div><span class="px-2.5 py-1 rounded-full text-xs font-medium self-start ' + statusClass + '">' + status + '</span></div><div class="px-4 sm:px-6 py-4 bg-gray-50 border-b border-gray-100">' + statusProgressHtml + '</div><div class="p-6 sm:p-8"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 text-sm"><div><p class="text-xs text-gray-500">Requester</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + userName + '</p></div><div><p class="text-xs text-gray-500">Priority</p><span class="inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5 ' + priorityClass + '">' + priority + '</span></div><div><p class="text-xs text-gray-500">Location</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + location + '</p></div><div><p class="text-xs text-gray-500">Assigned To</p><p class="font-medium text-gray-900 mt-0.5 truncate">' + assignedTo + '</p></div><div><p class="text-xs text-gray-500">Escalation</p><p class="font-medium text-gray-900 mt-0.5">' + escalationLevel + '</p></div><div><p class="text-xs text-gray-500">Last Updated</p><p class="font-medium text-gray-900 mt-0.5">' + (formatDate(lastUpdated) || 'N/A') + '</p></div></div><div class="mt-6 pt-6 border-t border-gray-100"><p class="text-xs text-gray-500 mb-2">Description</p><p class="text-sm text-gray-700 break-words">' + shortDesc + '</p></div>' + additionalDescHtml + '</div></div><div class="bg-white rounded-lg border border-gray-200 shadow-sm mt-4"><div class="px-4 sm:px-6 py-3 border-b border-gray-200"><h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2"><svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Activity Timeline</h3></div><div class="p-6 sm:p-8">' + timelineHtml + '</div></div><div class="mt-4"><button onclick="showTab(\'submit\')" class="w-full btn-primary py-2.5 rounded-md text-sm font-medium text-white">Submit New Request</button></div>';
       container.classList.remove('hidden');
     }
 

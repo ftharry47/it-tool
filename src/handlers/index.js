@@ -2,6 +2,7 @@ const core = require('./core');
 const tickets = require('./tickets');
 const reports = require('./reports');
 const utils = require('../utils');
+const email = require('../email');
 
 module.exports = {
   ...core,
@@ -30,7 +31,10 @@ module.exports = {
   testUpdateImpactArea: tickets.updateImpactArea,
   testUpdatePhoneNumber: tickets.updatePhoneNumber,
   testUpdateLocation: tickets.updateLocation,
-  testEmailConfiguration: () => ({ success: true, message: 'Email configured via SMTP env vars' }),
+  testEmailConfiguration: () => email.verifyEmail(),
+  verifySMTP: () => email.verifySMTP(),
+  verifyGraph: () => email.verifyGraph(),
+  verifyEmail: () => email.verifyEmail(),
   diagnoseSystem: core.getSystemStatus,
   addDirectory: core.addDirectory,
   bulkImportDirectory: core.bulkImportDirectory

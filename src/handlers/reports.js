@@ -19,10 +19,17 @@ function getTeamPerformance(filters) {
 
     const staff = require('./tickets').getITStaffList();
     if (!staff.length) return [];
+    const data = db.readDb();
+    const adminUsers = (data.users || []).filter(u => u.role === 'Admin');
+    const adminEmails = new Set(adminUsers.map(u => String(u.email).toLowerCase().trim()));
+    const adminNames = new Set(adminUsers.map(u => String(u.displayName || '').toLowerCase().trim()));
     const performance = {};
     staff.forEach(s => {
+      const sName = String(s.name).toLowerCase().trim();
+      const sEmail = String(s.email).toLowerCase().trim();
+      const isAdmin = adminEmails.has(sEmail) || adminNames.has(sName);
       performance[s.name] = {
-        name: s.name, level: s.level || 'L1', status: s.status || 'Online',
+        name: s.name, level: isAdmin ? 'Admin' : (s.level || 'L1'), status: s.status || 'Online',
         month: monthLabel,
         ticketsHandled: 0, resolved: 0, openTickets: 0, currentLoad: 0, criticalTickets: 0, highTickets: 0,
         withinSla: 0, breachedSla: 0, totalResolutionHours: 0, totalResponseHours: 0

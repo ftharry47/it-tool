@@ -73,14 +73,47 @@ function generateTicketId() {
   let highest = 0;
   d.tickets.forEach(t => {
     const id = String(t['Ticket ID']);
-    if (id.indexOf('SSPTKT-') === 0) {
+    if (id.indexOf('INC') === 0) {
+      const num = parseInt(id.substring(3));
+      if (!isNaN(num) && num > highest) highest = num;
+    } else if (id.indexOf('SSPTKT-') === 0) {
       const num = parseInt(id.split('-')[1]);
       if (!isNaN(num) && num > highest) highest = num;
     }
   });
-  let newNum = (highest + 1).toString();
-  while (newNum.length < 3) newNum = '0' + newNum;
-  return 'SSPTKT-' + newNum;
+  let newNum = (highest + 1).toString().padStart(7, '0');
+  return 'INC' + newNum;
+}
+
+function migrateToIncidentNumbers() {
+  try {
+    db.withDb(d => {
+      if (!Array.isArray(d.tickets)) return;
+      const idMap = {};
+      d.tickets.forEach(t => {
+        const oldId = String(t['Ticket ID'] || '');
+        if (oldId.indexOf('SSPTKT-') === 0) {
+          const num = parseInt(oldId.split('-')[1]);
+          if (!isNaN(num)) {
+            const newId = 'INC' + String(num).padStart(7, '0');
+            idMap[oldId] = newId;
+            t['Ticket ID'] = newId;
+          }
+        }
+      });
+      if (Object.keys(idMap).length > 0) {
+        if (Array.isArray(d.history)) {
+          d.history.forEach(h => { if (idMap[h.ticketId]) h.ticketId = idMap[h.ticketId]; });
+        }
+        if (Array.isArray(d.notes)) {
+          d.notes.forEach(n => { if (idMap[n.ticketId]) n.ticketId = idMap[n.ticketId]; });
+        }
+        console.log('Migrated ' + Object.keys(idMap).length + ' old ticket IDs to INC format');
+      }
+    });
+  } catch (e) {
+    console.error('Incident number migration error:', e.message);
+  }
 }
 
 function formatDate(date) {
@@ -142,5 +175,6 @@ function generateCSVContent(headers, data) {
 module.exports = {
   readSetting, writeSetting, getAdminEmails, getAllSettings, getSetting, setSetting,
   getAutoAssignSetting, isValidEmail, normalizeStatus, findTicket, generateTicketId,
-  formatDate, ticketValue, cloneTicket, getAllTickets, escapeCSVField, generateCSVContent
+  migrateToIncidentNumbers, formatDate, ticketValue, cloneTicket, getAllTickets,
+  escapeCSVField, generateCSVContent
 };

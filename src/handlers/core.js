@@ -66,9 +66,19 @@ function updateUserStatus(employeeId, newStatus) {
 }
 
 function updateITStaffStatus(staffName, newStatus) {
-  db.withDb(d => {
+  if (!staffName) return { success: false, error: 'Staff name is required' };
+  if (!newStatus) return { success: false, error: 'New status is required' };
+  const config = require('../config');
+  if (!config.VALID_USER_STATUSES.includes(newStatus)) {
+    return { success: false, error: 'Invalid status' };
+  }
+  return db.withDb(d => {
     const staff = d.itStaff.find(s => s.name.toLowerCase() === String(staffName).toLowerCase().trim());
-    if (staff) staff.status = newStatus;
+    if (!staff) return { success: false, error: 'Staff member not found' };
+    staff.status = newStatus;
+    const user = d.users.find(u => String(u.displayName || '').toLowerCase() === staff.name.toLowerCase());
+    if (user) user.status = newStatus;
+    return { success: true, message: 'Status updated to ' + newStatus, staffName, newStatus };
   });
 }
 

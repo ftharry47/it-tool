@@ -42,6 +42,7 @@
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes bellShake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(10deg); } 50% { transform: rotate(-10deg); } 75% { transform: rotate(5deg); } }
+        @keyframes dashTopShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-float-delayed { animation: float 6s ease-in-out 2s infinite; }
@@ -94,7 +95,7 @@
         .main { margin-left: 280px; min-height: 100vh; padding: 24px; }
 
         .metric-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px; padding: 20px; position: relative; overflow: hidden; transition: all 0.3s; }
-        .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(192,192,192,0.5), transparent); opacity: 0; transition: opacity 0.3s; }
+        .metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(192,192,192,0.5), transparent); background-size: 200% 100%; opacity: 0.6; transition: opacity 0.3s; animation: dashTopShimmer 2.5s linear infinite; }
         .metric-card:hover::before { opacity: 1; }
         .metric-card:hover { transform: translateY(-4px); border-color: rgba(192,192,192,0.4); }
         .metric-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
@@ -145,15 +146,21 @@
         .badge-medium { background: rgba(113,113,122,0.15); color: #a1a1aa; }
         .badge-low { background: rgba(16,185,129,0.15); color: #34d399; }
         .badge-pending { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        .badge-onhold { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .badge-differ { background: rgba(59,130,246,0.15); color: #60a5fa; }
         .badge-l1 { background: rgba(168,85,247,0.15); color: #c084fc; }
         .badge-l2 { background: rgba(245,158,11,0.15); color: #fbbf24; }
         .badge-l3 { background: rgba(239,68,68,0.15); color: #f87171; }
+        .badge-admin { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .badge-viewer { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+        .badge-critical { background: rgba(239,68,68,0.15); color: #f87171; }
         .badge-note-workdone { background: rgba(34,197,94,0.15); color: #4ade80; }
         .badge-note-update { background: rgba(59,130,246,0.15); color: #60a5fa; }
         .badge-note-investigation { background: rgba(168,85,247,0.15); color: #c084fc; }
         .badge-note-solution { background: rgba(16,185,129,0.15); color: #34d399; }
         .badge-note-followup { background: rgba(245,158,11,0.15); color: #fbbf24; }
         .badge-note-general { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+
 
         .notification-btn { position: relative; }
         .notification-badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
@@ -207,7 +214,10 @@
         .section { display: none; }
         .section.active { display: block; }
         .team-card, .settings-card, .report-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all 0.3s; }
+        .team-card { cursor: pointer; }
         .team-card:hover, .report-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-4px); }
+        .team-table-row { cursor: pointer; }
+        .team-table-row:hover td { background: rgba(255,255,255,0.04); }
 
         .toggle-container { position: relative; }
         .toggle-switch-new { position: relative; width: 56px; height: 28px; background: linear-gradient(135deg, #3f3f46 0%, #52525b 100%); border-radius: 14px; cursor: pointer; transition: all 0.3s ease; border: 2px solid rgba(255,255,255,0.1); }
@@ -484,11 +494,11 @@
                     <div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Priority</h3><div id="priorityBars"></div></div>
                     <div class="glass-card rounded-2xl p-5"><h3 class="font-heading font-semibold text-base mb-4" style="color:var(--text-primary)">By Location</h3><div id="locationBars"></div></div>
                 </div>
-                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex items-center justify-between" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Recent Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Latest 10 tickets</p></div><button class="btn btn-primary" onclick="handleNavClick('tickets')">View All <i class="ri-arrow-right-line"></i></button></div><div class="table-container"><table><thead><tr><th>Ticket ID</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="recentTicketsBody"></tbody></table></div></div>
+                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex items-center justify-between" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Recent Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Latest 10 tickets</p></div><button class="btn btn-primary" onclick="handleNavClick('tickets')">View All <i class="ri-arrow-right-line"></i></button></div><div class="table-container"><table><thead><tr><th>Incident Number</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="recentTicketsBody"></tbody></table></div></div>
             </section>
 
             <section id="ticketsSection" class="section">
-                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex flex-wrap items-center justify-between gap-3" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">All Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Manage and track all support tickets</p></div><div class="flex items-center gap-2"><div class="relative"><i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)"></i><input type="text" id="ticketSearch" placeholder="Search..." class="pl-10 pr-3 py-2 rounded-xl text-sm w-48" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" oninput="filterTickets()"></div><select class="px-3 py-2 rounded-xl text-sm" id="statusFilter" onchange="filterTickets()"><option value="">All Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Resolved">Resolved</option></select><select class="px-3 py-2 rounded-xl text-sm" id="priorityFilter" onchange="filterTickets()"><option value="">All Priority</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Pending">Pending</option></select></div></div><div class="table-container" style="max-height:550px;overflow-y:auto;"><table><thead><tr><th>Ticket ID</th><th>Created</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Impact Area</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="allTicketsBody"></tbody></table></div></div>
+                <div class="glass-card rounded-2xl overflow-hidden"><div class="p-5 border-b flex flex-wrap items-center justify-between gap-3" style="border-color:var(--border)"><div><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">All Tickets</h3><p class="text-sm" style="color:var(--text-muted)">Manage and track all support tickets</p></div><div class="flex items-center gap-2"><div class="relative"><i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--text-muted)"></i><input type="text" id="ticketSearch" placeholder="Search..." class="pl-10 pr-3 py-2 rounded-xl text-sm w-48" style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" oninput="filterTickets()"></div><select class="px-3 py-2 rounded-xl text-sm" id="statusFilter" onchange="filterTickets()"><option value="">All Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="On Hold">On Hold</option><option value="Differ">Differ</option><option value="Resolved">Resolved</option></select><select class="px-3 py-2 rounded-xl text-sm" id="priorityFilter" onchange="filterTickets()"><option value="">All Priority</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="Pending">Pending</option></select></div></div><div class="table-container" style="max-height:550px;overflow-y:auto;"><table><thead><tr><th>Incident Number</th><th>Created</th><th>Requester</th><th>Location</th><th>Issue Type</th><th>Impact Area</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Level</th><th>Action</th></tr></thead><tbody id="allTicketsBody"></tbody></table></div></div>
             </section>
 
             <section id="teamSection" class="section">
@@ -567,7 +577,7 @@
 
     <div id="ticketModal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-header"><div><h2 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="modalTicketId">Ticket Details</h2><div class="flex gap-2 mt-2" id="modalBadges"></div></div><button class="modal-close" onclick="confirmCloseModal()" title="Close (Esc)"><i class="ri-close-line"></i></button></div>
+            <div class="modal-header"><div><h2 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="modalTicketId">Incident Details</h2><div class="flex gap-2 mt-2" id="modalBadges"></div></div><button class="modal-close" onclick="confirmCloseModal()" title="Close (Esc)"><i class="ri-close-line"></i></button></div>
             <div class="modal-body">
                 <div class="modal-grid mb-6">
                     <div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">Requester</p><p class="text-sm font-semibold" style="color:var(--text-primary)" id="modalName">--</p></div>
@@ -588,15 +598,71 @@
             </div>
             <div class="modal-footer">
                 <div class="mb-3"><p class="text-xs font-semibold mb-2" style="color:var(--text-muted)">Select Priority Before Assigning</p><div class="priority-dropdown"><select id="modalPrioritySelect" class="w-full" onchange="updatePriorityStyle()"><option value="">-- Select Priority --</option><option value="Critical">P1 - Critical</option><option value="High">P2 - High</option><option value="Medium">P3 - Medium</option><option value="Low">P4 - Low</option></select></div></div>
-                <div class="grid grid-cols-3 gap-2 mb-3"><select class="p-2 rounded-xl text-sm" id="modalStatusSelect"><option value="">Update Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Resolved">Resolved</option></select><select class="p-2 rounded-xl text-sm" id="modalAssignSelect"><option value="">Assign To</option></select><select class="p-2 rounded-xl text-sm" id="modalEscalateSelect" onchange="toggleEscalationReason()"><option value="">Escalate To</option></select></div>
+                <div class="grid grid-cols-3 gap-2 mb-3" id="actionSelects"><select class="p-2 rounded-xl text-sm" id="modalStatusSelect"><option value="">Update Status</option><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="On Hold">On Hold</option><option value="Differ">Differ</option><option value="Resolved">Resolved</option></select><select class="p-2 rounded-xl text-sm" id="modalAssignSelect"><option value="">Assign To</option></select><select class="p-2 rounded-xl text-sm" id="modalEscalateSelect" onchange="toggleEscalationReason()"><option value="">Escalate To</option></select></div>
                 <div class="p-3 rounded-xl mb-3" id="escReasonGroup" style="display:none;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3)"><p class="text-xs font-semibold mb-2 flex items-center gap-2" style="color:#c084fc"><i class="ri-arrow-up-circle-line"></i> Escalation Reason (Required)</p><textarea class="w-full p-2 rounded-xl text-sm resize-none" id="modalEscReasonInput" rows="2" placeholder="Enter reason..." style="background:var(--bg-tertiary);border:1px solid var(--border);color:var(--text-primary)" maxlength="500"></textarea></div>
-                <div class="grid grid-cols-3 gap-2"><button class="btn btn-primary" id="updateBtn" onclick="handleStatusChange()"><span class="btn-text flex items-center gap-1"><i class="ri-refresh-line"></i> Update</span><div class="btn-spinner"></div></button><button class="btn btn-success" id="assignBtn" onclick="handleAssignment()"><span class="btn-text flex items-center gap-1"><i class="ri-user-add-line"></i> Assign</span><div class="btn-spinner"></div></button><button class="btn btn-purple" id="escalateBtn" onclick="handleEscalation()"><span class="btn-text flex items-center gap-1"><i class="ri-arrow-up-circle-line"></i> Escalate</span><div class="btn-spinner"></div></button></div>
+                <div class="grid grid-cols-3 gap-2" id="actionButtons"><button class="btn btn-primary" id="updateBtn" onclick="handleStatusChange()"><span class="btn-text flex items-center gap-1"><i class="ri-refresh-line"></i> Update</span><div class="btn-spinner"></div></button><button class="btn btn-success" id="assignBtn" onclick="handleAssignment()"><span class="btn-text flex items-center gap-1"><i class="ri-user-add-line"></i> Assign</span><div class="btn-spinner"></div></button><button class="btn btn-purple" id="escalateBtn" onclick="handleEscalation()"><span class="btn-text flex items-center gap-1"><i class="ri-arrow-up-circle-line"></i> Escalate</span><div class="btn-spinner"></div></button></div>
             </div>
         </div>
     </div>
 
-    <div id="confirmCloseDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(245,158,11,0.15)"><i class="ri-error-warning-line text-4xl text-amber-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Close Ticket Details?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">Any unsaved changes will be lost. Are you sure you want to close this ticket view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelCloseModal()">Cancel</button><button class="btn btn-danger" onclick="forceCloseModal()">Close</button></div></div></div>
-    <div id="confirmNavDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(59,130,246,0.15)"><i class="ri-arrow-left-right-line text-4xl text-blue-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Leave Ticket View?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You have a ticket open. Do you want to leave this view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelNavigation()">Stay</button><button class="btn btn-info" onclick="confirmNavigation()">Leave</button></div></div></div>
+    <div id="teamMemberModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="flex items-center gap-4">
+                    <div class="staff-avatar" id="memberModalAvatar" style="width:56px;height:56px;font-size:18px;">U</div>
+                    <div>
+                        <h2 class="font-heading font-bold text-xl" style="color:var(--text-primary)" id="memberModalName">Member Name</h2>
+                        <div class="flex gap-2 mt-1" id="memberModalBadges"></div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeTeamMemberModal()" title="Close (Esc)"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5" id="memberStatsGrid"></div>
+                <div class="grid md:grid-cols-3 gap-5 mb-5">
+                    <div class="glass-card rounded-2xl p-4">
+                        <h4 class="font-heading font-semibold text-sm mb-3" style="color:var(--text-primary)">Status Breakdown</h4>
+                        <div id="memberStatusBars"></div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-4">
+                        <h4 class="font-heading font-semibold text-sm mb-3" style="color:var(--text-primary)">Priority Breakdown</h4>
+                        <div id="memberPriorityBars"></div>
+                    </div>
+                    <div class="glass-card rounded-2xl p-4">
+                        <h4 class="font-heading font-semibold text-sm mb-3" style="color:var(--text-primary)">7-Day Activity</h4>
+                        <div class="chart-container" style="height:200px" id="memberTrendChart"></div>
+                        <div class="flex justify-center gap-4 mt-2" id="memberTrendLegend"></div>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl overflow-hidden">
+                    <div class="p-4 border-b flex items-center justify-between" style="border-color:var(--border)">
+                        <h4 class="font-heading font-semibold text-base" style="color:var(--text-primary)">Assigned Incidents</h4>
+                        <span class="text-xs" style="color:var(--text-muted)" id="memberTicketCount">0 incidents</span>
+                    </div>
+                    <div class="table-container" style="max-height:350px;overflow-y:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Incident Number</th>
+                                    <th>Created</th>
+                                    <th>Requester</th>
+                                    <th>Location</th>
+                                    <th>Issue Type</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Resolved</th>
+                                </tr>
+                            </thead>
+                            <tbody id="memberTicketsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmCloseDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(245,158,11,0.15)"><i class="ri-error-warning-line text-4xl text-amber-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Close Incident Details?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">Any unsaved changes will be lost. Are you sure you want to close this incident view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelCloseModal()">Cancel</button><button class="btn btn-danger" onclick="forceCloseModal()">Close</button></div></div></div>
+    <div id="confirmNavDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(59,130,246,0.15)"><i class="ri-arrow-left-right-line text-4xl text-blue-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Leave Incident View?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You have an incident open. Do you want to leave this view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelNavigation()">Stay</button><button class="btn btn-info" onclick="confirmNavigation()">Leave</button></div></div></div>
     <div id="confirmLogoutDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(239,68,68,0.15)"><i class="ri-logout-box-r-line text-4xl text-red-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Sign Out?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You will be signed out of the IT Support Control Center. You will need to sign in again to access the dashboard.</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelLogout()">Cancel</button><button class="btn btn-danger" onclick="executeLogout()">Sign Out</button></div></div></div>
     <div id="loadingOverlay" class="loading-overlay"><div class="spinner"></div><div class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Loading Dashboard</div><div style="color:var(--text-muted)">Fetching latest data...</div></div>
     <div id="toast" class="toast"><i id="toastIcon" class="ri-checkbox-circle-line text-lg text-emerald-400"></i><span id="toastMessage" class="text-sm" style="color:var(--text-primary)">Success!</span></div>
@@ -607,8 +673,9 @@
 const $ = id => document.getElementById(id);
 let INACTIVITY_TIMEOUT = 15 * 60 * 1000;
 let autoSignOutEnabled = true, autoAssignEnabled = false;
-let currentUser = null, allTickets = [], allUsers = [], itStaff = [], dashboardStats = {}, dashboardSettings = {}, dashboardConfig = {};
+let currentUser = null, allTickets = [], allUsers = [], itStaff = [], dashboardStats = {}, dashboardSettings = {}, dashboardConfig = {}, adminEmails = {};
 let currentTicket = null, currentTicketNotes = [], isRefreshing = false, isProcessing = false;
+let currentMember = null, teamPerformanceData = [];
 let inactivityTimer = null, pendingSection = null, statusPollingInterval = null;
 const STATUS_POLLING_INTERVAL = 5000, CREDENTIALS_KEY = 'it_support_credentials';
 let inactivityListenersAttached = false;
@@ -652,9 +719,9 @@ const Validator = {
         return { valid: true, message: '', sanitized: this.sanitizeString(reason) };
     },
     validateTicketId: function(ticketId) {
-        if (!ticketId) return { valid: false, message: 'Invalid ticket ID' };
+        if (!ticketId) return { valid: false, message: 'Invalid incident number' };
         const id = String(ticketId).trim();
-        if (id.length < 3 || id.length > 20) return { valid: false, message: 'Invalid ticket ID format' };
+        if (id.length < 3 || id.length > 20) return { valid: false, message: 'Invalid incident number format' };
         return { valid: true, message: '' };
     },
     validateSelection: function(value, allowedValues, fieldName) {
@@ -685,7 +752,7 @@ function showInputHint(inputId, message, type = 'error') { const hint = $(inputI
 function clearInputHint(inputId) { const hint = $(inputId + 'Hint'), input = $(inputId); if (hint) { hint.textContent = ''; hint.className = 'input-hint'; } if (input) input.classList.remove('input-error'); }
 function saveCredentials(empId, pwd) { try { localStorage.setItem(CREDENTIALS_KEY, JSON.stringify({ employeeId: empId, password: btoa(pwd), timestamp: Date.now() })); } catch (e) {} }
 function loadSavedCredentials() { try { const saved = localStorage.getItem(CREDENTIALS_KEY); if (saved) { const c = JSON.parse(saved); if (Date.now() - c.timestamp < 30*24*60*60*1000) return { employeeId: c.employeeId, password: atob(c.password) }; localStorage.removeItem(CREDENTIALS_KEY); } } catch (e) { localStorage.removeItem(CREDENTIALS_KEY); } return null; }
-function clearSavedCredentials() { try { localStorage.removeItem(CREDENTIALS_KEY); $('rememberMe').checked = false; showToast('Saved credentials cleared', 'info'); } catch (e) { showToast('Could not clear credentials', 'error'); } }
+function clearSavedCredentials() { if (isViewer()) { showToast('Viewers cannot clear credentials', 'error'); return; } try { localStorage.removeItem(CREDENTIALS_KEY); $('rememberMe').checked = false; showToast('Saved credentials cleared', 'info'); } catch (e) { showToast('Could not clear credentials', 'error'); } }
 function populateSavedCredentials() { const saved = loadSavedCredentials(); if (saved) { $('employeeId').value = saved.employeeId; $('password').value = saved.password; $('rememberMe').checked = true; } }
 function updatePriorityStyle() { const s = $('modalPrioritySelect'), v = s.value; s.classList.remove('priority-critical','priority-high','priority-medium','priority-low','priority-pending'); s.classList.add(v === 'Critical' ? 'priority-critical' : v === 'High' ? 'priority-high' : v === 'Medium' ? 'priority-medium' : v === 'Low' ? 'priority-low' : 'priority-pending'); }
 function setSelectedPriority(p) { const s = $('modalPrioritySelect'); s.value = (p && p !== 'Pending') ? p : ''; updatePriorityStyle(); }
@@ -694,7 +761,7 @@ function toggleBotPopup() { $('botPopup').classList.toggle('show'); }
 function hideBotPopup() { $('botPopup').classList.remove('show'); }
 function toggleTheme() { /* Dark theme only */ }
 function loadTheme() { document.body.setAttribute('data-theme', 'dark'); }
-function handleNavClick(section) { if ($('ticketModal').classList.contains('show')) { pendingSection = section; $('confirmNavDialog').classList.add('show'); } else showSection(section); }
+function handleNavClick(section) { if ($('ticketModal').classList.contains('show')) { pendingSection = section; $('confirmNavDialog').classList.add('show'); } else if ($('teamMemberModal').classList.contains('show')) { closeTeamMemberModal(); showSection(section); } else showSection(section); }
 function cancelNavigation() { $('confirmNavDialog').classList.remove('show'); pendingSection = null; }
 function confirmNavigation() { $('confirmNavDialog').classList.remove('show'); forceCloseModal(); if (pendingSection) { showSection(pendingSection); pendingSection = null; } }
 function formatDate(d) { if (!d) return '--'; try { const date = new Date(d); return isNaN(date.getTime()) ? '--' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '--'; } }
@@ -703,7 +770,7 @@ function getVal(ticket, key) { if (!ticket || typeof ticket !== 'object') return
 function getAttachments(ticket) { try { const raw = getVal(ticket, 'ATTACHMENTS'); if (!raw) return []; const arr = JSON.parse(raw); return Array.isArray(arr) ? arr.filter(u => typeof u === 'string' && u.startsWith('/uploads/')) : []; } catch { return []; } }
 function attachmentIcon(count) { return count ? `<span class="inline-flex items-center gap-1 text-xs" style="color:var(--text-muted)"><i class="ri-image-line"></i>${count}</span>` : ''; }
 const escapeHtml = s => { if (s === null || s === undefined) return ''; const str = String(s); return str.replace(/[<>"'&]/g, m => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'})[m]); };
-const statusBadge = s => `<span class="badge badge-${{'Open':'open','In Progress':'progress','Resolved':'resolved'}[s||'Open']||'open'}">${escapeHtml(s||'Open')}</span>`;
+const statusBadge = s => `<span class="badge badge-${{'Open':'open','In Progress':'progress','On Hold':'onhold','Differ':'differ','Resolved':'resolved'}[s||'Open']||'open'}">${escapeHtml(s||'Open')}</span>`;
 const priorityBadge = p => { const l = (p || 'Pending').toLowerCase(); return `<span class="badge badge-${{'critical':'critical','high':'high','medium':'medium','low':'low','pending':'pending'}[l]||'pending'}">${escapeHtml(p||'Pending')}</span>`; };
 const levelBadge = l => `<span class="badge badge-${(l||'L1').toLowerCase()}">${escapeHtml(l||'L1')}</span>`;
 const noteTypeBadge = t => { const l = (t || 'general').toLowerCase().replace(/\s+/g,'').replace('-',''); return `<span class="badge badge-${{'workdone':'note-workdone','update':'note-update','investigation':'note-investigation','solution':'note-solution','followup':'note-followup','general':'note-general'}[l]||'note-general'}">${escapeHtml(t||'General')}</span>`; };
@@ -715,7 +782,7 @@ async function callGAS(fn, ...args) {
   const response = await fetch('/api/' + fn, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ args: args })
+    body: JSON.stringify({ args: args, user: currentUser || null })
   });
   if (!response.ok) throw new Error('API error');
   return response.json();
@@ -745,7 +812,7 @@ function confirmLogout() { $('confirmLogoutDialog').classList.add('show'); }
 function cancelLogout() { $('confirmLogoutDialog').classList.remove('show'); }
 function executeLogout() {
     $('confirmLogoutDialog').classList.remove('show');
-    if ($('ticketModal').classList.contains('show')) { $('ticketModal').classList.remove('show'); document.body.style.overflow = ''; currentTicket = null; currentTicketNotes = []; }
+    if ($('ticketModal').classList.contains('show')) { $('ticketModal').classList.remove('show'); document.body.style.overflow = ''; currentTicket = null; currentTicketNotes = []; } closeTeamMemberModal();
     $('confirmCloseDialog').classList.remove('show'); $('confirmNavDialog').classList.remove('show');
     $('aiBotBtn').classList.add('hidden'); hideBotPopup(); stopInactivityTracking(); stopStatusPolling();
     if (currentUser) callGAS('updateUserStatus', currentUser.employeeId, 'Offline').catch(() => {});
@@ -754,6 +821,16 @@ function executeLogout() {
     if (!$('rememberMe').checked) { $('employeeId').value = ''; $('password').value = ''; }
     allTickets = []; allUsers = []; itStaff = []; pendingSection = null;
 }
+function applyViewerRestrictions() {
+    const v = isViewer();
+    // Sidebar status selector
+    const uss = $('userStatusSelect'); if (uss) uss.classList.toggle('hidden', v);
+    // Hide Settings nav and section
+    const settingsNav = document.querySelector('.nav-item[data-section="settings"]');
+    if (settingsNav) settingsNav.classList.toggle('hidden', v);
+    const settingsSection = $('settingsSection'); if (settingsSection) settingsSection.classList.toggle('hidden', v);
+}
+
 async function showDashboard() {
     $('loginPage').style.display = 'none'; $('dashboardPage').classList.remove('hidden');
     showLoading(); loadTheme();
@@ -761,6 +838,7 @@ async function showDashboard() {
     $('userAvatar').innerHTML = escapeHtml(initials) + '<div class="status-dot online" id="userStatusDot"></div>';
     $('userName').textContent = escapeHtml(name); $('userRole').textContent = escapeHtml(currentUser.role || 'Staff');
     updateGreeting(); updateUserStatusDot();
+    applyViewerRestrictions();
     if (autoSignOutEnabled) setupInactivityTracking();
     await loadData(); startStatusPolling(); $('aiBotBtn').classList.remove('hidden'); hideLoading();
 }
@@ -771,6 +849,7 @@ async function loadData(silent = false) {
             allTickets = Validator.validateArray(data.tickets); itStaff = Validator.validateArray(data.itStaff);
             dashboardStats = Validator.validateObject(data.stats); dashboardSettings = Validator.validateObject(data.settings);
             dashboardConfig = Validator.validateObject(data.config);
+            adminEmails = data.adminEmails || {};
             populateEditDropdowns(); renderAll(); renderSettings();
         }
         try { allUsers = Validator.validateArray(await callGAS('getAllUsers')); renderStaffPanel(); }
@@ -784,9 +863,9 @@ function populateEditDropdowns() {
     const ls = $('locationSelect'); if (ls && dashboardConfig.locations) { ls.innerHTML = '<option value="">Select Location</option>'; Validator.validateArray(dashboardConfig.locations).forEach(l => { ls.innerHTML += `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`; }); }
 }
 function toggleEditIssueType() { const f = $('issueTypeField'), e = $('issueTypeEdit'), s = $('issueTypeSelect'); if (e.classList.contains('hidden')) { s.value = $('modalIssueType').textContent !== '--' ? $('modalIssueType').textContent : ''; e.classList.remove('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; } else { e.classList.add('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; } }
-async function saveIssueType() { const s = $('issueTypeSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateIssueType', tid, nv, currentUser.displayName); if (r?.success) { $('modalIssueType').textContent = nv; currentTicket['Issue Type'] = nv; toggleEditIssueType(); showToast('Issue type updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating issue type', 'error'); } }
+async function saveIssueType() { if (isViewer()) { showToast('Viewers cannot edit ticket details', 'error'); return; } const s = $('issueTypeSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateIssueType', tid, nv, currentUser.displayName); if (r?.success) { $('modalIssueType').textContent = nv; currentTicket['Issue Type'] = nv; toggleEditIssueType(); showToast('Issue type updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating issue type', 'error'); } }
 function toggleEditImpactArea() { const f = $('impactAreaField'), e = $('impactAreaEdit'), s = $('impactAreaSelect'); if (e.classList.contains('hidden')) { s.value = $('modalImpactArea').textContent !== '--' ? $('modalImpactArea').textContent : ''; e.classList.remove('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-close-line"></i>'; } else { e.classList.add('hidden'); f.querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>'; } }
-async function saveImpactArea() { const s = $('impactAreaSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateImpactArea', tid, nv, currentUser.displayName); if (r?.success) { $('modalImpactArea').textContent = nv; currentTicket['Impact Area'] = nv; toggleEditImpactArea(); showToast('Impact area updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating impact area', 'error'); } }
+async function saveImpactArea() { if (isViewer()) { showToast('Viewers cannot edit ticket details', 'error'); return; } const s = $('impactAreaSelect'), nv = s.value; if (!nv || !currentTicket) return; const tid = getVal(currentTicket, 'TICKET_ID'); if (!Validator.validateTicketId(tid).valid) { showToast('Invalid ticket', 'error'); return; } try { const r = await callGAS('updateImpactArea', tid, nv, currentUser.displayName); if (r?.success) { $('modalImpactArea').textContent = nv; currentTicket['Impact Area'] = nv; toggleEditImpactArea(); showToast('Impact area updated', 'success'); loadTimeline(tid); await loadData(true); } else showToast(r?.error || 'Failed to update', 'error'); } catch { showToast('Error updating impact area', 'error'); } }
 
 // Phone Number Edit Functions
 function toggleEditPhone() {
@@ -806,6 +885,7 @@ function cancelEditPhone() {
     $('phoneField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
 }
 async function savePhone() {
+    if (isViewer()) { showToast('Viewers cannot edit ticket details', 'error'); return; }
     const i = $('phoneInput'), nv = i.value.trim();
     if (!currentTicket) return;
     const pv = Validator.validatePhoneNumber(nv);
@@ -838,6 +918,7 @@ function toggleEditLocation() {
     }
 }
 async function saveLocation() {
+    if (isViewer()) { showToast('Viewers cannot edit ticket details', 'error'); return; }
     const s = $('locationSelect'), nv = s.value;
     if (!nv || !currentTicket) return;
     const lv = Validator.validateLocation(nv);
@@ -859,13 +940,14 @@ async function saveLocation() {
 
 function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && !$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, STATUS_POLLING_INTERVAL); }
 function stopStatusPolling() { if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; } }
-async function updateMyStatus() { const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error updating status', 'error'); } }
+async function updateMyStatus() { if (isViewer()) { showToast('Viewers cannot change status', 'error'); return; } const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error updating status', 'error'); } }
 const SETTINGS_TOGGLE_MAP = { 'AUTO_ASSIGN': 'autoAssignToggle', 'DRY_RUN': 'dryRunToggle' };
 const SETTINGS_EMAIL_MAP = { 'PRIMARY_ADMIN_EMAIL': 'primaryAdminEmail', 'SECONDARY_ADMIN_EMAIL': 'secondaryAdminEmail', 'TERTIARY_ADMIN_EMAIL': 'tertiaryAdminEmail', 'ESCALATION_EMAIL': 'escalationEmail', 'CRITICAL_EMAIL': 'criticalEmail' };
 
 function getSettingBool(name) { return dashboardSettings[name] === true || String(dashboardSettings[name]).toLowerCase() === 'true'; }
 
 async function toggleSettingSwitch(name) {
+    if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; }
     const id = SETTINGS_TOGGLE_MAP[name]; const el = id ? $(id) : null;
     const was = name === 'AUTO_ASSIGN' ? autoAssignEnabled : getSettingBool(name);
     const next = !was;
@@ -879,6 +961,7 @@ async function toggleSettingSwitch(name) {
 }
 
 async function saveEmailSetting(key, inputId) {
+    if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; }
     const input = $(inputId), value = input.value.trim();
     if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) { showToast('Enter a valid email address', 'error'); input.focus(); return; }
     try {
@@ -892,7 +975,7 @@ function renderSettings() {
     Object.entries(SETTINGS_TOGGLE_MAP).forEach(([key, id]) => { const el = $(id); if (!el) return; const val = getSettingBool(key); el.classList.toggle('active', val); if (key === 'AUTO_ASSIGN') autoAssignEnabled = val; });
     Object.entries(SETTINGS_EMAIL_MAP).forEach(([key, id]) => { const el = $(id); if (el) el.value = dashboardSettings[key] || ''; });
 }
-function toggleAutoSignOut() { autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled ? 'enabled' : 'disabled'}`, 'info'); }
+function toggleAutoSignOut() { if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; } autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled ? 'enabled' : 'disabled'}`, 'info'); }
 function resetInactivityTimer() { if (inactivityTimer) clearTimeout(inactivityTimer); if (currentUser && autoSignOutEnabled) inactivityTimer = setTimeout(() => { showToast('Session expired due to inactivity', 'warning'); executeLogout(); }, INACTIVITY_TIMEOUT); }
 function setupInactivityTracking() { if (!autoSignOutEnabled || !currentUser) return; if (!inactivityListenersAttached) { inactivityEvents.forEach(e => document.addEventListener(e, handleInactivityEvent, { passive: true })); inactivityListenersAttached = true; } resetInactivityTimer(); }
 function stopInactivityTracking() { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } if (inactivityListenersAttached) { inactivityEvents.forEach(e => document.removeEventListener(e, handleInactivityEvent, { passive: true })); inactivityListenersAttached = false; } }
@@ -925,7 +1008,7 @@ function renderStaffPanel() {
     }).join('');
 }
 function renderProgressBars() {
-    renderProgressList('statusBars', [{ label: 'Open', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length, color: '#fbbf24' },{ label: 'In Progress', value: allTickets.filter(t => getVal(t, 'STATUS') === 'In Progress').length, color: '#c084fc' },{ label: 'Resolved', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Resolved').length, color: '#34d399' }]);
+    renderProgressList('statusBars', [{ label: 'Open', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Open').length, color: '#fbbf24' },{ label: 'In Progress', value: allTickets.filter(t => getVal(t, 'STATUS') === 'In Progress').length, color: '#c084fc' },{ label: 'On Hold', value: allTickets.filter(t => getVal(t, 'STATUS') === 'On Hold').length, color: '#f59e0b' },{ label: 'Differ', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Differ').length, color: '#60a5fa' },{ label: 'Resolved', value: allTickets.filter(t => getVal(t, 'STATUS') === 'Resolved').length, color: '#34d399' }]);
     renderProgressList('priorityBars', [{ label: 'Critical', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Critical').length, color: '#f87171' },{ label: 'High', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'High').length, color: '#fbbf24' },{ label: 'Medium', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Medium').length, color: '#60a5fa' },{ label: 'Low', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Low').length, color: '#34d399' },{ label: 'Pending', value: allTickets.filter(t => getVal(t, 'PRIORITY') === 'Pending' || !getVal(t, 'PRIORITY')).length, color: '#a1a1aa' }]);
     const locData = {}; allTickets.forEach(t => { const l = getVal(t, 'LOCATION') || 'Other'; locData[l] = (locData[l] || 0) + 1; });
     const colors = ['#22d3ee', '#c084fc', '#f472b6', '#34d399', '#fbbf24'];
@@ -976,14 +1059,100 @@ function filterTickets() { renderAllTickets(); }
 async function loadTeam() {
     try {
         const perf = await callGAS('getTeamPerformance', {}); const perfData = Validator.validateArray(perf);
+        teamPerformanceData = perfData;
         const grid = $('teamGrid'), tbody = $('teamTableBody');
         const monthLabel = perfData?.[0]?.month || new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
         $('teamMonthLabel').textContent = monthLabel;
         if (!perfData?.length) { grid.innerHTML = '<p class="col-span-full text-center py-6" style="color:var(--text-muted)">No team data</p>'; tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6" style="color:var(--text-muted)">No data</td></tr>'; return; }
         const statusDot = m => m.status === 'Online' ? 'bg-emerald-500' : m.status === 'In Meeting' ? 'bg-purple-500' : m.status === 'Break' ? 'bg-amber-500' : 'bg-gray-500';
-        grid.innerHTML = perfData.map(m => `<div class="team-card"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="staff-avatar">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><p class="font-semibold text-sm" style="color:var(--text-primary)">${escapeHtml(m.name)}</p><div class="flex items-center gap-2">${levelBadge(m.level)}<span class="w-2 h-2 rounded-full ${statusDot(m)}"></span></div></div></div><span class="text-2xl font-bold" style="color:var(--text-primary)">${m.resolutionRate}%</span></div><div class="grid grid-cols-4 gap-2 mb-3"><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.ticketsHandled}</p><p class="text-xs" style="color:var(--text-muted)">Handled</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold text-emerald-400">${m.resolved}</p><p class="text-xs" style="color:var(--text-muted)">Resolved</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.openTickets}</p><p class="text-xs" style="color:var(--text-muted)">Open</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.criticalTickets + m.highTickets}</p><p class="text-xs" style="color:var(--text-muted)">Critical/High</p></div></div><div class="grid grid-cols-2 gap-2 mb-3"><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Response</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResponseTime)}</p></div><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Resolution</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResolutionTime)}</p></div></div><div class="flex items-center gap-2"><span class="text-xs" style="color:var(--text-muted)">SLA</span><div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="text-sm font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></div>`).join('');
-        tbody.innerHTML = perfData.map(m => `<tr><td><div class="flex items-center gap-2"><div class="staff-avatar" style="width:28px;height:28px;font-size:10px;">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><span class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.name)}</span></div></td><td>${levelBadge(m.level)}</td><td class="font-semibold" style="color:var(--text-primary)">${m.ticketsHandled}</td><td>${m.resolved}</td><td>${m.openTickets}</td><td>${m.currentLoad}</td><td>${m.criticalTickets + m.highTickets}</td><td class="font-semibold">${m.resolutionRate}%</td><td><div class="flex items-center gap-2"><div class="w-16 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></td><td class="font-semibold">${escapeHtml(m.avgResponseTime)}</td><td class="font-semibold">${escapeHtml(m.avgResolutionTime)}</td></tr>`).join('');
+        grid.innerHTML = perfData.map(m => `<div class="team-card" data-member-name="${escapeHtml(m.name)}" onclick="openTeamMemberModal(this.dataset.memberName)"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="staff-avatar">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><p class="font-semibold text-sm" style="color:var(--text-primary)">${escapeHtml(m.name)}</p><div class="flex items-center gap-2">${levelBadge(m.level)}<span class="w-2 h-2 rounded-full ${statusDot(m)}"></span></div></div></div><span class="text-2xl font-bold" style="color:var(--text-primary)">${m.resolutionRate}%</span></div><div class="grid grid-cols-4 gap-2 mb-3"><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.ticketsHandled}</p><p class="text-xs" style="color:var(--text-muted)">Handled</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold text-emerald-400">${m.resolved}</p><p class="text-xs" style="color:var(--text-muted)">Resolved</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.openTickets}</p><p class="text-xs" style="color:var(--text-muted)">Open</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.criticalTickets + m.highTickets}</p><p class="text-xs" style="color:var(--text-muted)">Critical/High</p></div></div><div class="grid grid-cols-2 gap-2 mb-3"><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Response</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResponseTime)}</p></div><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Resolution</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResolutionTime)}</p></div></div><div class="flex items-center gap-2"><span class="text-xs" style="color:var(--text-muted)">SLA</span><div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="text-sm font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></div>`).join('');
+        tbody.innerHTML = perfData.map(m => `<tr class="team-table-row" data-member-name="${escapeHtml(m.name)}" onclick="openTeamMemberModal(this.dataset.memberName)"><td><div class="flex items-center gap-2"><div class="staff-avatar" style="width:28px;height:28px;font-size:10px;">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><span class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.name)}</span></div></td><td>${levelBadge(m.level)}</td><td class="font-semibold" style="color:var(--text-primary)">${m.ticketsHandled}</td><td>${m.resolved}</td><td>${m.openTickets}</td><td>${m.currentLoad}</td><td>${m.criticalTickets + m.highTickets}</td><td class="font-semibold">${m.resolutionRate}%</td><td><div class="flex items-center gap-2"><div class="w-16 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></td><td class="font-semibold">${escapeHtml(m.avgResponseTime)}</td><td class="font-semibold">${escapeHtml(m.avgResolutionTime)}</td></tr>`).join('');
     } catch (e) { console.error('Load team error:', e); }
+}
+
+function closeTeamMemberModal() {
+    const m = $('teamMemberModal');
+    if (m) { m.classList.remove('show'); document.body.style.overflow = ''; }
+    currentMember = null;
+}
+
+function openTeamMemberModal(name) {
+    if (!name) return;
+    currentMember = name;
+    const member = (teamPerformanceData || []).find(p => p.name === name) || { name, level: 'L1', status: 'Offline' };
+    const staff = (allUsers || []).find(u => (u.displayName || u.name) === name) || (itStaff || []).find(s => s.name === name);
+    const level = member.level || (staff ? (staff.role || staff.level) : 'L1');
+    const status = member.status || (staff ? (staff.status || 'Offline') : 'Offline');
+    const escName = escapeHtml(member.name);
+    const initials = escName.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
+    $('memberModalAvatar').textContent = initials;
+    $('memberModalName').textContent = escName;
+    const statusDot = status === 'Online' ? 'bg-emerald-500' : status === 'In Meeting' ? 'bg-purple-500' : status === 'Break' ? 'bg-amber-500' : 'bg-gray-500';
+    $('memberModalBadges').innerHTML = `${levelBadge(level)} <span class="w-2 h-2 rounded-full ${statusDot}"></span> <span class="text-xs" style="color:var(--text-muted)">${escapeHtml(status)}</span>`;
+    renderMemberStats(member);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const memberTickets = allTickets.filter(t => {
+        const a = String(getVal(t,'ASSIGNED_TO')).trim().toLowerCase();
+        if (a !== String(member.name).trim().toLowerCase()) return false;
+        const cd = getVal(t,'CREATED_DATE') ? new Date(getVal(t,'CREATED_DATE')) : null;
+        return cd && cd >= monthStart && cd < monthEnd;
+    });
+    renderMemberCharts(memberTickets);
+    renderMemberTickets(memberTickets);
+    $('memberTicketCount').textContent = `${memberTickets.length} incident${memberTickets.length === 1 ? '' : 's'}`;
+    $('teamMemberModal').classList.add('show'); document.body.style.overflow = 'hidden';
+}
+
+function renderMemberStats(member) {
+    const stats = [
+        { label: 'Handled', value: member.ticketsHandled || 0, color: '#3b82f6' },
+        { label: 'Resolved', value: member.resolved || 0, color: '#22c55e' },
+        { label: 'Open', value: member.openTickets || 0, color: '#f59e0b' },
+        { label: 'Load', value: member.currentLoad || 0, color: '#a855f7' },
+        { label: 'Critical/High', value: (member.criticalTickets || 0) + (member.highTickets || 0), color: '#ef4444' },
+        { label: 'Resolution Rate', value: (member.resolutionRate || 0) + '%', color: '#34d399' },
+        { label: 'Avg Response', value: member.avgResponseTime || '--', color: '#fbbf24' },
+        { label: 'Avg Resolution', value: member.avgResolutionTime || '--', color: '#06b6d4' }
+    ];
+    $('memberStatsGrid').innerHTML = stats.map(s => `<div class="p-3 rounded-xl" style="background:rgba(255,255,255,0.05);border:1px solid var(--border)"><p class="text-xs mb-1" style="color:var(--text-muted)">${s.label}</p><p class="text-lg font-bold" style="color:${s.color}">${s.value}</p></div>`).join('');
+}
+
+function renderMemberCharts(tickets) {
+    const statusCounts = { 'Open': 0, 'In Progress': 0, 'On Hold': 0, 'Differ': 0, 'Resolved': 0 };
+    const priorityCounts = { 'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0, 'Pending': 0 };
+    tickets.forEach(t => {
+        const s = getVal(t,'STATUS') || 'Open';
+        if (statusCounts[s] !== undefined) statusCounts[s]++;
+        const p = getVal(t,'PRIORITY') || 'Pending';
+        if (priorityCounts[p] !== undefined) priorityCounts[p]++;
+    });
+    const statusColors = { 'Open': '#fbbf24', 'In Progress': '#c084fc', 'On Hold': '#f59e0b', 'Differ': '#60a5fa', 'Resolved': '#34d399' };
+    const priorityColors = { 'Critical': '#f87171', 'High': '#fbbf24', 'Medium': '#60a5fa', 'Low': '#34d399', 'Pending': '#a1a1aa' };
+    renderProgressList('memberStatusBars', Object.keys(statusCounts).map(k => ({ label: k, value: statusCounts[k], color: statusColors[k] })));
+    renderProgressList('memberPriorityBars', Object.keys(priorityCounts).map(k => ({ label: k, value: priorityCounts[k], color: priorityColors[k] })));
+    const { labels, data } = getUserTrendData(tickets);
+    renderLineChart('memberTrendChart', 'memberTrendLegend', data, labels, [{ key: 'created', color: '#a1a1aa', label: 'Created' }, { key: 'resolved', color: '#34d399', label: 'Resolved' }]);
+}
+
+function getUserTrendData(tickets) {
+    const labels = [], data = { created: [], resolved: [] }, days = 7;
+    const now = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now); d.setDate(now.getDate() - i); d.setHours(0,0,0,0);
+        labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+        const dayEnd = new Date(d); dayEnd.setDate(d.getDate() + 1);
+        data.created.push(tickets.filter(t => { const cd = getVal(t,'CREATED_DATE') ? new Date(getVal(t,'CREATED_DATE')) : null; return cd && cd >= d && cd < dayEnd; }).length);
+        data.resolved.push(tickets.filter(t => { const rd = getVal(t,'RESOLVED_DATE') ? new Date(getVal(t,'RESOLVED_DATE')) : null; return rd && rd >= d && rd < dayEnd; }).length);
+    }
+    return { labels, data };
+}
+
+function renderMemberTickets(tickets) {
+    const tbody = $('memberTicketsBody');
+    if (!tickets.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6" style="color:var(--text-muted)">No incidents assigned this month</td></tr>'; return; }
+    tbody.innerHTML = tickets.map(t => `<tr><td class="ticket-id" onclick="openModal('${escapeHtml(getVal(t,'TICKET_ID'))}')">${escapeHtml(getVal(t,'TICKET_ID')||'--')}</td><td>${formatDate(getVal(t,'CREATED_DATE'))}</td><td>${escapeHtml(getVal(t,'NAME')||'--')}</td><td>${escapeHtml(getVal(t,'LOCATION')||'--')}</td><td>${escapeHtml(getVal(t,'ISSUE_TYPE')||'--')} ${attachmentIcon(getAttachments(t).length)}</td><td>${statusBadge(getVal(t,'STATUS'))}</td><td>${priorityBadge(getVal(t,'PRIORITY'))}</td><td>${formatDate(getVal(t,'RESOLVED_DATE'))}</td></tr>`).join('');
 }
 
 async function loadAnalytics() {
@@ -999,16 +1168,44 @@ async function loadAnalytics() {
 function populateStaffDropdowns() {
     const assign = $('modalAssignSelect'), esc = $('modalEscalateSelect');
     assign.innerHTML = '<option value="">Assign To</option>'; esc.innerHTML = '<option value="">Escalate To</option>';
-    itStaff.forEach(s => { const name = escapeHtml(s.name), level = escapeHtml(s.level); assign.innerHTML += `<option value="${name}">${name} (${level})</option>`; esc.innerHTML += `<option value="${level}|${name}">${level} - ${name}</option>`; });
+
+    // Find the admin target (user with Admin role, or escalation email, or first L3)
+    let adminUser = (allUsers || []).find(u => u.role === 'Admin') || itStaff.find(s => (adminEmails.primary && s.email === adminEmails.primary) || (adminEmails.escalation && s.email === adminEmails.escalation));
+    if (!adminUser) adminUser = itStaff.find(s => s.level === 'L3');
+    const adminName = adminUser ? escapeHtml(adminUser.name || adminUser.displayName) : '';
+    const adminEmail = adminUser ? escapeHtml(adminUser.email || '') : '';
+
+    // Regular staff list, excluding the admin to avoid duplicate L3/Admin entries
+    itStaff.forEach(s => {
+        if (adminEmail && s.email && s.email.toLowerCase() === adminEmail.toLowerCase()) return;
+        const name = escapeHtml(s.name), level = escapeHtml(s.level);
+        assign.innerHTML += `<option value="${name}">${name} (${level})</option>`;
+        esc.innerHTML += `<option value="${level}|${name}">${level} - ${name}</option>`;
+    });
+
+    // Single Admin option
+    if (adminName) {
+        assign.innerHTML += `<option value="${adminName}">${adminName} (Admin)</option>`;
+        esc.innerHTML += `<option value="L3|${adminName}">Admin - ${adminName}</option>`;
+    }
 }
 
 function toggleEscalationReason() { $('escReasonGroup').style.display = $('modalEscalateSelect').value ? 'block' : 'none'; }
 
+function isViewer() { return currentUser && String(currentUser.role).toLowerCase() === 'viewer'; }
+
+function setModalPermissions() {
+    const v = isViewer();
+    // Hide the entire action footer and note add form for viewers
+    const footer = document.querySelector('.modal-footer'); if (footer) footer.classList.toggle('hidden', v);
+    document.querySelectorAll('.edit-btn, .add-note-form').forEach(el => el.classList.toggle('hidden', v));
+}
+
 async function openModal(ticketId) {
-    if (!Validator.validateTicketId(ticketId).valid) { showToast('Invalid ticket ID', 'error'); return; }
+    if (!Validator.validateTicketId(ticketId).valid) { showToast('Invalid incident number', 'error'); return; }
     currentTicket = allTickets.find(t => getVal(t, 'TICKET_ID') === ticketId);
     if (!currentTicket) { try { const r = await callGAS('getTicketByIdForTracking', ticketId); if (r?.success) currentTicket = Validator.validateObject(r.ticket); } catch {} }
-    if (!currentTicket) { showToast('Ticket not found', 'error'); return; }
+    if (!currentTicket) { showToast('Incident not found', 'error'); return; }
     // Reset all edit fields
     $('issueTypeEdit').classList.add('hidden'); $('impactAreaEdit').classList.add('hidden');
     $('phoneEdit').classList.add('hidden'); $('locationEdit').classList.add('hidden');
@@ -1017,7 +1214,7 @@ async function openModal(ticketId) {
     $('phoneField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
     $('locationField').querySelector('.edit-btn').innerHTML = '<i class="ri-pencil-line"></i>';
     setSelectedPriority(getVal(currentTicket, 'PRIORITY'));
-    $('modalTicketId').textContent = escapeHtml(ticketId);
+    $('modalTicketId').textContent = 'Incident ' + escapeHtml(ticketId);
     let badges = `${statusBadge(getVal(currentTicket,'STATUS'))} ${priorityBadge(getVal(currentTicket,'PRIORITY'))} ${levelBadge(getVal(currentTicket,'ESCALATION_LEVEL'))}`;
     if (getVal(currentTicket,'CRITICAL_FLAG') === 'true') badges += ' <span class="badge badge-critical"><i class="ri-alert-fill mr-1"></i>CRITICAL</span>';
     $('modalBadges').innerHTML = badges;
@@ -1038,6 +1235,7 @@ async function openModal(ticketId) {
     $('modalAttachments').innerHTML = attachments.map(url => `<a href="${escapeHtml(url)}" target="_blank" class="rounded-xl overflow-hidden border" style="border-color:var(--border);width:120px;height:120px"><img src="${escapeHtml(url)}" loading="lazy" decoding="async" class="w-full h-full object-cover hover:opacity-90 transition" alt="Attachment"></a>`).join('');
     ['modalStatusSelect','modalAssignSelect','modalEscalateSelect','modalEscReasonInput'].forEach(id => { const el = $(id); if (el) el.value = ''; });
     $('escReasonGroup').style.display = 'none'; $('noteText').value = ''; $('noteTypeSelect').value = 'General';
+    setModalPermissions();
     $('ticketModal').classList.add('show'); document.body.style.overflow = 'hidden';
     loadNotes(ticketId); loadTimeline(ticketId);
 }
@@ -1055,6 +1253,7 @@ async function loadNotes(ticketId) {
 
 async function handleAddNote() {
     if (isProcessing) return;
+    if (isViewer()) { showToast('Viewers cannot add notes', 'error'); return; }
     const noteText = $('noteText').value.trim(), noteType = $('noteTypeSelect').value;
     const nv = Validator.validateNoteText(noteText);
     if (!nv.valid) { showToast(nv.message, 'warning'); $('noteText').focus(); return; }
@@ -1102,9 +1301,10 @@ function forceCloseModal() { $('confirmCloseDialog').classList.remove('show'); $
 
 async function handleStatusChange() {
     if (isProcessing) return;
+    if (isViewer()) { showToast('Viewers cannot change ticket status', 'error'); return; }
     const newStatus = $('modalStatusSelect').value;
     if (!newStatus || !currentTicket) return;
-    const validStatuses = ['Open', 'In Progress', 'Resolved'];
+    const validStatuses = ['Open', 'In Progress', 'On Hold', 'Differ', 'Resolved'];
     if (!Validator.validateSelection(newStatus, validStatuses, 'status').valid) { showToast('Invalid status', 'error'); return; }
     isProcessing = true; setButtonProcessing('updateBtn', true);
     try {
@@ -1117,6 +1317,7 @@ async function handleStatusChange() {
 
 async function handleAssignment() {
     if (isProcessing) return;
+    if (isViewer()) { showToast('Viewers cannot assign tickets', 'error'); return; }
     const assignTo = $('modalAssignSelect').value;
     if (!assignTo || !currentTicket) { showToast('Select a staff member', 'error'); return; }
     const currentPriority = getVal(currentTicket, 'PRIORITY'), selectedPriority = getSelectedPriority();
@@ -1127,7 +1328,7 @@ async function handleAssignment() {
     isProcessing = true; setButtonProcessing('assignBtn', true);
     try {
         const r = await callGAS('assignTicket', getVal(currentTicket,'TICKET_ID'), assignTo, currentUser.displayName, priorityToSet);
-        if (r?.success) { showToast(`Assigned to ${escapeHtml(assignTo)}` + (selectedPriority ? ` with ${selectedPriority} priority` : '')); forceCloseModal(); await loadData(); }
+        if (r?.success) { showToast(r.message || `Assigned to ${escapeHtml(assignTo)}`); await loadData(true); openModal(getVal(currentTicket,'TICKET_ID')); }
         else showToast(r?.error || 'Failed', 'error');
     } catch { showToast('Error', 'error'); }
     finally { setButtonProcessing('assignBtn', false); isProcessing = false; }
@@ -1135,6 +1336,7 @@ async function handleAssignment() {
 
 async function handleEscalation() {
     if (isProcessing) return;
+    if (isViewer()) { showToast('Viewers cannot escalate tickets', 'error'); return; }
     const escVal = $('modalEscalateSelect').value, reason = $('modalEscReasonInput').value.trim();
     if (!escVal || !currentTicket) { showToast('Select escalation target', 'error'); return; }
     const rv = Validator.validateEscalationReason(reason);
@@ -1189,6 +1391,7 @@ document.addEventListener('keydown', e => {
         else if ($('confirmCloseDialog').classList.contains('show')) cancelCloseModal();
         else if ($('confirmNavDialog').classList.contains('show')) cancelNavigation();
         else if ($('ticketModal').classList.contains('show')) confirmCloseModal();
+        else if ($('teamMemberModal').classList.contains('show')) closeTeamMemberModal();
         else if ($('botPopup').classList.contains('show')) hideBotPopup();
     }
 });
