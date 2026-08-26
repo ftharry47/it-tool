@@ -1,0 +1,24 @@
+{
+  "name": "@work/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "prisma": {
+    "seed": "ts-node --project ./prisma/tsconfig.seed.json ./prisma/seed.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:dev": "prisma dev --name work-platform --port 51213 --db-port 51214 --shadow-db-port 51215",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.8.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.8.1",
+    "typescript": "^5.7.0"
+  }
+}

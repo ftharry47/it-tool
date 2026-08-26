@@ -1,0 +1,21 @@
+{
+  "name": "dev-it-enterprise",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise Work Management Platform v2 (Next.js + NestJS + Prisma)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces",
+    "prisma:generate": "prisma generate --schema=packages/database/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=packages/database/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "prisma": "^5.18.0",
+    "typescript": "^5.5.4"
+  }
+}

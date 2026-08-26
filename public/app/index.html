@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IT Support Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --sn-bg: #f8fafc;
+      --sn-card: #ffffff;
+      --sn-border: #e2e8f0;
+      --sn-text: #0f172a;
+      --sn-muted: #64748b;
+      --sn-primary: #2563eb;
+      --sn-primary-700: #1d4ed8;
+      --sn-sidebar: #0f172a;
+      --sn-sidebar-hover: #1e293b;
+    }
+    * { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up {
+      opacity: 0;
+      animation: fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .delay-1 { animation-delay: 0.08s; }
+    .delay-2 { animation-delay: 0.16s; }
+    .delay-3 { animation-delay: 0.24s; }
+    .delay-4 { animation-delay: 0.32s; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased font-[Inter]">
+  <div id="root">
+    <div class="min-h-screen flex items-center justify-center text-slate-500">
+      <div class="text-center">
+        <div class="w-8 h-8 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"></div>
+        <p class="text-sm">Loading IT Support Portal...</p>
+      </div>
+    </div>
+  </div>
+  <div id="diag" class="hidden fixed bottom-4 left-4 right-4 z-50 p-4 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-mono whitespace-pre-wrap shadow-lg"></div>
+  <script type="module" src="/app/main.js"></script>
+  <script>
+    function showErr(msg) { var d = document.getElementById('diag'); if (d) { d.textContent = msg; d.classList.remove('hidden'); } }
+    window.addEventListener('error', function(e) { showErr((e.message || e.error && e.error.message || 'Unknown error') + '\n' + (e.error && e.error.stack ? e.error.stack : '')); });
+    window.addEventListener('unhandledrejection', function(e) { showErr('Unhandled promise: ' + (e.reason && e.reason.message || e.reason)); });
+    document.querySelector('script[type="module"]').addEventListener('error', function() { showErr('Failed to load /app/main.js. Check that the server is running and the path is correct.'); });
+  </script>
+</body>
+</html>

@@ -25,7 +25,9 @@ module.exports = {
     'Phone Number', 'Location', 'Issue Type', 'Impact Area',
     'Short Description', 'Additional Description', 'Attachments',
     'Status', 'Priority', 'Critical Flag', 'Assigned To', 'Assigned Date', 'Escalation Level',
-    'Escalated To', 'Escalation Date', 'Last Updated', 'Resolved By', 'Resolved Date'
+    'Escalated To', 'Escalation Date', 'Last Updated', 'Resolved By', 'Resolved Date',
+    'Project', 'Issue Class', 'Satisfaction', 'Satisfaction Comment',
+    'Response Due', 'Resolution Due', 'SLA Status', 'SLA Breached', 'SLA Breach Time'
   ],
 
   HISTORY_HEADERS: ['Timestamp', 'Ticket ID', 'Action', 'From', 'To', 'Performed By', 'Notes'],
@@ -39,7 +41,9 @@ module.exports = {
     CREATED_DATE: 1, TICKET_ID: 2, EMPLOYEE_ID: 3, NAME: 4, EMAIL: 5, PHONE: 6, LOCATION: 7,
     ISSUE_TYPE: 8, IMPACT_AREA: 9, SHORT_DESCRIPTION: 10, ADDITIONAL_DESCRIPTION: 11, ATTACHMENTS: 12,
     STATUS: 13, PRIORITY: 14, CRITICAL_FLAG: 15, ASSIGNED_TO: 16, ASSIGNED_DATE: 17,
-    ESCALATION_LEVEL: 18, ESCALATED_TO: 19, ESCALATION_DATE: 20, LAST_UPDATED: 21, RESOLVED_BY: 22, RESOLVED_DATE: 23
+    ESCALATION_LEVEL: 18, ESCALATED_TO: 19, ESCALATION_DATE: 20, LAST_UPDATED: 21, RESOLVED_BY: 22, RESOLVED_DATE: 23,
+    PROJECT: 24, ISSUE_CLASS: 25, SATISFACTION: 26, SATISFACTION_COMMENT: 27,
+    RESPONSE_DUE: 28, RESOLUTION_DUE: 29, SLA_STATUS: 30, SLA_BREACHED: 31, SLA_BREACH_TIME: 32
   },
 
   PRIORITY_MAP: { P1: 'Critical', P2: 'High', P3: 'Medium', P4: 'Low', Critical: 'Critical', High: 'High', Medium: 'Medium', Low: 'Low', Pending: 'Pending' },

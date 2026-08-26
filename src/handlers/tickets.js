@@ -1,6 +1,9 @@
 const db = require('../db');
 const utils = require('../utils');
 const email = require('../email');
+const sms = require('../sms');
+const audit = require('../audit');
+const sla = require('../sla');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
@@ -95,8 +98,12 @@ function submitTicket(formData) {
       'Last Updated': timestamp.toISOString(),
       'Resolved By': '',
       'Resolved Date': '',
+      'Project': (formData.project || '').toString().trim(),
+      'Issue Class': (formData.issueClass || 'Incident').toString().trim(),
       'Attachments': processAttachments(formData.attachments)
     };
+
+    sla.updateTicketSLAFields(row);
 
     db.withDb(d => { d.tickets.push(row); });
 
@@ -104,14 +111,20 @@ function submitTicket(formData) {
     if (criticalFlag) historyNotes += ' [Marked as Critical]';
     if (issueType) historyNotes += ' - Issue: ' + issueType;
     if (impactArea) historyNotes += ' - Impact: ' + impactArea;
-    db.withDb(d => logHistory(d, ticketId, 'Created', '', 'Open', finalName, historyNotes));
+    db.withDb(d => {
+      logHistory(d, ticketId, 'Created', '', 'Open', finalName, historyNotes);
+      audit.appendAuditEntry(d, { action: 'TICKET_CREATED', targetType: 'Ticket', targetId: ticketId, performedBy: finalName, details: historyNotes });
+    });
+
+    const assignedTo = autoAssignTicket(ticketId, priority);
 
     email.sendTicketSubmittedEmail(ticketId, timestamp, finalName, formData, issueType, impactArea, criticalFlag).catch(() => {});
     email.sendNewTicketNotificationToIT(ticketId, timestamp, employeeLookup, finalName, formData, priority, issueType, impactArea, criticalFlag).catch(() => {});
+    sms.sendTicketSubmittedSms(row).catch(() => {});
 
     return {
-      success: true, ticketId, message: 'Ticket created successfully', timestamp: timestamp.toISOString(),
-      priority, impactArea, issueType, criticalFlag, employeeName: finalName, nameSource, employeeFound: employeeLookup.found
+      success: true, ticketId, message: 'Ticket created successfully' + (assignedTo ? ' and assigned to ' + assignedTo : ''), timestamp: timestamp.toISOString(),
+      priority, impactArea, issueType, criticalFlag, employeeName: finalName, nameSource, employeeFound: employeeLookup.found, assignedTo
     };
   } catch (error) {
     return { success: false, error: error.message || 'Failed to create ticket' };
@@ -122,12 +135,19 @@ function getDashboardStats(tickets) {
   const stats = {
     total: tickets.length, open: 0, inProgress: 0, onHold: 0, differ: 0, resolved: 0, unassigned: 0,
     highPriority: 0, critical: 0, pending: 0, markedCritical: 0, resolvedToday: 0,
+    slaOnTrack: 0, slaAtRisk: 0, slaBreached: 0,
     byLocation: {}, byAssignee: {}, byEscalationLevel: { L1: 0, L2: 0, L3: 0 },
     byIssueType: {}, byImpactArea: {}
   };
   const today = new Date().toDateString();
 
   tickets.forEach(t => {
+    sla.updateTicketSLAFields(t);
+    const slaStatus = t['SLA Status'] || 'On Track';
+    if (slaStatus === 'Breached') stats.slaBreached++;
+    else if (slaStatus === 'At Risk') stats.slaAtRisk++;
+    else if (slaStatus !== 'Resolved') stats.slaOnTrack++;
+
     const status = utils.ticketValue(t, 'Status') || 'Open';
     const location = utils.ticketValue(t, 'Location') || 'Unknown';
     const assignedTo = utils.ticketValue(t, 'Assigned To') || 'Unassigned';
@@ -159,6 +179,7 @@ function getDashboardStats(tickets) {
 }
 
 function getDashboardConfig() {
+  const d = db.readDb();
   return {
     locations: config.locations,
     issueTypes: config.issueTypes,
@@ -168,7 +189,10 @@ function getDashboardConfig() {
     escalationLevels: config.escalationLevels,
     userStatuses: ['Online', 'Offline', 'Break', 'In Meeting'],
     noteTypes: config.NOTE_TYPES,
-    version: '8.1.0',
+    projects: Array.isArray(d.projects) ? d.projects : [],
+    issueClasses: Array.isArray(d.issueTypes) ? d.issueTypes : [{ id: 'incident', name: 'Incident' }],
+    maintenance: require('./core').getMaintenanceConfig(),
+    version: '8.2.0',
     lastUpdated: new Date().toISOString()
   };
 }
@@ -234,6 +258,8 @@ function updateTicketPriority(ticketId, newPriority, updatedBy) {
     t['Priority'] = newPriority;
     t['Last Updated'] = now;
     logHistory(d, ticketId, 'Priority Changed', old, newPriority, updatedBy || 'Dashboard User', 'Priority updated by ' + (updatedBy || 'Dashboard User'));
+    sla.updateTicketSLAFields(t);
+    audit.appendAuditEntry(d, { action: 'TICKET_PRIORITY_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: updatedBy || 'Dashboard User', before: old, after: newPriority });
     return { success: true, message: 'Priority updated to ' + newPriority, ticketId, oldPriority: old, newPriority, updatedDate: now };
   });
 }
@@ -249,6 +275,7 @@ function updateIssueType(ticketId, newIssueType, updatedBy) {
     t['Issue Type'] = String(newIssueType).trim();
     t['Last Updated'] = now;
     logHistory(d, ticketId, 'Issue Type Changed', old, t['Issue Type'], updatedBy || 'Dashboard User', 'Issue Type changed by ' + (updatedBy || 'Dashboard User'));
+    audit.appendAuditEntry(d, { action: 'TICKET_FIELD_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: updatedBy || 'Dashboard User', before: old, after: t['Issue Type'], details: 'Issue Type' });
     return { success: true, message: 'Issue type updated', ticketId, oldIssueType: old, newIssueType: t['Issue Type'], updatedBy, updatedDate: now };
   });
 }
@@ -264,6 +291,7 @@ function updateImpactArea(ticketId, newImpactArea, updatedBy) {
     t['Impact Area'] = String(newImpactArea).trim();
     t['Last Updated'] = now;
     logHistory(d, ticketId, 'Impact Area Changed', old, t['Impact Area'], updatedBy || 'Dashboard User', 'Impact Area changed by ' + (updatedBy || 'Dashboard User'));
+    audit.appendAuditEntry(d, { action: 'TICKET_FIELD_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: updatedBy || 'Dashboard User', before: old, after: t['Impact Area'], details: 'Impact Area' });
     return { success: true, message: 'Impact area updated', ticketId, oldImpactArea: old, newImpactArea: t['Impact Area'], updatedBy, updatedDate: now };
   });
 }
@@ -281,6 +309,7 @@ function updatePhoneNumber(ticketId, newPhone, updatedBy) {
     t['Phone Number'] = clean;
     t['Last Updated'] = now;
     logHistory(d, ticketId, 'Phone Number Changed', old, clean, updatedBy || 'Dashboard User', 'Phone Number changed by ' + (updatedBy || 'Dashboard User'));
+    audit.appendAuditEntry(d, { action: 'TICKET_FIELD_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: updatedBy || 'Dashboard User', before: old, after: clean, details: 'Phone Number' });
     return { success: true, message: 'Phone number updated', ticketId, oldPhone: old, newPhone: clean, updatedBy, updatedDate: now };
   });
 }
@@ -296,6 +325,7 @@ function updateLocation(ticketId, newLocation, updatedBy) {
     t['Location'] = String(newLocation).trim();
     t['Last Updated'] = now;
     logHistory(d, ticketId, 'Location Changed', old, t['Location'], updatedBy || 'Dashboard User', 'Location changed by ' + (updatedBy || 'Dashboard User'));
+    audit.appendAuditEntry(d, { action: 'TICKET_FIELD_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: updatedBy || 'Dashboard User', before: old, after: t['Location'], details: 'Location' });
     return { success: true, message: 'Location updated', ticketId, oldLocation: old, newLocation: t['Location'], updatedBy, updatedDate: now };
   });
 }
@@ -309,8 +339,10 @@ function addTicketNote(ticketId, noteText, addedBy, noteType) {
     const t = utils.findTicket(d, ticketId);
     if (!t) return { success: false, error: 'Ticket not found' };
     const now = new Date().toISOString();
-    d.notes.push({ timestamp: now, ticketId: String(ticketId), note: String(noteText).trim(), addedBy: String(addedBy).trim(), noteType: validType });
+    const noteRecord = { timestamp: now, ticketId: String(ticketId), note: String(noteText).trim(), addedBy: String(addedBy).trim(), noteType: validType };
+    d.notes.push(noteRecord);
     t['Last Updated'] = now;
+    audit.appendAuditEntry(d, { action: 'NOTE_ADDED', targetType: 'Note', targetId: ticketId, performedBy: String(addedBy).trim(), details: validType + ': ' + noteRecord.note });
     return { success: true, message: 'Note added successfully', ticketId, noteType: validType, addedBy: String(addedBy).trim(), timestamp: now };
   });
 }
@@ -332,7 +364,9 @@ function deleteTicketNote(ticketId, timestamp, deletedBy) {
   return db.withDb(d => {
     const idx = d.notes.findIndex(n => String(n.ticketId).trim() === String(ticketId).trim() && String(n.timestamp) === String(timestamp));
     if (idx === -1) return { success: false, error: 'Note not found' };
+    const deleted = d.notes[idx];
     d.notes.splice(idx, 1);
+    audit.appendAuditEntry(d, { action: 'NOTE_DELETED', targetType: 'Note', targetId: ticketId, performedBy: deletedBy || 'Dashboard User', details: (deleted.noteType || 'General') + ': ' + deleted.note });
     return { success: true, message: 'Note deleted successfully' };
   });
 }
@@ -374,35 +408,32 @@ function searchTickets(searchType, searchValue) {
   return { success: true, tickets: matched.slice(0, 50), count: matched.length };
 }
 
-function updateTicketStatus(ticketId, newStatus, resolvedBy) {
+function updateTicketStatus(ticketId, newStatus, resolvedBy, user) {
   if (!ticketId) return { success: false, error: 'Ticket ID is required' };
-  if (!newStatus || !['Open', 'In Progress', 'On Hold', 'Differ', 'Resolved'].includes(newStatus)) return { success: false, error: 'Invalid status' };
-  return db.withDb(d => {
+  if (!newStatus) return { success: false, error: 'New status is required' };
+
+  const workflow = require('../workflow');
+  const role = user && user.role ? user.role : (resolvedBy ? 'L1' : 'Viewer');
+  const performedBy = (user && (user.displayName || user.email)) || resolvedBy || 'Dashboard User';
+  const result = workflow.transitionTicket(ticketId, newStatus, role, performedBy);
+  if (!result.success) return result;
+
+  db.withDb(d => {
     const t = utils.findTicket(d, ticketId);
-    if (!t) return { success: false, error: 'Ticket not found' };
-    const now = new Date().toISOString();
-    const oldStatus = t['Status'] || 'Open';
+    if (!t) return;
     const assignedTo = t['Assigned To'] || '';
-    t['Status'] = newStatus;
-    t['Last Updated'] = now;
-    if (newStatus === 'Resolved') {
-      const resolver = resolvedBy || assignedTo || 'IT Support';
-      t['Resolved By'] = resolver;
-      t['Resolved Date'] = now;
-      logHistory(d, ticketId, 'Resolved', oldStatus, 'Resolved', resolver, 'Ticket resolved by ' + resolver);
-    } else if (oldStatus === 'Resolved') {
-      t['Resolved By'] = '';
-      t['Resolved Date'] = '';
-      logHistory(d, ticketId, 'Reopened', 'Resolved', newStatus, resolvedBy || 'Dashboard User', 'Ticket reopened by ' + (resolvedBy || 'Dashboard User'));
-    } else {
-      logHistory(d, ticketId, 'Status Changed', oldStatus, newStatus, resolvedBy || 'Dashboard User', 'Status updated by ' + (resolvedBy || 'Dashboard User'));
-    }
+    const oldStatus = result.oldStatus;
     if (oldStatus !== newStatus && t['Email Address']) {
-      const ticketInfo = { 'Ticket ID': t['Ticket ID'], 'Short Description': t['Short Description'], 'Location': t['Location'], 'Phone Number': t['Phone Number'], 'Issue Type': t['Issue Type'], 'Assigned To': assignedTo, 'Resolved By': newStatus === 'Resolved' ? (resolvedBy || assignedTo) : '', 'Status': newStatus };
+      const ticketInfo = { 'Ticket ID': t['Ticket ID'], 'Short Description': t['Short Description'], 'Location': t['Location'], 'Phone Number': t['Phone Number'], 'Issue Type': t['Issue Type'], 'Assigned To': assignedTo, 'Resolved By': newStatus === 'Resolved' ? performedBy : '', 'Status': newStatus };
       email.sendStatusChangeEmail(ticketId, t['Name'], t['Email Address'], oldStatus, newStatus, ticketInfo).catch(() => {});
+      sms.sendTicketStatusChangedSms(t, oldStatus, newStatus).catch(() => {});
+      sla.updateTicketSLAFields(t);
+      audit.appendAuditEntry(d, { action: 'TICKET_STATUS_CHANGED', targetType: 'Ticket', targetId: ticketId, performedBy: performedBy || 'Dashboard User', before: oldStatus, after: newStatus });
+      if (newStatus === 'Resolved') email.sendCSATEmail(ticketId, t).catch(() => {});
     }
-    return { success: true, message: 'Status updated to ' + newStatus, ticketId, newStatus, updatedDate: now };
   });
+
+  return { ...result, message: 'Status updated to ' + newStatus, ticketId, newStatus };
 }
 
 function assignTicket(ticketId, assignedTo, assignedBy, priority) {
@@ -426,9 +457,12 @@ function assignTicket(ticketId, assignedTo, assignedBy, priority) {
     if (prioritySet) historyNotes += ' with priority ' + priority;
     logHistory(d, ticketId, actionType, previousAssignee, assignedTo, assignedBy || 'Dashboard User', historyNotes);
     if (prioritySet && oldPriority !== priority) logHistory(d, ticketId, 'Priority Changed', oldPriority, priority, assignedBy || 'Dashboard User', 'Priority set to ' + priority + ' by ' + (assignedBy || 'Dashboard User'));
+    sla.updateTicketSLAFields(t);
+    audit.appendAuditEntry(d, { action: actionType === 'Reassigned' ? 'TICKET_REASSIGNED' : 'TICKET_ASSIGNED', targetType: 'Ticket', targetId: ticketId, performedBy: assignedBy || 'Dashboard User', before: previousAssignee, after: assignedTo, details: 'Priority: ' + t['Priority'] });
 
     email.sendTicketAssignedEmailToUser(ticketId, t['Name'], assignedTo, t).catch(() => {});
     email.sendTicketAssignedEmailToStaff(ticketId, assignedTo, assignedBy || 'Dashboard', t).catch(() => {});
+    sms.sendTicketAssignedSms(t, assignedTo).catch(() => {});
 
     const actionLabel = (actionType === 'Reassigned') ? 'reassigned to ' : 'assigned to ';
     return { success: true, message: 'Ticket ' + actionLabel + assignedTo + (prioritySet ? ' with priority ' + priority : ''), ticketId, assignedTo, priority: prioritySet ? priority : oldPriority, assignedDate: now };
@@ -454,10 +488,13 @@ function escalateTicket(ticketId, escalateTo, escalationLevel, escalatedBy, reas
     let historyNotes = 'Escalated by ' + (escalatedBy || 'Dashboard User');
     if (reason) historyNotes += ' - Reason: ' + reason;
     logHistory(d, ticketId, 'Escalated', previousLevel + ' - ' + previousAssignee, escalationLevel + ' - ' + escalateTo, escalatedBy || 'Dashboard User', historyNotes);
+    sla.updateTicketSLAFields(t);
+    audit.appendAuditEntry(d, { action: 'TICKET_ESCALATED', targetType: 'Ticket', targetId: ticketId, performedBy: escalatedBy || 'Dashboard User', before: previousLevel + ' - ' + previousAssignee, after: escalationLevel + ' - ' + escalateTo, details: reason ? 'Reason: ' + reason : '' });
 
     email.sendTicketEscalatedEmailToUser(ticketId, t['Name'], escalateTo, escalationLevel, reason, t).catch(() => {});
     email.sendTicketEscalatedEmailToStaff(ticketId, escalateTo, escalationLevel, escalatedBy || 'Dashboard', reason, t).catch(() => {});
     if (t['Priority'] === 'Critical' || t['Critical Flag'] === 'true') email.sendCriticalEscalationNotification(ticketId, escalateTo, escalationLevel, reason, t).catch(() => {});
+    sms.sendTicketEscalatedSms(t, escalateTo, escalationLevel).catch(() => {});
 
     return { success: true, message: 'Ticket escalated to ' + escalationLevel + ' - ' + escalateTo, ticketId, level: escalationLevel, escalatedTo: escalateTo, escalationDate: now };
   });
@@ -476,14 +513,36 @@ function getStaffWorkload() {
 
 function autoAssignTicket(ticketId, priority) {
   if (!utils.getAutoAssignSetting()) return null;
-  const itStaff = getITStaffList().filter(s => s.level === 'L1' && ['Online', 'Active'].includes(s.status));
+  const itStaff = getITStaffList().filter(s => s.isAvailable);
   if (itStaff.length === 0) return null;
   const workload = getStaffWorkload();
-  let selected = null, lowest = Infinity;
-  itStaff.forEach(s => { const load = workload[s.name] || 0; if (load < lowest) { lowest = load; selected = s; } });
-  if (!selected) return null;
+  const levelRank = { L1: 1, L2: 2, L3: 3 };
+  itStaff.sort((a, b) => {
+    const loadA = workload[a.name] || 0;
+    const loadB = workload[b.name] || 0;
+    if (loadA !== loadB) return loadA - loadB;
+    return (levelRank[a.level] || 9) - (levelRank[b.level] || 9);
+  });
+  const selected = itStaff[0];
   const result = assignTicket(ticketId, selected.name, 'Auto-Assignment', priority || null);
   return result.success ? selected.name : null;
+}
+
+function recordSatisfaction(ticketId, rating, comment) {
+  if (!ticketId) return { success: false, error: 'Ticket ID is required' };
+  const numRating = Number(rating);
+  if (isNaN(numRating) || numRating < 1 || numRating > 5) return { success: false, error: 'Rating must be between 1 and 5' };
+  return db.withDb(d => {
+    const t = utils.findTicket(d, ticketId);
+    if (!t) return { success: false, error: 'Ticket not found' };
+    const now = new Date().toISOString();
+    t['Satisfaction'] = String(numRating);
+    t['Satisfaction Comment'] = String(comment || '').trim();
+    t['Last Updated'] = now;
+    logHistory(d, ticketId, 'Satisfaction Recorded', '', String(numRating), 'User', 'Satisfaction rating recorded: ' + numRating + (comment ? ' - ' + comment : ''));
+    audit.appendAuditEntry(d, { action: 'SATISFACTION_RECORDED', targetType: 'Ticket', targetId: ticketId, performedBy: 'User', before: '', after: String(numRating), details: comment ? 'Comment: ' + comment : '' });
+    return { success: true, message: 'Thank you for your feedback', ticketId, rating: numRating, comment };
+  });
 }
 
 module.exports = {
@@ -492,5 +551,6 @@ module.exports = {
   updateTicketPriority, updateIssueType, updateImpactArea, updatePhoneNumber, updateLocation,
   addTicketNote, getTicketNotes, deleteTicketNote, getNoteTypes,
   getTicketHistory, getTicketTimeline, searchTickets,
-  updateTicketStatus, assignTicket, escalateTicket, getStaffWorkload, autoAssignTicket, logHistory
+  updateTicketStatus, assignTicket, escalateTicket, getStaffWorkload, autoAssignTicket, logHistory,
+  recordSatisfaction
 };

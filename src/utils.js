@@ -1,5 +1,6 @@
 const config = require('./config');
 const db = require('./db');
+const audit = require('./audit');
 
 function readSetting(d, name) {
   const s = d.settings[name];
@@ -11,11 +12,10 @@ function readSetting(d, name) {
 }
 
 function writeSetting(d, name, value, updatedBy) {
-  d.settings[name] = {
-    value: String(value),
-    lastUpdated: new Date().toISOString(),
-    updatedBy: updatedBy || 'System'
-  };
+  if (!d.settings) d.settings = {};
+  const oldValue = d.settings[name] ? String(d.settings[name].value) : '';
+  d.settings[name] = { value: String(value), lastUpdated: new Date().toISOString(), updatedBy: String(updatedBy || 'System') };
+  audit.appendAuditEntry(d, { action: 'SETTING_CHANGED', targetType: 'Setting', targetId: name, performedBy: String(updatedBy || 'System'), before: oldValue, after: String(value) });
   return { success: true, message: 'Setting updated' };
 }
 

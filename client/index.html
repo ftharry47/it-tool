@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <title>IT Support Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <style>
+      #maintenance-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 100000; background: #f59e0b; color: #fff; padding: 0.6rem 1rem; text-align: center; font-family: 'Plus Jakarta Sans', Inter, sans-serif; font-size: 14px; font-weight: 500; box-shadow: 0 2px 6px rgba(0,0,0,.15); display: none; }
+    </style>
+    <div id="maintenance-banner"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        const banner = document.getElementById('maintenance-banner');
+        function applyMaintenance(data) {
+          if (!data || !data.maintenance || !data.maintenance.enabled) { banner.style.display = 'none'; return; }
+          const title = data.maintenance.title || 'Scheduled Maintenance';
+          const message = data.maintenance.message || '';
+          banner.style.display = 'block';
+          banner.textContent = title + (message ? ' — ' + message : '');
+          document.body.style.paddingTop = banner.offsetHeight + 'px';
+        }
+        fetch('/status').then(r => r.ok ? r.json() : null).then(applyMaintenance).catch(function() {});
+      })();
+    </script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
+        });
+      }
+    </script>
+  </body>
+</html>

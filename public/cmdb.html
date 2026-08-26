@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asset Inventory - IT Support</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', sans-serif; } body { background: #f8fafc; }</style>
+</head>
+<body class="min-h-screen p-6">
+  <main class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-8">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="6" rx="2"/><path d="M5 7v14"/><path d="M19 7v14"/><rect x="7" y="11" width="10" height="7" rx="1"/></svg>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900">Asset Inventory (CMDB)</h1>
+      </div>
+      <a href="/admin" class="text-blue-700 hover:underline text-sm font-medium">Admin</a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
+      <div class="flex flex-col md:flex-row gap-4">
+        <input id="search" type="text" placeholder="Search assets by name, id, type or owner..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
+        <button id="searchBtn" class="bg-blue-700 hover:bg-blue-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm">Search</button>
+        <button id="newBtn" class="bg-green-700 hover:bg-green-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm">New Asset</button>
+      </div>
+    </div>
+
+    <div id="form" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+      <h2 class="text-lg font-semibold text-slate-900 mb-4" id="formTitle">New Asset</h2>
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Name</label><input id="fName" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Type</label><select id="fType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option>Workstation</option><option>Server</option><option>Network</option><option>Application</option><option>Service</option><option>Peripheral</option></select></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Status</label><select id="fStatus" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"><option>Operational</option><option>Maintenance</option><option>Retired</option><option>Decommissioned</option></select></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Owner</label><input id="fOwner" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Location</label><input id="fLocation" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Purchase Date</label><input id="fPurchase" type="date" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Warranty Expiry</label><input id="fWarranty" type="date" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div>
+      </div>
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-slate-500 mb-1">Configuration (JSON)</label>
+        <textarea id="fConfig" rows="4" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono" placeholder='{"serial":"...","model":"..."}'></textarea>
+      </div>
+      <div class="flex gap-3">
+        <button id="saveBtn" class="bg-blue-700 hover:bg-blue-800 text-white font-medium px-5 py-2 rounded-xl text-sm">Save</button>
+        <button id="cancelBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-5 py-2 rounded-xl text-sm">Cancel</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-slate-50 text-slate-600 font-semibold">
+          <tr><th class="px-5 py-3">ID</th><th class="px-5 py-3">Name</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Owner</th><th class="px-5 py-3">Location</th><th class="px-5 py-3">Linked Tickets</th><th class="px-5 py-3"></th></tr>
+        </thead>
+        <tbody id="tbody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+      </table>
+      <div id="empty" class="hidden p-8 text-center text-slate-500">No assets found.</div>
+    </div>
+  </main>
+
+  <script>
+    let editingId = null;
+
+    async function callApi(fn, args) {
+      const res = await fetch('/api/' + fn, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) });
+      return res.json();
+    }
+
+    async function load(query) {
+      const result = await callApi('getCMDBItems', [query || '']);
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      const empty = document.getElementById('empty');
+      if (!result.success || !result.items.length) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+      for (const ci of result.items) {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+        tr.innerHTML = `<td class="px-5 py-3 font-medium">${ci.id}</td>
+          <td class="px-5 py-3">${ci.name}</td>
+          <td class="px-5 py-3">${ci.type}</td>
+          <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 rounded-md text-xs font-medium ${ci.status === 'Operational' ? 'bg-green-100 text-green-700' : ci.status === 'Maintenance' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}">${ci.status}</span></td>
+          <td class="px-5 py-3">${ci.owner || '-'}</td>
+          <td class="px-5 py-3">${ci.location || '-'}</td>
+          <td class="px-5 py-3">${(ci.linkedTickets || []).length}</td>
+          <td class="px-5 py-3"><button data-id="${ci.id}" class="editBtn text-blue-700 hover:underline mr-3">Edit</button><button data-id="${ci.id}" class="delBtn text-red-600 hover:underline">Delete</button></td>`;
+        tbody.appendChild(tr);
+      }
+      tbody.querySelectorAll('.editBtn').forEach(b => b.addEventListener('click', e => editAsset(e.target.dataset.id)));
+      tbody.querySelectorAll('.delBtn').forEach(b => b.addEventListener('click', e => deleteAsset(e.target.dataset.id)));
+    }
+
+    function showForm(id) {
+      editingId = id || null;
+      document.getElementById('formTitle').textContent = id ? 'Edit Asset' : 'New Asset';
+      if (!id) {
+        document.getElementById('fName').value = '';
+        document.getElementById('fType').value = 'Workstation';
+        document.getElementById('fStatus').value = 'Operational';
+        document.getElementById('fOwner').value = '';
+        document.getElementById('fLocation').value = '';
+        document.getElementById('fPurchase').value = '';
+        document.getElementById('fWarranty').value = '';
+        document.getElementById('fConfig').value = '';
+      }
+      document.getElementById('form').classList.remove('hidden');
+    }
+
+    async function editAsset(id) {
+      const result = await callApi('getCMDBItemById', [id]);
+      if (!result.success) return;
+      const ci = result.item;
+      showForm(id);
+      document.getElementById('fName').value = ci.name;
+      document.getElementById('fType').value = ci.type;
+      document.getElementById('fStatus').value = ci.status;
+      document.getElementById('fOwner').value = ci.owner || '';
+      document.getElementById('fLocation').value = ci.location || '';
+      document.getElementById('fPurchase').value = ci.purchaseDate ? ci.purchaseDate.slice(0, 10) : '';
+      document.getElementById('fWarranty').value = ci.warrantyExpiry ? ci.warrantyExpiry.slice(0, 10) : '';
+      document.getElementById('fConfig').value = JSON.stringify(ci.configuration || {}, null, 2);
+    }
+
+    async function saveAsset() {
+      const payload = {
+        name: document.getElementById('fName').value,
+        type: document.getElementById('fType').value,
+        status: document.getElementById('fStatus').value,
+        owner: document.getElementById('fOwner').value,
+        location: document.getElementById('fLocation').value,
+        purchaseDate: document.getElementById('fPurchase').value,
+        warrantyExpiry: document.getElementById('fWarranty').value,
+        configuration: {}
+      };
+      try { payload.configuration = JSON.parse(document.getElementById('fConfig').value || '{}'); } catch {}
+      if (!payload.name) return alert('Name is required');
+      if (editingId) await callApi('updateCMDBItem', [editingId, payload]);
+      else await callApi('createCMDBItem', [payload]);
+      document.getElementById('form').classList.add('hidden');
+      load(document.getElementById('search').value);
+    }
+
+    async function deleteAsset(id) {
+      if (!confirm('Delete asset ' + id + '?')) return;
+      await callApi('deleteCMDBItem', [id]);
+      load(document.getElementById('search').value);
+    }
+
+    document.getElementById('newBtn').addEventListener('click', () => showForm());
+    document.getElementById('saveBtn').addEventListener('click', saveAsset);
+    document.getElementById('cancelBtn').addEventListener('click', () => document.getElementById('form').classList.add('hidden'));
+    document.getElementById('searchBtn').addEventListener('click', () => load(document.getElementById('search').value));
+    document.getElementById('search').addEventListener('keydown', e => { if (e.key === 'Enter') load(e.target.value); });
+
+    load();
+  </script>
+</body>
+</html>

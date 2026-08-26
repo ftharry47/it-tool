@@ -5,13 +5,19 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "node app.js"
+    "dev": "node app.js",
+    "build:client": "node build-client.js",
+    "build": "node build-client.js",
+    "test": "node scripts/smoke-test.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
+  "optionalDependencies": {
+    "twilio": "^5.0.0"
+  },
   "dependencies": {
     "express": "^4.19.2",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^9.0.5"
   }
 }

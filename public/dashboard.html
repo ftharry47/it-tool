@@ -7,24 +7,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     <style>
-        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; }
-        .font-heading { font-family: 'Space Grotesk', sans-serif; }
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        .font-heading { font-family: 'Inter', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
         ::-webkit-scrollbar { width: 0px; height: 0px; display: none; }
         * { scrollbar-width: none; -ms-overflow-style: none; }
 
-        :root, [data-theme="dark"] {
-            --bg-primary: #09090b; --bg-secondary: #18181b; --bg-tertiary: #27272a;
-            --text-primary: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
-            --border: rgba(255,255,255,0.1); --accent: #e4e4e7;
-            --card-bg: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
-            --card-hover: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%);
-            --input-bg: rgba(255,255,255,0.08); --success: #22c55e; --warning: #f59e0b;
-            --danger: #ef4444; --info: #06b6d4; --purple: #a855f7;
+        :root {
+            --bg-primary: #f8fafc; --bg-secondary: #ffffff; --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --border: #e2e8f0; --accent: #2563eb;
+            --card-bg: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            --card-hover: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+            --input-bg: #ffffff; --success: #16a34a; --warning: #f59e0b;
+            --danger: #ef4444; --info: #2563eb; --purple: #7c3aed;
         }
 
         /* Dark theme only */
@@ -412,9 +412,91 @@
     [data-theme="light"] .btn-primary {
       box-shadow: 0 4px 14px rgba(30, 64, 175, 0.25);
     }
+    /* ServiceNow/Jira light theme overrides */
+    [data-theme="light"] .login-card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 25px 50px -12px rgba(15,23,42,0.15); }
+    [data-theme="light"] .login-input { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
+    [data-theme="light"] .login-input::placeholder { color: #94a3b8; }
+    [data-theme="light"] .login-input:focus { border-color: #2563eb; background: #ffffff; box-shadow: 0 0 0 4px rgba(37,99,235,0.1); }
+    [data-theme="light"] .login-btn { background: #2563eb; color: #ffffff; }
+    [data-theme="light"] .login-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(37,99,235,0.25); }
+    [data-theme="light"] .gradient-text { background: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #0f172a 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    [data-theme="light"] .modal-overlay { background: rgba(15,23,42,0.5); backdrop-filter: blur(8px); }
+    [data-theme="light"] .modal-content { background: #ffffff; }
+    [data-theme="light"] .modal-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    [data-theme="light"] .modal-footer { background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    [data-theme="light"] .modal-close { background: #fee2e2; border-color: #fca5a5; color: #ef4444; }
+    [data-theme="light"] .modal-close:hover { background: #fecaca; border-color: #ef4444; box-shadow: 0 0 20px rgba(239,68,68,0.15); }
+    [data-theme="light"] .confirm-overlay { background: rgba(15,23,42,0.5); }
+    [data-theme="light"] .confirm-dialog { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 20px 60px rgba(15,23,42,0.15); }
+    [data-theme="light"] .confirm-dialog-icon { background: rgba(245,158,11,0.1) !important; }
+    [data-theme="light"] .confirm-dialog-icon i { color: #d97706 !important; }
+    [data-theme="light"] .confirm-dialog-title { color: #0f172a; }
+    [data-theme="light"] .notes-section, [data-theme="light"] .timeline-section { background: #ffffff; }
+    [data-theme="light"] .note-item { background: #f8fafc; }
+    [data-theme="light"] .note-item:hover { background: #f1f5f9; }
+    [data-theme="light"] .add-note-form textarea { background: #ffffff; border-color: #e2e8f0; }
+    [data-theme="light"] .add-note-form textarea:focus { border-color: #a855f7; }
+    [data-theme="light"] .timeline-icon { color: #ffffff !important; }
+    [data-theme="light"] .timeline-icon i { color: #ffffff !important; }
+    [data-theme="light"] .internal-badge { color: #b91c1c; }
+    [data-theme="light"] .notes-count { color: #92400e; }
+    [data-theme="light"] .badge-open { color: #92400e; }
+    [data-theme="light"] .badge-progress { color: #6b21a8; }
+    [data-theme="light"] .badge-resolved { color: #166534; }
+    [data-theme="light"] .badge-critical { color: #991b1b; }
+    [data-theme="light"] .badge-high { color: #92400e; }
+    [data-theme="light"] .badge-medium { color: #475569; }
+    [data-theme="light"] .badge-low { color: #166534; }
+    [data-theme="light"] .badge-pending { color: #475569; }
+    [data-theme="light"] .badge-onhold { color: #92400e; }
+    [data-theme="light"] .badge-differ { color: #1e40af; }
+    [data-theme="light"] .badge-l1 { color: #6b21a8; }
+    [data-theme="light"] .badge-l2 { color: #92400e; }
+    [data-theme="light"] .badge-l3 { color: #991b1b; }
+    [data-theme="light"] .badge-admin { color: #1e40af; }
+    [data-theme="light"] .badge-viewer { color: #475569; }
+    [data-theme="light"] .badge-note-workdone { color: #166534; }
+    [data-theme="light"] .badge-note-update { color: #1e40af; }
+    [data-theme="light"] .badge-note-investigation { color: #6b21a8; }
+    [data-theme="light"] .badge-note-solution { color: #166534; }
+    [data-theme="light"] .badge-note-followup { color: #92400e; }
+    [data-theme="light"] .badge-note-general { color: #475569; }
+    [data-theme="light"] .priority-dropdown select.priority-critical { color: #991b1b !important; }
+    [data-theme="light"] .priority-dropdown select.priority-high { color: #92400e !important; }
+    [data-theme="light"] .priority-dropdown select.priority-medium { color: #1e40af !important; }
+    [data-theme="light"] .priority-dropdown select.priority-low { color: #166534 !important; }
+    [data-theme="light"] .priority-dropdown select.priority-pending { color: #475569 !important; }
+    [data-theme="light"] .btn-primary { background: #2563eb; color: #ffffff; }
+    [data-theme="light"] .btn-primary:hover { box-shadow: 0 8px 24px rgba(37,99,235,0.25); }
+    [data-theme="light"] .btn-secondary { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+    [data-theme="light"] .btn-secondary:hover { background: #f1f5f9; }
+    [data-theme="light"] .btn-success { background: #16a34a; color: #ffffff; }
+    [data-theme="light"] .btn-purple { background: #7c3aed; color: #ffffff; }
+    [data-theme="light"] .btn-info { background: #2563eb; color: #ffffff; }
+    [data-theme="light"] .btn-warning { background: #f59e0b; color: #0f172a; }
+    [data-theme="light"] .btn-danger { background: #ef4444; color: #ffffff; }
+    [data-theme="light"] .format-btn { background: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+    [data-theme="light"] .format-btn:hover { background: #f1f5f9; }
+    [data-theme="light"] .glass-card:hover { border-color: rgba(15,23,42,0.15); }
+    [data-theme="light"] .metric-card:hover { border-color: rgba(15,23,42,0.2); }
+    [data-theme="light"] .staff-item { background: #ffffff; }
+    [data-theme="light"] .staff-item:hover { background: #f1f5f9; }
+    [data-theme="light"] th { background: #f1f5f9; }
+    [data-theme="light"] tr:hover td { background: #f8fafc; }
+    [data-theme="light"] .team-table-row:hover td { background: #f1f5f9; }
+    [data-theme="light"] .progress-bar { background: #e2e8f0; }
+    [data-theme="light"] .toast { background: #ffffff; border-color: #e2e8f0; box-shadow: 0 20px 40px rgba(15,23,42,0.1); }
+    [data-theme="light"] .ai-coming-soon-box p:first-child { color: #4f46e5 !important; }
+    [data-theme="light"] .toggle-switch-new { background: #cbd5e1; border-color: #94a3b8; }
+    [data-theme="light"] .toggle-switch-new.active { background: #22c55e; border-color: rgba(34,197,94,0.5); }
+    [data-theme="light"] .toggle-label-off { color: rgba(15,23,42,0.6); }
+    [data-theme="light"] .toggle-label-on { color: #ffffff; }
+    [data-theme="light"] .settings-card, [data-theme="light"] .report-card, [data-theme="light"] .team-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; }
+    [data-theme="light"] select { background-color: #ffffff !important; color: #0f172a !important; border-color: #e2e8f0 !important; }
+    [data-theme="light"] select:focus { border-color: #2563eb !important; }
     </style>
 </head>
-<body data-theme="dark">
+<body data-theme="light">
     <div id="loginPage" class="login-container">
         <div class="login-bg-pattern"></div>
         <div class="login-glow" style="top:-200px;left:-200px;background:radial-gradient(circle,rgba(168,168,168,0.15),transparent);"></div>
@@ -425,29 +507,29 @@
 
         <div class="login-left">
             <div class="mb-8">
-                <div class="flex items-center gap-4 mb-8"><span class="font-heading font-bold text-4xl text-white">AlignedCardio</span></div>
-                <h1 class="font-heading font-bold text-5xl md:text-6xl mb-6"><span class="text-white">Centralized</span><br><span class="gradient-text">Service Management</span></h1>
-                <p class="text-zinc-400 text-lg max-w-md">Streamline your IT operations with our comprehensive ticket management and support platform.</p>
+                <div class="flex items-center gap-4 mb-8"><span class="font-heading font-bold text-4xl text-slate-900">AlignedCardio</span></div>
+                <h1 class="font-heading font-bold text-5xl md:text-6xl mb-6"><span class="text-slate-900">Centralized</span><br><span class="gradient-text">Service Management</span></h1>
+                <p class="text-slate-600 text-lg max-w-md">Streamline your IT operations with our comprehensive ticket management and support platform.</p>
             </div>
             <div class="grid grid-cols-2 gap-4 max-w-lg">
-                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-robot-line text-2xl icon-gradient-green"></i></div><h3 class="font-heading font-semibold text-white mb-2">Smart Automation</h3><p class="text-sm text-zinc-500">AI-powered workflows automate repetitive tasks efficiently</p></div>
-                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-timer-flash-line text-2xl icon-gradient-blue"></i></div><h3 class="font-heading font-semibold text-white mb-2">Real-time Updates</h3><p class="text-sm text-zinc-500">Live ticket tracking and instant notifications</p></div>
-                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-team-line text-2xl icon-gradient-purple"></i></div><h3 class="font-heading font-semibold text-white mb-2">Team Management</h3><p class="text-sm text-zinc-500">Efficient workload distribution and performance tracking</p></div>
-                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 flex items-center justify-center mb-4 border border-zinc-700/30"><i class="ri-bar-chart-grouped-line text-2xl icon-gradient-orange"></i></div><h3 class="font-heading font-semibold text-white mb-2">Analytics</h3><p class="text-sm text-zinc-500">Comprehensive reports and SLA compliance metrics</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center mb-4"><i class="ri-robot-line text-2xl icon-gradient-green"></i></div><h3 class="font-heading font-semibold text-slate-900 mb-2">Smart Automation</h3><p class="text-sm text-slate-600">AI-powered workflows automate repetitive tasks efficiently</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center mb-4"><i class="ri-timer-flash-line text-2xl icon-gradient-blue"></i></div><h3 class="font-heading font-semibold text-slate-900 mb-2">Real-time Updates</h3><p class="text-sm text-slate-600">Live ticket tracking and instant notifications</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center mb-4"><i class="ri-team-line text-2xl icon-gradient-purple"></i></div><h3 class="font-heading font-semibold text-slate-900 mb-2">Team Management</h3><p class="text-sm text-slate-600">Efficient workload distribution and performance tracking</p></div>
+                <div class="feature-card"><div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center mb-4"><i class="ri-bar-chart-grouped-line text-2xl icon-gradient-orange"></i></div><h3 class="font-heading font-semibold text-slate-900 mb-2">Analytics</h3><p class="text-sm text-slate-600">Comprehensive reports and SLA compliance metrics</p></div>
             </div>
         </div>
 
         <div class="login-right">
             <div class="login-card">
-                <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-white mb-3">Welcome Back</h2><p class="text-zinc-300 text-base font-medium">Sign in with your Email ID</p></div>
+                <div class="text-center mb-10"><h2 class="font-heading font-bold text-3xl text-slate-900 mb-3">Welcome Back</h2><p class="text-slate-700 text-base font-medium">Sign in with your Email ID</p></div>
                 <form id="loginForm">
-                    <div id="loginError" class="hidden mb-5 p-4 rounded-xl bg-red-500/15 border border-red-500/30"><p id="loginErrorText" class="text-red-400 text-sm text-center font-medium">Invalid credentials</p></div>
+                    <div id="loginError" class="hidden mb-5 p-4 rounded-xl bg-red-500/15 border border-red-500/30"><p id="loginErrorText" class="text-red-600 text-sm text-center font-medium">Invalid credentials</p></div>
                     <div class="mb-5 relative"><i class="ri-user-3-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="email" id="employeeId" class="login-input" placeholder="Email ID" required autocomplete="off"><p id="employeeIdHint" class="input-hint"></p></div>
-                    <div class="mb-5 relative"><i class="ri-lock-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="password" id="password" class="login-input" placeholder="Password" required autocomplete="off" maxlength="50"><button type="button" class="absolute right-5 top-1/2 -translate-y-1/2 login-icon-secondary hover:text-white transition-colors" onclick="togglePassword()"><i id="pwdToggleIcon" class="ri-eye-line text-xl"></i></button><p id="passwordHint" class="input-hint"></p></div>
+                    <div class="mb-5 relative"><i class="ri-lock-line absolute left-5 top-1/2 -translate-y-1/2 login-icon-secondary text-xl"></i><input type="password" id="password" class="login-input" placeholder="Password" required autocomplete="off" maxlength="50"><button type="button" class="absolute right-5 top-1/2 -translate-y-1/2 login-icon-secondary hover:text-slate-900 transition-colors" onclick="togglePassword()"><i id="pwdToggleIcon" class="ri-eye-line text-xl"></i></button><p id="passwordHint" class="input-hint"></p></div>
                     <div class="remember-me"><input type="checkbox" id="rememberMe"><label for="rememberMe">Remember my credentials</label></div>
                     <button type="submit" id="loginBtn" class="login-btn"><span>Sign In</span><i class="ri-arrow-right-line text-lg"></i></button>
                 </form>
-                <p class="text-center text-sm text-zinc-400 mt-10 font-medium">© 2025 Srihari. All Rights Reserved.</p>
+                <p class="text-center text-sm text-slate-600 mt-10 font-medium">© 2025 Srihari. All Rights Reserved.</p>
             </div>
         </div>
     </div>
@@ -466,6 +548,15 @@
                 <div class="nav-item" data-section="analytics" onclick="handleNavClick('analytics')"><i class="ri-bar-chart-grouped-line text-xl"></i><span>Analytics</span></div>
                 <div class="nav-item" data-section="reports" onclick="handleNavClick('reports')"><i class="ri-file-chart-line text-xl"></i><span>Reports</span></div>
                 <div class="nav-item" data-section="settings" onclick="handleNavClick('settings')"><i class="ri-settings-3-line text-xl"></i><span>Settings</span></div>
+                <div class="px-4 py-2 mt-4"><p class="px-4 py-2 text-xs font-semibold uppercase tracking-wider" style="color:var(--text-muted)">Admin Pages</p></div>
+                <div class="nav-item" onclick="window.location.href='/analytics'"><i class="ri-bar-chart-box-line text-xl"></i><span>Analytics Portal</span></div>
+                <div class="nav-item" onclick="window.location.href='/audit'"><i class="ri-shield-check-line text-xl"></i><span>Audit Logs</span></div>
+                <div class="nav-item" onclick="window.location.href='/cmdb'"><i class="ri-server-line text-xl"></i><span>Asset Inventory</span></div>
+                <div class="nav-item" onclick="window.location.href='/import-export'"><i class="ri-file-transfer-line text-xl"></i><span>Import / Export</span></div>
+                <div class="nav-item" onclick="window.location.href='/live'"><i class="ri-live-line text-xl"></i><span>Live Activity</span></div>
+                <div class="nav-item" onclick="window.location.href='/roles'"><i class="ri-user-settings-line text-xl"></i><span>Role Permissions</span></div>
+                <div class="nav-item" onclick="window.location.href='/kb'"><i class="ri-book-open-line text-xl"></i><span>Knowledge Base</span></div>
+                <div class="nav-item" onclick="window.location.href='/help-bot'"><i class="ri-robot-2-line text-xl"></i><span>Help Bot</span></div>
             </nav>
             <div class="p-4 border-t border-white/5">
                 <div class="flex items-center gap-3 p-3 rounded-xl mb-3" style="background:rgba(255,255,255,0.05)"><div class="staff-avatar" id="userAvatar">U<div class="status-dot online" id="userStatusDot"></div></div><div class="flex-1 min-w-0"><p class="text-sm font-semibold truncate" style="color:var(--text-primary)" id="userName">User</p><p class="text-xs" style="color:var(--text-muted)" id="userRole">Role</p></div></div>
@@ -519,7 +610,7 @@
 
             <section id="reportsSection" class="section">
                 <div class="glass-card rounded-2xl p-5 mb-5"><h3 class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Reports</h3><p class="text-sm" style="color:var(--text-muted)">Generate and download reports</p></div>
-                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5"><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-ticket-2-line text-xl text-cyan-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">All Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Complete export</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('tickets','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('tickets','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-team-line text-xl text-purple-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Team Performance</h4><p class="text-xs" style="color:var(--text-muted)">Staff metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('team','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('team','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-speed-line text-xl text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">SLA Compliance</h4><p class="text-xs" style="color:var(--text-muted)">SLA metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('sla','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('sla','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 flex items-center justify-center"><i class="ri-calendar-line text-xl text-amber-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Monthly Summary</h4><p class="text-xs" style="color:var(--text-muted)">Statistics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('monthly','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('monthly','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div></div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5"><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-ticket-2-line text-xl text-cyan-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">All Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Complete export</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('tickets','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('tickets','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center"><i class="ri-team-line text-xl text-purple-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Team Performance</h4><p class="text-xs" style="color:var(--text-muted)">Staff metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('team','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('team','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-speed-line text-xl text-green-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">SLA Compliance</h4><p class="text-xs" style="color:var(--text-muted)">SLA metrics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('sla','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('sla','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div><div class="report-card"><div class="flex items-center gap-3 mb-3"><div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 flex items-center justify-center"><i class="ri-calendar-line text-xl text-amber-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Monthly Summary</h4><p class="text-xs" style="color:var(--text-muted)">Statistics</p></div></div><div class="flex gap-2"><button class="format-btn" onclick="downloadReport('monthly','csv')"><i class="ri-file-text-line"></i> CSV</button><button class="format-btn" onclick="downloadReport('monthly','excel')"><i class="ri-file-excel-2-line"></i> Excel</button></div></div></div>
             </section>
 
             <section id="settingsSection" class="section">
@@ -535,19 +626,19 @@
                 <div class="grid md:grid-cols-2 gap-5 mb-5">
                     <div class="settings-card">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-user-settings-line text-lg text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto-Assign Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Auto-assign new tickets to available L1 staff</p></div></div>
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-user-settings-line text-lg text-green-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto-Assign Tickets</h4><p class="text-xs" style="color:var(--text-muted)">Auto-assign new tickets to available L1 staff</p></div></div>
                             <div class="toggle-container"><div class="toggle-switch-new" id="autoAssignToggle" onclick="toggleSettingSwitch('AUTO_ASSIGN')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
                         </div>
                     </div>
                     <div class="settings-card">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 flex items-center justify-center"><i class="ri-flashlight-line text-lg text-orange-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Dry-Run Mode</h4><p class="text-xs" style="color:var(--text-muted)">Log emails instead of sending them</p></div></div>
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 flex items-center justify-center"><i class="ri-flashlight-line text-lg text-orange-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Dry-Run Mode</h4><p class="text-xs" style="color:var(--text-muted)">Log emails instead of sending them</p></div></div>
                             <div class="toggle-container"><div class="toggle-switch-new" id="dryRunToggle" onclick="toggleSettingSwitch('DRY_RUN')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
                         </div>
                     </div>
                     <div class="settings-card">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center"><i class="ri-timer-line text-lg text-red-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto Sign Out</h4><p class="text-xs" style="color:var(--text-muted)">Sign out after 15 min inactivity</p></div></div>
+                            <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center"><i class="ri-timer-line text-lg text-red-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Auto Sign Out</h4><p class="text-xs" style="color:var(--text-muted)">Sign out after 15 min inactivity</p></div></div>
                             <div class="toggle-container"><div class="toggle-switch-new active" id="autoSignOutToggle" onclick="toggleAutoSignOut()"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div>
                         </div>
                     </div>
@@ -565,10 +656,38 @@
                     </div>
                 </div>
 
+                <h4 class="font-heading font-semibold text-sm mb-3 flex items-center gap-2" style="color:var(--text-secondary)"><i class="ri-message-3-line"></i>SMS Notifications</h4>
+                <div class="glass-card rounded-2xl p-5 mb-5">
+                    <p class="text-xs mb-4" style="color:var(--text-muted)">Send SMS updates to users when tickets are submitted, assigned, escalated or changed. Requires Twilio credentials.</p>
+                    <div class="grid md:grid-cols-2 gap-5 mb-4">
+                        <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center"><i class="ri-message-2-line text-lg text-green-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">SMS Enabled</h4><p class="text-xs" style="color:var(--text-muted)">Send SMS notifications to users</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="smsEnabledToggle" onclick="toggleSettingSwitch('SMS_ENABLED')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                        <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 flex items-center justify-center"><i class="ri-alarm-warning-line text-lg text-orange-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Critical Only</h4><p class="text-xs" style="color:var(--text-muted)">Only SMS for critical tickets</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="smsCriticalOnlyToggle" onclick="toggleSettingSwitch('SMS_CRITICAL_ONLY')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-5">
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Twilio Account SID</label><div class="flex gap-2"><input type="text" id="twilioSid" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="AC..."><button class="btn btn-primary" onclick="saveSmsSetting('TWILIO_SID','twilioSid')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Twilio Auth Token</label><div class="flex gap-2"><input type="password" id="twilioToken" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="..."><button class="btn btn-primary" onclick="saveSmsSetting('TWILIO_TOKEN','twilioToken')">Save</button></div></div>
+                        <div class="md:col-span-2"><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Twilio Phone Number</label><div class="flex gap-2"><input type="tel" id="twilioPhone" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="+1234567890"><button class="btn btn-primary" onclick="saveSmsSetting('TWILIO_PHONE_NUMBER','twilioPhone')">Save</button></div></div>
+                    </div>
+                </div>
+
+                <h4 class="font-heading font-semibold text-sm mb-3 flex items-center gap-2" style="color:var(--text-secondary)"><i class="ri-timer-flash-line"></i>Maintenance Banner</h4>
+                <div class="glass-card rounded-2xl p-5 mb-5">
+                    <p class="text-xs mb-4" style="color:var(--text-muted)">Display an outage or maintenance banner on the public form and dashboard. Dates are optional.</p>
+                    <div class="grid md:grid-cols-2 gap-5 mb-4">
+                        <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 flex items-center justify-center"><i class="ri-alarm-warning-line text-lg text-amber-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Banner Active</h4><p class="text-xs" style="color:var(--text-muted)">Show maintenance banner</p></div></div><div class="toggle-container"><div class="toggle-switch-new" id="maintenanceModeToggle" onclick="toggleSettingSwitch('MAINTENANCE_MODE')"><span class="toggle-label toggle-label-on">ON</span><span class="toggle-label toggle-label-off">OFF</span></div></div></div></div>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-5">
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Title</label><div class="flex gap-2"><input type="text" id="maintenanceTitle" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="Scheduled Maintenance"><button class="btn btn-primary" onclick="saveMaintenanceSetting('MAINTENANCE_TITLE','maintenanceTitle')">Save</button></div></div>
+                        <div class="md:col-span-2"><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Message</label><div class="flex gap-2"><input type="text" id="maintenanceMessage" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)" placeholder="System will be unavailable..."><button class="btn btn-primary" onclick="saveMaintenanceSetting('MAINTENANCE_MESSAGE','maintenanceMessage')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">Start (ISO 8601)</label><div class="flex gap-2"><input type="datetime-local" id="maintenanceStart" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)"><button class="btn btn-primary" onclick="saveMaintenanceDate('MAINTENANCE_START','maintenanceStart')">Save</button></div></div>
+                        <div><label class="text-xs font-semibold mb-1.5 block" style="color:var(--text-muted)">End (ISO 8601)</label><div class="flex gap-2"><input type="datetime-local" id="maintenanceEnd" class="flex-1 px-3 py-2 rounded-xl text-sm" style="background:var(--input-bg);border:1px solid var(--border);color:var(--text-primary)"><button class="btn btn-primary" onclick="saveMaintenanceDate('MAINTENANCE_END','maintenanceEnd')">Save</button></div></div>
+                    </div>
+                </div>
+
                 <h4 class="font-heading font-semibold text-sm mb-3 flex items-center gap-2" style="color:var(--text-secondary)"><i class="ri-tools-line"></i>System Maintenance</h4>
                 <div class="grid md:grid-cols-2 gap-5">
-                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500/20 to-gray-600/20 flex items-center justify-center"><i class="ri-key-line text-lg text-gray-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Clear Saved Credentials</h4><p class="text-xs" style="color:var(--text-muted)">Remove saved login credentials</p></div></div><button class="btn btn-secondary" onclick="clearSavedCredentials()"><i class="ri-delete-bin-line"></i> Clear</button></div></div>
-                    <div class="settings-card"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-information-line text-lg text-cyan-400"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">System Info</h4><p class="text-xs" style="color:var(--text-muted)">Version <span class="font-mono">8.1.0</span> • JSON DB</p></div></div></div>
+                    <div class="settings-card"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500/20 to-gray-600/20 flex items-center justify-center"><i class="ri-key-line text-lg text-gray-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">Clear Saved Credentials</h4><p class="text-xs" style="color:var(--text-muted)">Remove saved login credentials</p></div></div><button class="btn btn-secondary" onclick="clearSavedCredentials()"><i class="ri-delete-bin-line"></i> Clear</button></div></div>
+                    <div class="settings-card"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center"><i class="ri-information-line text-lg text-cyan-600"></i></div><div><h4 class="font-heading font-semibold text-sm" style="color:var(--text-primary)">System Info</h4><p class="text-xs" style="color:var(--text-muted)">Version <span class="font-mono">8.1.0</span> • JSON DB</p></div></div></div>
                 </div>
             </section>
             <footer class="mt-8 py-5 border-t text-center" style="border-color:var(--border)"><p class="text-sm font-medium" style="color:var(--text-muted)">© 2025-2026 Srihari. All Rights Reserved.</p></footer>
@@ -661,11 +780,11 @@
         </div>
     </div>
 
-    <div id="confirmCloseDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(245,158,11,0.15)"><i class="ri-error-warning-line text-4xl text-amber-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Close Incident Details?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">Any unsaved changes will be lost. Are you sure you want to close this incident view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelCloseModal()">Cancel</button><button class="btn btn-danger" onclick="forceCloseModal()">Close</button></div></div></div>
-    <div id="confirmNavDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(59,130,246,0.15)"><i class="ri-arrow-left-right-line text-4xl text-blue-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Leave Incident View?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You have an incident open. Do you want to leave this view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelNavigation()">Stay</button><button class="btn btn-info" onclick="confirmNavigation()">Leave</button></div></div></div>
-    <div id="confirmLogoutDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(239,68,68,0.15)"><i class="ri-logout-box-r-line text-4xl text-red-400"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Sign Out?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You will be signed out of the IT Support Control Center. You will need to sign in again to access the dashboard.</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelLogout()">Cancel</button><button class="btn btn-danger" onclick="executeLogout()">Sign Out</button></div></div></div>
+    <div id="confirmCloseDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(245,158,11,0.15)"><i class="ri-error-warning-line text-4xl text-amber-600"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Close Incident Details?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">Any unsaved changes will be lost. Are you sure you want to close this incident view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelCloseModal()">Cancel</button><button class="btn btn-danger" onclick="forceCloseModal()">Close</button></div></div></div>
+    <div id="confirmNavDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(59,130,246,0.15)"><i class="ri-arrow-left-right-line text-4xl text-blue-600"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Leave Incident View?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You have an incident open. Do you want to leave this view?</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelNavigation()">Stay</button><button class="btn btn-info" onclick="confirmNavigation()">Leave</button></div></div></div>
+    <div id="confirmLogoutDialog" class="confirm-overlay"><div class="confirm-dialog"><div class="confirm-dialog-icon" style="background:rgba(239,68,68,0.15)"><i class="ri-logout-box-r-line text-4xl text-red-600"></i></div><h3 class="confirm-dialog-title font-heading" style="color:var(--text-primary)">Sign Out?</h3><p class="confirm-dialog-message" style="color:var(--text-secondary)">You will be signed out of the IT Support Control Center. You will need to sign in again to access the dashboard.</p><div class="confirm-dialog-buttons"><button class="btn btn-secondary" onclick="cancelLogout()">Cancel</button><button class="btn btn-danger" onclick="executeLogout()">Sign Out</button></div></div></div>
     <div id="loadingOverlay" class="loading-overlay"><div class="spinner"></div><div class="font-heading font-semibold text-lg" style="color:var(--text-primary)">Loading Dashboard</div><div style="color:var(--text-muted)">Fetching latest data...</div></div>
-    <div id="toast" class="toast"><i id="toastIcon" class="ri-checkbox-circle-line text-lg text-emerald-400"></i><span id="toastMessage" class="text-sm" style="color:var(--text-primary)">Success!</span></div>
+    <div id="toast" class="toast"><i id="toastIcon" class="ri-checkbox-circle-line text-lg text-emerald-600"></i><span id="toastMessage" class="text-sm" style="color:var(--text-primary)">Success!</span></div>
     <div class="ai-bot-btn hidden" id="aiBotBtn" onclick="toggleBotPopup()"><img src="https://lh3.googleusercontent.com/d/1GE0iQqxwIHOpywIeF_X-hNnPBuG1oLtT" alt="AI Assistant" class="ai-bot-image"></div>
     <div id="botPopup" class="ai-bot-popup"><div class="flex items-center gap-3 mb-3"><div class="rage-avatar"><img src="https://lh3.googleusercontent.com/d/1GE0iQqxwIHOpywIeF_X-hNnPBuG1oLtT" alt="Rage AI"></div><div><p class="popup-title">Rage</p><p class="text-xs" style="color:var(--text-muted)">AI Assistant</p></div></div><div class="ai-coming-soon-box"><p class="text-sm font-semibold mb-1" style="color:#c084fc">Coming Soon</p><p class="text-xs leading-relaxed" style="color:var(--text-secondary)">Rage will be available soon to help with IT support queries and automate ticket management.</p></div></div>
 
@@ -760,7 +879,7 @@ function getSelectedPriority() { return $('modalPrioritySelect').value || null; 
 function toggleBotPopup() { $('botPopup').classList.toggle('show'); }
 function hideBotPopup() { $('botPopup').classList.remove('show'); }
 function toggleTheme() { /* Dark theme only */ }
-function loadTheme() { document.body.setAttribute('data-theme', 'dark'); }
+function loadTheme() { document.body.setAttribute('data-theme', 'light'); }
 function handleNavClick(section) { if ($('ticketModal').classList.contains('show')) { pendingSection = section; $('confirmNavDialog').classList.add('show'); } else if ($('teamMemberModal').classList.contains('show')) { closeTeamMemberModal(); showSection(section); } else showSection(section); }
 function cancelNavigation() { $('confirmNavDialog').classList.remove('show'); pendingSection = null; }
 function confirmNavigation() { $('confirmNavDialog').classList.remove('show'); forceCloseModal(); if (pendingSection) { showSection(pendingSection); pendingSection = null; } }
@@ -776,7 +895,7 @@ const levelBadge = l => `<span class="badge badge-${(l||'L1').toLowerCase()}">${
 const noteTypeBadge = t => { const l = (t || 'general').toLowerCase().replace(/\s+/g,'').replace('-',''); return `<span class="badge badge-${{'workdone':'note-workdone','update':'note-update','investigation':'note-investigation','solution':'note-solution','followup':'note-followup','general':'note-general'}[l]||'note-general'}">${escapeHtml(t||'General')}</span>`; };
 function showLoading() { $('loadingOverlay').classList.add('show'); }
 function hideLoading() { $('loadingOverlay').classList.remove('show'); }
-function showToast(msg, type = 'success') { if (!currentUser || $('dashboardPage').classList.contains('hidden')) return; const icons = { success: 'ri-checkbox-circle-line text-emerald-400', error: 'ri-error-warning-line text-red-400', warning: 'ri-alert-line text-amber-400', info: 'ri-information-line text-blue-400' }; $('toastMessage').textContent = msg; $('toastIcon').className = icons[type] + ' text-lg'; $('toast').classList.add('show'); setTimeout(() => $('toast').classList.remove('show'), 3000); }
+function showToast(msg, type = 'success') { if (!currentUser || $('dashboardPage').classList.contains('hidden')) return; const icons = { success: 'ri-checkbox-circle-line text-emerald-600', error: 'ri-error-warning-line text-red-600', warning: 'ri-alert-line text-amber-600', info: 'ri-information-line text-blue-600' }; $('toastMessage').textContent = msg; $('toastIcon').className = icons[type] + ' text-lg'; $('toast').classList.add('show'); setTimeout(() => $('toast').classList.remove('show'), 3000); }
 function setButtonProcessing(btnId, p) { const btn = $(btnId); if (btn) { btn.classList.toggle('btn-processing', p); btn.disabled = p; } }
 async function callGAS(fn, ...args) {
   const response = await fetch('/api/' + fn, {
@@ -941,8 +1060,11 @@ async function saveLocation() {
 function startStatusPolling() { if (statusPollingInterval) clearInterval(statusPollingInterval); statusPollingInterval = setInterval(async () => { if (!currentUser) { stopStatusPolling(); return; } if ($('dashboardPage').classList.contains('hidden')) return; try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } const data = await callGAS('getDashboardData', false); if (data?.tickets) { const oc = allTickets.length, nc = data.tickets.length; if (nc > oc && currentUser && !$('dashboardPage').classList.contains('hidden')) { allTickets = Validator.validateArray(data.tickets); dashboardStats = Validator.validateObject(data.stats); showToast(`${nc - oc} new ticket(s) received`, 'info'); $('notificationBtn').classList.add('animate-bell'); setTimeout(() => $('notificationBtn').classList.remove('animate-bell'), 500); renderAll(); } } } catch (e) { console.log('Polling error:', e); } }, STATUS_POLLING_INTERVAL); }
 function stopStatusPolling() { if (statusPollingInterval) { clearInterval(statusPollingInterval); statusPollingInterval = null; } }
 async function updateMyStatus() { if (isViewer()) { showToast('Viewers cannot change status', 'error'); return; } const status = $('userStatusSelect').value; updateUserStatusDot(); try { const r = await callGAS('updateUserStatus', currentUser.employeeId, status); if (r?.success) { showToast(`Status: ${status}`, 'info'); const ui = allUsers.findIndex(u => u.employeeId === currentUser.employeeId || u.displayName === currentUser.displayName || u.name === currentUser.displayName); if (ui !== -1) allUsers[ui].status = status; renderStaffPanel(); try { const users = await callGAS('getAllUsers'); if (users?.length > 0) { allUsers = Validator.validateArray(users); renderStaffPanel(); } } catch {} } else showToast(r?.error || 'Failed', 'error'); } catch { showToast('Error updating status', 'error'); } }
-const SETTINGS_TOGGLE_MAP = { 'AUTO_ASSIGN': 'autoAssignToggle', 'DRY_RUN': 'dryRunToggle' };
+const SETTINGS_TOGGLE_MAP = { 'AUTO_ASSIGN': 'autoAssignToggle', 'DRY_RUN': 'dryRunToggle', 'SMS_ENABLED': 'smsEnabledToggle', 'SMS_CRITICAL_ONLY': 'smsCriticalOnlyToggle', 'MAINTENANCE_MODE': 'maintenanceModeToggle' };
 const SETTINGS_EMAIL_MAP = { 'PRIMARY_ADMIN_EMAIL': 'primaryAdminEmail', 'SECONDARY_ADMIN_EMAIL': 'secondaryAdminEmail', 'TERTIARY_ADMIN_EMAIL': 'tertiaryAdminEmail', 'ESCALATION_EMAIL': 'escalationEmail', 'CRITICAL_EMAIL': 'criticalEmail' };
+const SETTINGS_SMS_MAP = { 'TWILIO_SID': 'twilioSid', 'TWILIO_TOKEN': 'twilioToken', 'TWILIO_PHONE_NUMBER': 'twilioPhone' };
+const SETTINGS_MAINTENANCE_MAP = { 'MAINTENANCE_TITLE': 'maintenanceTitle', 'MAINTENANCE_MESSAGE': 'maintenanceMessage' };
+const SETTINGS_MAINTENANCE_DATE_MAP = { 'MAINTENANCE_START': 'maintenanceStart', 'MAINTENANCE_END': 'maintenanceEnd' };
 
 function getSettingBool(name) { return dashboardSettings[name] === true || String(dashboardSettings[name]).toLowerCase() === 'true'; }
 
@@ -971,9 +1093,56 @@ async function saveEmailSetting(key, inputId) {
     } catch { showToast('Error saving email', 'error'); }
 }
 
+async function saveSmsSetting(key, inputId) {
+    if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; }
+    const input = $(inputId), value = input.value.trim();
+    if (!value) { showToast('Enter a value', 'error'); input.focus(); return; }
+    try {
+        const r = await callGAS('setSetting', key, value, currentUser?.displayName || 'User');
+        if (r?.success) { dashboardSettings[key] = value; showToast(`${key.replace(/_/g,' ')} saved`, 'success'); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error saving SMS setting', 'error'); }
+}
+
+async function saveMaintenanceSetting(key, inputId) {
+    if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; }
+    const input = $(inputId), value = input.value.trim();
+    if (!value) { showToast('Enter a value', 'error'); input.focus(); return; }
+    try {
+        const r = await callGAS('setSetting', key, value, currentUser?.displayName || 'User');
+        if (r?.success) { dashboardSettings[key] = value; showToast(`${key.replace(/_/g,' ')} saved`, 'success'); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error saving maintenance setting', 'error'); }
+}
+
+async function saveMaintenanceDate(key, inputId) {
+    if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; }
+    const input = $(inputId), value = input.value;
+    let iso = '';
+    if (value) {
+        try {
+            const d = new Date(value);
+            if (isNaN(d.getTime())) throw new Error('Invalid date');
+            iso = d.toISOString();
+        } catch (e) { showToast('Invalid date', 'error'); input.focus(); return; }
+    }
+    try {
+        const r = await callGAS('setSetting', key, iso, currentUser?.displayName || 'User');
+        if (r?.success) { dashboardSettings[key] = iso; showToast(`${key.replace(/_/g,' ')} saved`, 'success'); }
+        else showToast(r?.error || 'Failed', 'error');
+    } catch { showToast('Error saving maintenance date', 'error'); }
+}
+
 function renderSettings() {
     Object.entries(SETTINGS_TOGGLE_MAP).forEach(([key, id]) => { const el = $(id); if (!el) return; const val = getSettingBool(key); el.classList.toggle('active', val); if (key === 'AUTO_ASSIGN') autoAssignEnabled = val; });
     Object.entries(SETTINGS_EMAIL_MAP).forEach(([key, id]) => { const el = $(id); if (el) el.value = dashboardSettings[key] || ''; });
+    Object.entries(SETTINGS_SMS_MAP).forEach(([key, id]) => { const el = $(id); if (el) el.value = dashboardSettings[key] || ''; });
+    Object.entries(SETTINGS_MAINTENANCE_MAP).forEach(([key, id]) => { const el = $(id); if (el) el.value = dashboardSettings[key] || ''; });
+    Object.entries(SETTINGS_MAINTENANCE_DATE_MAP).forEach(([key, id]) => {
+        const el = $(id); if (!el) return;
+        const v = dashboardSettings[key];
+        if (v) { try { const d = new Date(v); if (!isNaN(d.getTime())) { const pad = n => String(n).padStart(2, '0'); el.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; } } catch (e) {} }
+    });
 }
 function toggleAutoSignOut() { if (isViewer()) { showToast('Viewers cannot change settings', 'error'); return; } autoSignOutEnabled = !autoSignOutEnabled; $('autoSignOutToggle').classList.toggle('active', autoSignOutEnabled); if (autoSignOutEnabled) setupInactivityTracking(); else stopInactivityTracking(); showToast(`Auto sign out ${autoSignOutEnabled ? 'enabled' : 'disabled'}`, 'info'); }
 function resetInactivityTimer() { if (inactivityTimer) clearTimeout(inactivityTimer); if (currentUser && autoSignOutEnabled) inactivityTimer = setTimeout(() => { showToast('Session expired due to inactivity', 'warning'); executeLogout(); }, INACTIVITY_TIMEOUT); }
@@ -1065,7 +1234,7 @@ async function loadTeam() {
         $('teamMonthLabel').textContent = monthLabel;
         if (!perfData?.length) { grid.innerHTML = '<p class="col-span-full text-center py-6" style="color:var(--text-muted)">No team data</p>'; tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6" style="color:var(--text-muted)">No data</td></tr>'; return; }
         const statusDot = m => m.status === 'Online' ? 'bg-emerald-500' : m.status === 'In Meeting' ? 'bg-purple-500' : m.status === 'Break' ? 'bg-amber-500' : 'bg-gray-500';
-        grid.innerHTML = perfData.map(m => `<div class="team-card" data-member-name="${escapeHtml(m.name)}" onclick="openTeamMemberModal(this.dataset.memberName)"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="staff-avatar">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><p class="font-semibold text-sm" style="color:var(--text-primary)">${escapeHtml(m.name)}</p><div class="flex items-center gap-2">${levelBadge(m.level)}<span class="w-2 h-2 rounded-full ${statusDot(m)}"></span></div></div></div><span class="text-2xl font-bold" style="color:var(--text-primary)">${m.resolutionRate}%</span></div><div class="grid grid-cols-4 gap-2 mb-3"><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.ticketsHandled}</p><p class="text-xs" style="color:var(--text-muted)">Handled</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold text-emerald-400">${m.resolved}</p><p class="text-xs" style="color:var(--text-muted)">Resolved</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.openTickets}</p><p class="text-xs" style="color:var(--text-muted)">Open</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.criticalTickets + m.highTickets}</p><p class="text-xs" style="color:var(--text-muted)">Critical/High</p></div></div><div class="grid grid-cols-2 gap-2 mb-3"><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Response</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResponseTime)}</p></div><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Resolution</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResolutionTime)}</p></div></div><div class="flex items-center gap-2"><span class="text-xs" style="color:var(--text-muted)">SLA</span><div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="text-sm font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></div>`).join('');
+        grid.innerHTML = perfData.map(m => `<div class="team-card" data-member-name="${escapeHtml(m.name)}" onclick="openTeamMemberModal(this.dataset.memberName)"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="staff-avatar">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><p class="font-semibold text-sm" style="color:var(--text-primary)">${escapeHtml(m.name)}</p><div class="flex items-center gap-2">${levelBadge(m.level)}<span class="w-2 h-2 rounded-full ${statusDot(m)}"></span></div></div></div><span class="text-2xl font-bold" style="color:var(--text-primary)">${m.resolutionRate}%</span></div><div class="grid grid-cols-4 gap-2 mb-3"><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.ticketsHandled}</p><p class="text-xs" style="color:var(--text-muted)">Handled</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold text-emerald-600">${m.resolved}</p><p class="text-xs" style="color:var(--text-muted)">Resolved</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.openTickets}</p><p class="text-xs" style="color:var(--text-muted)">Open</p></div><div class="text-center p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><p class="text-base font-bold" style="color:var(--text-primary)">${m.criticalTickets + m.highTickets}</p><p class="text-xs" style="color:var(--text-muted)">Critical/High</p></div></div><div class="grid grid-cols-2 gap-2 mb-3"><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Response</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResponseTime)}</p></div><div class="text-xs p-2 rounded-lg" style="background:rgba(255,255,255,0.05)"><span style="color:var(--text-muted)">Avg Resolution</span><p class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.avgResolutionTime)}</p></div></div><div class="flex items-center gap-2"><span class="text-xs" style="color:var(--text-muted)">SLA</span><div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="text-sm font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></div>`).join('');
         tbody.innerHTML = perfData.map(m => `<tr class="team-table-row" data-member-name="${escapeHtml(m.name)}" onclick="openTeamMemberModal(this.dataset.memberName)"><td><div class="flex items-center gap-2"><div class="staff-avatar" style="width:28px;height:28px;font-size:10px;">${(escapeHtml(m.name)||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><span class="font-semibold" style="color:var(--text-primary)">${escapeHtml(m.name)}</span></div></td><td>${levelBadge(m.level)}</td><td class="font-semibold" style="color:var(--text-primary)">${m.ticketsHandled}</td><td>${m.resolved}</td><td>${m.openTickets}</td><td>${m.currentLoad}</td><td>${m.criticalTickets + m.highTickets}</td><td class="font-semibold">${m.resolutionRate}%</td><td><div class="flex items-center gap-2"><div class="w-16 h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.1)"><div class="h-full bg-emerald-500 rounded-full" style="width:${m.slaCompliance}%"></div></div><span class="font-semibold" style="color:var(--text-primary)">${m.slaCompliance}%</span></div></td><td class="font-semibold">${escapeHtml(m.avgResponseTime)}</td><td class="font-semibold">${escapeHtml(m.avgResolutionTime)}</td></tr>`).join('');
     } catch (e) { console.error('Load team error:', e); }
 }

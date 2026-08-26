@@ -117,6 +117,24 @@ function setupSystem() {
   return { success: true, message: 'System initialized' };
 }
 
+function getMaintenanceConfig() {
+  const settings = utils.getAllSettings();
+  const isTrue = v => v === true || String(v).toLowerCase() === 'true';
+  const now = new Date();
+  let active = isTrue(settings.MAINTENANCE_MODE);
+  const start = settings.MAINTENANCE_START ? new Date(settings.MAINTENANCE_START) : null;
+  const end = settings.MAINTENANCE_END ? new Date(settings.MAINTENANCE_END) : null;
+  if (active && start && !isNaN(start) && now < start) active = false;
+  if (active && end && !isNaN(end) && now > end) active = false;
+  return {
+    enabled: active,
+    title: settings.MAINTENANCE_TITLE || 'Scheduled Maintenance',
+    message: settings.MAINTENANCE_MESSAGE || 'The IT support portal is under scheduled maintenance.',
+    start: settings.MAINTENANCE_START || '',
+    end: settings.MAINTENANCE_END || ''
+  };
+}
+
 function getSystemStatus() {
   const d = db.readDb();
   const settings = utils.getAllSettings();
@@ -129,6 +147,7 @@ function getSystemStatus() {
     version: '8.1.0',
     settings,
     adminEmails: utils.getAdminEmails(d),
+    maintenance: getMaintenanceConfig(),
     dbPath: db.DB_PATH
   };
 }
@@ -254,6 +273,7 @@ module.exports = {
   toggleAutoAssign,
   setupSystem,
   getSystemStatus,
+  getMaintenanceConfig,
   addDirectory,
   bulkImportDirectory,
   addUser,

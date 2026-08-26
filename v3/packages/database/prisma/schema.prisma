@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userRoles     UserRole[]
+  requestedIssues Issue[] @relation("RequestedIssues")
+  assignedIssues  Issue[] @relation("AssignedIssues")
+  comments      Comment[]
+  approvals     Approval[]
+
+  managedBy     User?     @relation("ManagerRelation", fields: [managerId], references: [id])
+  managerId     String?
+  directReports User[]    @relation("ManagerRelation")
+
+  ownedCIs      ConfigurationItem[]
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions   RolePermission[]
+  userRoles     UserRole[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+enum IssueType {
+  INCIDENT
+  BUG
+  REQUEST
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum Priority {
+  LOWEST
+  LOW
+  MEDIUM
+  HIGH
+  HIGHEST
+}
+
+model Issue {
+  id          String      @id @default(cuid())
+  ticketId    String      @unique @default(cuid())
+  type        IssueType
+  title       String
+  description String?     @db.Text
+  status      IssueStatus @default(OPEN)
+  priority    Priority    @default(MEDIUM)
+  customFields Json?      @default("{}")
+
+  requesterId String
+  assigneeId  String?
+  managerId   String?
+  epicId      String?
+  sprintId    String?
+
+  points      Int?
+  boardColumn String?     @default("todo")
+  boardOrder  Int?        @default(0)
+
+  slaTargetAt DateTime?
+  slaBreached Boolean     @default(false)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  requester   User        @relation("RequestedIssues", fields: [requesterId], references: [id])
+  assignee    User?       @relation("AssignedIssues", fields: [assigneeId], references: [id])
+  epic        Epic?       @relation(fields: [epicId], references: [id])
+  sprint      Sprint?     @relation(fields: [sprintId], references: [id])
+
+  comments    Comment[]
+  cis         IssueCI[]
+  approvals   Approval[]
+  history     IssueHistory[]
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  issueId   String
+  authorId  String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model Epic {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  title       String
+  description String?  @db.Text
+  status      String   @default("active")
+  startAt     DateTime?
+  endAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  issues      Issue[]
+}
+
+model Sprint {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  goal        String?  @db.Text
+  startAt     DateTime?
+  endAt       DateTime?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  issues      Issue[]
+}
+
+model ConfigurationItem {
+  id          String   @id @default(cuid())
+  ciId        String   @unique
+  name        String
+  type        String
+  category    String?
+  status      String   @default("active")
+  ownerId     String?
+  attributes  Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  fromRels    CIRelationship[] @relation("FromCI")
+  toRels      CIRelationship[] @relation("ToCI")
+  issues      IssueCI[]
+}
+
+model CIRelationship {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  type      String
+  createdAt DateTime @default(now())
+
+  from      ConfigurationItem @relation("FromCI", fields: [fromId], references: [id])
+  to        ConfigurationItem @relation("ToCI", fields: [toId], references: [id])
+
+  @@unique([fromId, toId, type])
+}
+
+model IssueCI {
+  issueId String
+  ciId    String
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  ci      ConfigurationItem @relation(fields: [ciId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, ciId])
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  issueType   IssueType?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transitions WorkflowTransition[]
+}
+
+model WorkflowTransition {
+  id                    String   @id @default(cuid())
+  workflowId            String
+  fromStatus            IssueStatus
+  toStatus              IssueStatus
+  requiredPermissionKey String?
+  createdAt             DateTime @default(now())
+
+  workflow              Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, fromStatus, toStatus])
+}
+
+model SlaDefinition {
+  id        String     @id @default(cuid())
+  issueType IssueType?
+  priority  Priority?
+  hours     Float
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Approval {
+  id        String   @id @default(cuid())
+  issueId   String
+  managerId String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  manager   User     @relation(fields: [managerId], references: [id])
+}
+
+model IssueHistory {
+  id          String      @id @default(cuid())
+  issueId     String
+  field       String
+  oldValue    String?
+  newValue    String?
+  changedById String?
+  createdAt   DateTime    @default(now())
+
+  issue       Issue       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+}

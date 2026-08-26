@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Base - IT Support</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', sans-serif; } body { background: #f8fafc; }</style>
+</head>
+<body class="min-h-screen p-6">
+  <main class="max-w-5xl mx-auto">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold text-slate-900 mb-2">IT Support Knowledge Base</h1>
+      <p class="text-slate-600">Search common issues and self-service answers before opening a ticket.</p>
+    </div>
+    <div class="relative max-w-2xl mx-auto mb-8">
+      <input id="search" type="text" placeholder="Search for answers (e.g. password, printer, VPN)..." class="w-full rounded-2xl border border-slate-200 px-5 py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="flex justify-end mb-6">
+      <a href="/" class="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition-colors">Open a ticket</a>
+    </div>
+    <div id="categories" class="grid md:grid-cols-3 gap-5 mb-8"></div>
+    <div id="results" class="hidden">
+      <h2 class="text-lg font-semibold text-slate-900 mb-4">Search results</h2>
+      <div id="resultsList" class="space-y-4"></div>
+      <button id="backBtn" class="mt-6 text-blue-700 hover:underline text-sm font-medium">Show all categories</button>
+    </div>
+  </main>
+
+  <script>
+    const faqs = [
+      { category: 'Password & Accounts', icon: '🔐', items: [
+        { q: 'How do I reset my password?', a: 'Use the self-service password reset link on the login page, or submit a ticket and select Password reset / MFA issue.' },
+        { q: 'My MFA prompt is not working', a: 'Try re-registering your authenticator app. If you lost access to your MFA device, contact IT for a temporary bypass.' },
+        { q: 'Unlock my account', a: 'Wait 15 minutes after failed attempts or submit a ticket with your employee ID and location.' }
+      ]},
+      { category: 'Email & Collaboration', icon: '📧', items: [
+        { q: 'Outlook will not open', a: 'Close Outlook, restart your computer, and try again. If the issue persists, clear the Outlook cache or submit a ticket.' },
+        { q: 'I am not receiving emails', a: 'Check your Junk/Deleted folders and any email rules. Make sure your mailbox is not over quota.' },
+        { q: 'Teams crashes on launch', a: 'Fully quit Teams from the system tray, then reopen. Reinstall Teams if the problem continues.' }
+      ]},
+      { category: 'Network & VPN', icon: '🌐', items: [
+        { q: 'VPN is not connecting', a: 'Verify your credentials, restart the VPN client, and check that Duo/MFA is approved.' },
+        { q: 'Wi-Fi keeps disconnecting', a: 'Move closer to an access point, restart your device, and forget/re-add the network.' },
+        { q: 'No internet access', a: 'Check the network cable or Wi-Fi status. Restart the modem/router and test another device.' }
+      ]},
+      { category: 'Hardware', icon: '💻', items: [
+        { q: 'My laptop will not turn on', a: 'Check the power adapter and try a different outlet. Hold the power button for 30 seconds to drain residual power.' },
+        { q: 'External monitor is blank', a: 'Verify the video cable is firmly connected, select the correct input source on the monitor, and check display settings.' },
+        { q: 'Keyboard or mouse not working', a: 'Try unplugging and reconnecting, replace batteries for wireless devices, or test on another USB port.' }
+      ]},
+      { category: 'Printer', icon: '🖨️', items: [
+        { q: 'Printer shows offline', a: 'Restart the printer and check the network connection. Re-add the printer in Windows Settings if needed.' },
+        { q: 'Print jobs are stuck', a: 'Open the print queue, cancel all documents, and restart the Print Spooler service.' },
+        { q: 'Print quality is poor', a: 'Replace low toner or ink cartridges, clean the print heads, and use the correct paper type.' }
+      ]},
+      { category: 'Applications', icon: '📱', items: [
+        { q: 'Application will not launch', a: 'Restart the application and your computer. Run as administrator or reinstall the application if necessary.' },
+        { q: 'I need new software installed', a: 'Submit a service request with the application name, business justification, and your device location.' },
+        { q: 'License activation failed', a: 'Confirm you are signed in with your work account. If the error persists, open a ticket with the error code.' }
+      ]}
+    ];
+
+    function renderCategories() {
+      const container = document.getElementById('categories');
+      container.innerHTML = '';
+      faqs.forEach(cat => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition-shadow cursor-pointer';
+        card.innerHTML = `<div class="text-2xl mb-3">${cat.icon}</div><h3 class="font-semibold text-slate-900 mb-2">${cat.category}</h3><p class="text-sm text-slate-500">${cat.items.length} articles</p>`;
+        card.addEventListener('click', () => showResults(cat.items, cat.category));
+        container.appendChild(card);
+      });
+    }
+
+    function showResults(items, title) {
+      document.getElementById('categories').classList.add('hidden');
+      const results = document.getElementById('results');
+      results.classList.remove('hidden');
+      document.getElementById('resultsList').innerHTML = '';
+      items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'bg-white rounded-2xl border border-slate-200 p-5';
+        div.innerHTML = `<h3 class="font-semibold text-slate-900 mb-2">${item.q}</h3><p class="text-slate-600 text-sm leading-relaxed">${item.a}</p>`;
+        document.getElementById('resultsList').appendChild(div);
+      });
+    }
+
+    function search(term) {
+      const t = term.toLowerCase().trim();
+      if (!t) { renderCategories(); document.getElementById('results').classList.add('hidden'); return; }
+      const matches = [];
+      faqs.forEach(cat => {
+        cat.items.forEach(item => {
+          if (item.q.toLowerCase().includes(t) || item.a.toLowerCase().includes(t) || cat.category.toLowerCase().includes(t)) {
+            matches.push(item);
+          }
+        });
+      });
+      document.getElementById('categories').classList.add('hidden');
+      showResults(matches, 'Search results');
+    }
+
+    document.getElementById('search').addEventListener('input', e => search(e.target.value));
+    document.getElementById('backBtn').addEventListener('click', () => {
+      document.getElementById('search').value = '';
+      renderCategories();
+      document.getElementById('results').classList.add('hidden');
+    });
+
+    renderCategories();
+  </script>
+</body>
+</html>

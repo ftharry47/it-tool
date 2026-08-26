@@ -53,7 +53,21 @@ function initDb() {
     itStaff: [],
     directory: [],
     history: [],
+    audit: [],
     notes: [],
+    workflows: [],
+    issueTypes: [],
+    cmdb: [],
+    cmdbTypes: ['Workstation', 'Server', 'Network', 'Application', 'Service', 'Peripheral'],
+    ticketCIs: [],
+    projects: [],
+    permissions: [
+      { role: 'Viewer', resources: ['tickets.read', 'tickets.track'] },
+      { role: 'L1', resources: ['tickets.read', 'tickets.update.status', 'tickets.update.assign', 'tickets.update.note', 'cmdb.read'] },
+      { role: 'L2', resources: ['tickets.*', 'cmdb.*', 'workflows.read'] },
+      { role: 'L3', resources: ['tickets.*', 'cmdb.*', 'workflows.*', 'users.*', 'settings.*'] },
+      { role: 'Admin', resources: ['*'] }
+    ],
     settings: {
       AUTO_ASSIGN: { value: 'false', lastUpdated: new Date().toISOString(), updatedBy: 'System' },
       DRY_RUN: { value: 'false', lastUpdated: new Date().toISOString(), updatedBy: 'System' },

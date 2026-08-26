@@ -1,0 +1,22 @@
+{
+  "name": "IT Support Portal",
+  "short_name": "IT Support",
+  "description": "Modern IT support ticketing and self-service portal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Dashboard", "short_name": "Dashboard", "description": "Admin control center", "url": "/admin", "icons": [{ "src": "/icon.svg", "sizes": "any" }] },
+    { "name": "Analytics", "short_name": "Analytics", "description": "Ticket and SLA analytics", "url": "/analytics", "icons": [{ "src": "/icon.svg", "sizes": "any" }] },
+    { "name": "Asset Inventory", "short_name": "CMDB", "description": "Asset and configuration items", "url": "/cmdb", "icons": [{ "src": "/icon.svg", "sizes": "any" }] },
+    { "name": "Live Activity", "short_name": "Live", "description": "Real-time activity feed", "url": "/live", "icons": [{ "src": "/icon.svg", "sizes": "any" }] },
+    { "name": "Knowledge Base", "short_name": "KB", "description": "Self-service articles", "url": "/kb", "icons": [{ "src": "/icon.svg", "sizes": "any" }] },
+    { "name": "Help Bot", "short_name": "Bot", "description": "IT self-service assistant", "url": "/help-bot", "icons": [{ "src": "/icon.svg", "sizes": "any" }] }
+  ]
+}

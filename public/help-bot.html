@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Help Bot - IT Support</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', sans-serif; } body { background: #f8fafc; }</style>
+</head>
+<body class="min-h-screen p-6">
+  <main class="max-w-2xl mx-auto h-[85vh]">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <h1 class="font-semibold text-slate-900">IT Help Bot</h1>
+          <p class="text-xs text-slate-500">Self-service assistant</p>
+        </div>
+        <a href="/" class="ml-auto text-blue-700 hover:underline text-sm">Portal</a>
+      </div>
+
+      <div id="chat" class="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50"></div>
+
+      <div class="p-4 border-t border-slate-100 bg-white">
+        <div class="flex gap-2 mb-3 flex-wrap" id="chips">
+          <button class="chip bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium">Forgot password</button>
+          <button class="chip bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium">VPN not working</button>
+          <button class="chip bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium">Printer offline</button>
+          <button class="chip bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium">Teams crash</button>
+          <button class="chip bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium">Open ticket</button>
+        </div>
+        <div class="flex gap-2">
+          <input id="input" type="text" placeholder="Type a question..." class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
+          <button id="send" class="bg-blue-700 hover:bg-blue-800 text-white font-medium px-5 py-2.5 rounded-xl text-sm">Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const knowledge = [
+      { q: ['password', 'reset', 'forgot', 'mfa'], a: 'Use the self-service password reset link on the login page, or submit a ticket and select Password reset / MFA issue.', link: '/?issueType=Password%20reset%20/%20MFA%20issue' },
+      { q: ['vpn', 'connect'], a: 'Verify your credentials, restart the VPN client, and check that Duo/MFA is approved.', link: '/?issueType=VPN%20issue' },
+      { q: ['printer', 'print', 'offline'], a: 'Restart the printer and check the network connection. Re-add the printer in Windows Settings if needed.', link: '/?issueType=Printer%20/%20scanner' },
+      { q: ['teams', 'teams crash', 'teams not working'], a: 'Fully quit Teams from the system tray, then reopen. Reinstall Teams if the problem continues.', link: '/?issueType=Teams%20/%20Zoom%20issue' },
+      { q: ['outlook', 'email', 'mailbox', 'not receiving'], a: 'Check your Junk/Deleted folders and any email rules. Make sure your mailbox is not over quota.', link: '/?issueType=Mailbox%20/%20Outlook%20access' },
+      { q: ['wifi', 'internet', 'network'], a: 'Check the network cable or Wi-Fi status. Restart the modem/router and test another device.', link: '/?issueType=No%20internet' },
+      { q: ['laptop', 'computer', 'won\'t turn on', 'desktop'], a: 'Check the power adapter and try a different outlet. Hold the power button for 30 seconds to drain residual power.', link: '/?issueType=Laptop%20/%20desktop%20issue' },
+      { q: ['monitor', 'screen', 'blank'], a: 'Verify the video cable is firmly connected, select the correct input source on the monitor, and check display settings.', link: '/?issueType=Monitor%20/%20keyboard%20/%20mouse' }
+    ];
+
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+
+    function addMessage(text, from) {
+      const div = document.createElement('div');
+      div.className = `flex ${from === 'user' ? 'justify-end' : 'justify-start'}`;
+      div.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-3 text-sm ${from === 'user' ? 'bg-blue-700 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}">${text}</div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function reply(text) {
+      const t = text.toLowerCase().trim();
+      for (const item of knowledge) {
+        if (item.q.some(k => t.includes(k))) {
+          let html = item.a;
+          if (item.link) html += `<br><br><a href="${item.link}" class="text-blue-700 hover:underline font-medium">Open related ticket</a>`;
+          return html;
+        }
+      }
+      if (t.includes('open ticket') || t.includes('submit ticket') || t.includes('create ticket')) {
+        return 'I can help you open a ticket. <a href="/" class="text-blue-700 hover:underline font-medium">Click here to submit a ticket</a>.';
+      }
+      if (t.includes('hello') || t.includes('hi') || t.includes('hey')) {
+        return 'Hello! How can I help you today? You can ask about password reset, VPN, printer, Teams, Outlook, Wi-Fi, laptop, or monitor issues.';
+      }
+      return 'I\'m not sure about that. Try searching the <a href="/kb" class="text-blue-700 hover:underline font-medium">Knowledge Base</a> or <a href="/" class="text-blue-700 hover:underline font-medium">open a ticket</a>.';
+    }
+
+    function handle(text) {
+      if (!text) return;
+      addMessage(text, 'user');
+      setTimeout(() => addMessage(reply(text), 'bot'), 400);
+    }
+
+    document.getElementById('send').addEventListener('click', () => { handle(input.value); input.value = ''; });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { handle(input.value); input.value = ''; } });
+    document.getElementById('chips').addEventListener('click', e => { if (e.target.classList.contains('chip')) handle(e.target.textContent); });
+
+    addMessage('Hi there! I\'m the IT Help Bot. Ask me a quick question or select a topic below.', 'bot');
+  </script>
+</body>
+</html>

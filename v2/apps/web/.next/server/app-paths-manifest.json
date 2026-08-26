@@ -1,0 +1,14 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/portal/catalog/page": "app/portal/catalog/page.js",
+  "/portal/page": "app/portal/page.js",
+  "/portal/admin/forms/page": "app/portal/admin/forms/page.js",
+  "/portal/catalog/[key]/page": "app/portal/catalog/[key]/page.js",
+  "/portal/kb/[id]/page": "app/portal/kb/[id]/page.js",
+  "/portal/requests/[id]/page": "app/portal/requests/[id]/page.js",
+  "/portal/approvals/page": "app/portal/approvals/page.js",
+  "/portal/kb/page": "app/portal/kb/page.js",
+  "/portal/report/page": "app/portal/report/page.js",
+  "/portal/requests/page": "app/portal/requests/page.js"
+}

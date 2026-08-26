@@ -400,6 +400,29 @@ async function sendCriticalEscalationNotification(ticketId, escalateTo, escalati
   return sendEmail([adminEmails.escalation], subject, body);
 }
 
+async function sendSLABreachEmail(ticketId, ticket) {
+  const userEmail = ticket['Email Address'];
+  const shortDesc = ticket['Short Description'] || '';
+  const adminEmails = getAdminEmails();
+  const escalationEmail = adminEmails.escalation || config.ADMIN_EMAILS.ESCALATION || '';
+  const toList = [escalationEmail, config.ADMIN_EMAILS.PRIMARY].filter(Boolean);
+  const subject = 'SLA Breach Alert: ' + ticketId;
+  const body = 'An open ticket has breached its SLA resolution target.\n\n' +
+    'Incident Number: ' + ticketId + '\n' +
+    'Priority: ' + (ticket['Priority'] || 'Pending') + '\n' +
+    'User: ' + (ticket['Name'] || 'Unknown') + '\n' +
+    'Description: ' + shortDesc + '\n' +
+    'Resolution Due: ' + (ticket['Resolution Due'] || 'N/A') + '\n' +
+    'Current Status: ' + (ticket['Status'] || 'Open') + '\n\n' +
+    'Please review and escalate as needed.\n\n' +
+    'Best regards,\nIT Support Team';
+  const result = await sendEmail(toList, subject, body);
+  if (userEmail) {
+    await sendEmail([userEmail], 'Update on ' + ticketId + ' - Escalated', 'Dear ' + (ticket['Name'] || 'Valued User') + ',\n\nYour ticket ' + ticketId + ' has exceeded our resolution target and has been escalated for priority handling. We are working to resolve it as soon as possible.\n\n' + body);
+  }
+  return result;
+}
+
 async function verifySMTP() {
   const transporter = getTransporter();
   if (!transporter) {
@@ -411,6 +434,30 @@ async function verifySMTP() {
   } catch (e) {
     return { success: false, error: e.message, code: e.code };
   }
+}
+
+function getBaseUrl() {
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
+  const port = process.env.PORT || 3000;
+  const host = process.env.HOST || 'localhost';
+  return `http://${host}:${port}`;
+}
+
+async function sendCSATEmail(ticketId, ticket) {
+  const userEmail = ticket['Email Address'];
+  const userName = ticket['Name'] || 'Valued User';
+  const shortDesc = ticket['Short Description'] || '';
+  if (!userEmail) return;
+  const baseUrl = getBaseUrl();
+  const surveyUrl = baseUrl + '/csat.html?ticketId=' + encodeURIComponent(ticketId);
+  const subject = 'How did we do? Ticket ' + ticketId;
+  let body = 'Dear ' + userName + ',\n\n';
+  body += 'Your IT ticket ' + ticketId + ' has been resolved.\n\n';
+  body += 'Description: ' + shortDesc + '\n\n';
+  body += 'We value your feedback. Please take a moment to rate the support you received.\n\n';
+  body += 'Open survey: ' + surveyUrl + '\n\n';
+  body += 'Best regards,\nIT Support Team';
+  return sendEmail([userEmail], subject, body);
 }
 
 async function sendStatusChangeEmail(ticketId, userName, userEmail, oldStatus, newStatus, ticketInfo) {
@@ -458,6 +505,8 @@ module.exports = {
   sendTicketEscalatedEmailToStaff,
   sendCriticalEscalationNotification,
   sendStatusChangeEmail,
+  sendCSATEmail,
+  sendSLABreachEmail,
   getAdminEmails,
   verifySMTP,
   verifyGraph,

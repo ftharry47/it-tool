@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audit Logs - IT Support Portal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', sans-serif; } body { background: #f8fafc; }</style>
+</head>
+<body class="min-h-screen p-6">
+  <main class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900">Audit Logs</h1>
+      </div>
+      <a href="/" class="text-blue-700 hover:underline text-sm font-medium">Portal</a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
+      <div class="grid md:grid-cols-4 gap-4">
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Action</label><input id="filterAction" type="text" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. TICKET_CREATED"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Target ID</label><input id="filterTargetId" type="text" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="Ticket or setting ID"></div>
+        <div><label class="block text-xs font-semibold text-slate-500 mb-1">Performed By</label><input id="filterPerformedBy" type="text" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="User name"></div>
+        <div class="flex items-end"><button id="refreshBtn" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-2 rounded-xl text-sm">Refresh</button></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-slate-50 text-slate-600 font-semibold">
+          <tr>
+            <th class="px-5 py-3">Timestamp</th>
+            <th class="px-5 py-3">Action</th>
+            <th class="px-5 py-3">Target</th>
+            <th class="px-5 py-3">Performed By</th>
+            <th class="px-5 py-3">Before</th>
+            <th class="px-5 py-3">After</th>
+            <th class="px-5 py-3">Details</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+      </table>
+      <div id="empty" class="hidden p-8 text-center text-slate-500">No audit logs found.</div>
+      <div class="flex items-center justify-between px-5 py-4 border-t border-slate-100 text-xs text-slate-500">
+        <span id="totalLabel"></span>
+        <div class="flex gap-2">
+          <button id="prevBtn" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50">Previous</button>
+          <button id="nextBtn" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50">Next</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const state = { limit: 25, offset: 0 };
+    async function load() {
+      const filters = {};
+      const action = document.getElementById('filterAction').value.trim();
+      const targetId = document.getElementById('filterTargetId').value.trim();
+      const performedBy = document.getElementById('filterPerformedBy').value.trim();
+      if (action) filters.action = action;
+      if (targetId) filters.targetId = targetId;
+      if (performedBy) filters.performedBy = performedBy;
+      const args = [state.limit, state.offset, filters];
+      const res = await fetch('/api/getAuditLogs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) });
+      const data = await res.json();
+      const tbody = document.getElementById('auditBody');
+      tbody.innerHTML = '';
+      const empty = document.getElementById('empty');
+      if (!data.success || !data.logs || data.logs.length === 0) { empty.classList.remove('hidden'); document.getElementById('totalLabel').textContent = '0 logs'; updateButtons(0); return; }
+      empty.classList.add('hidden');
+      document.getElementById('totalLabel').textContent = `${data.offset + 1}-${Math.min(data.offset + data.logs.length, data.total)} of ${data.total} logs`;
+      updateButtons(data.total);
+      for (const l of data.logs) {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50';
+        tr.innerHTML = `<td class="px-5 py-3 whitespace-nowrap">${new Date(l.timestamp).toLocaleString()}</td>
+          <td class="px-5 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium text-xs">${l.action}</span></td>
+          <td class="px-5 py-3">${l.targetType}<br><span class="text-xs text-slate-500">${l.targetId}</span></td>
+          <td class="px-5 py-3">${l.performedBy || 'System'}</td>
+          <td class="px-5 py-3 text-xs max-w-xs truncate" title="${(l.before || '').replace(/"/g,'&quot;')}">${l.before || '-'}</td>
+          <td class="px-5 py-3 text-xs max-w-xs truncate" title="${(l.after || '').replace(/"/g,'&quot;')}">${l.after || '-'}</td>
+          <td class="px-5 py-3 text-xs max-w-xs truncate" title="${(l.details || '').replace(/"/g,'&quot;')}">${l.details || '-'}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+    function updateButtons(total) {
+      document.getElementById('prevBtn').disabled = state.offset === 0;
+      document.getElementById('nextBtn').disabled = state.offset + state.limit >= total;
+    }
+    document.getElementById('refreshBtn').addEventListener('click', () => { state.offset = 0; load(); });
+    document.getElementById('prevBtn').addEventListener('click', () => { if (state.offset >= state.limit) { state.offset -= state.limit; load(); } });
+    document.getElementById('nextBtn').addEventListener('click', () => { state.offset += state.limit; load(); });
+    load();
+  </script>
+</body>
+</html>
