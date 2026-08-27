@@ -9,7 +9,6 @@ import { useAuth, api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
   Home,
-  LayoutDashboard,
   LifeBuoy,
   Search,
   Settings,
@@ -62,9 +61,7 @@ export function CommandPalette() {
   const commands: CommandItem[] = React.useMemo(() => {
     return [
       { id: 'home', label: 'Go to Home', icon: <Home className="h-4 w-4" />, action: nav('/') },
-      { id: 'dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, action: nav('/dashboard/issues') },
       { id: 'issues', label: 'Go to Issues', icon: <Ticket className="h-4 w-4" />, action: nav('/dashboard/issues') },
-      { id: 'workflows', label: 'Go to Workflows', icon: <Workflow className="h-4 w-4" />, action: nav('/dashboard/workflows') },
       { id: 'cmdb', label: 'Go to CMDB', icon: <Server className="h-4 w-4" />, action: nav('/dashboard/cmdb') },
       { id: 'help', label: 'Go to Help Center', icon: <LifeBuoy className="h-4 w-4" />, action: nav('/help-center') },
       { id: 'settings', label: 'Go to Settings', icon: <Settings className="h-4 w-4" />, action: nav('/dashboard/settings') },

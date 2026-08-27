@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth, api } from '@/lib/api'
-import { Shell } from '@/components/shell'
 import { Input } from '@/components/input'
 import { Button } from '@/components/button'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -105,8 +104,7 @@ export default function HelpCenterPage() {
   }
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8">
         <div className="space-y-2 text-center">
           <h1 className="text-3xl font-semibold">How can we help?</h1>
           <p className="text-muted-foreground">Search the knowledge base or open a request with IT.</p>
@@ -198,7 +196,6 @@ export default function HelpCenterPage() {
             ))}
           </div>
         </div>
-      </div>
 
       <Dialog.Root open={!!dialog} onOpenChange={(open) => !open && setDialog(null)}>
         <Dialog.Portal>
@@ -237,7 +234,7 @@ export default function HelpCenterPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </Shell>
+    </div>
   )
 }
 

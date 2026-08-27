@@ -1,11 +1,11 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useCommandPalette } from '@/store/command-palette'
 import { useAuth } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Command, LayoutDashboard, LifeBuoy, Ticket, Workflow, Settings, LogOut, User, Activity } from 'lucide-react'
+import { Command, LayoutDashboard, LifeBuoy, Ticket, Workflow, Settings, LogOut, User } from 'lucide-react'
 import { Button } from './button'
 
 const nav = [
@@ -18,6 +18,7 @@ const nav = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { toggle } = useCommandPalette()
   const { user, loaded, logout } = useAuth()
 
@@ -26,9 +27,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="flex h-14 items-center gap-4 px-4">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="h-6 w-6 rounded bg-rose-500 text-white grid place-items-center text-xs font-mono">
-              <Activity className="h-3.5 w-3.5" />
-            </span>
             AlignedCardio
           </Link>
 
@@ -67,7 +65,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <p className="font-medium">{user.name}</p>
                 <p className="text-muted-foreground">{user.email}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={logout} className="flex items-center gap-1.5 px-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  logout()
+                  router.push('/')
+                }}
+                className="flex items-center gap-1.5 px-2"
+              >
                 <LogOut className="h-4 w-4" />
                 <span className="hidden lg:inline">Sign out</span>
               </Button>

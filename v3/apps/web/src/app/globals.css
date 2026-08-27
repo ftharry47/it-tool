@@ -37,3 +37,58 @@
     font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 }
+
+/* Login page animations */
+.login-perspective {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.login-board {
+  transform: translate(-50%, -50%) rotateX(55deg) rotateZ(-35deg);
+  transform-style: preserve-3d;
+  animation: loginBoardFloat 8s ease-in-out infinite;
+}
+
+.login-float {
+  animation: loginTicketFloat 5s ease-in-out infinite;
+}
+
+.login-ticket-1 { animation-delay: 0s; }
+.login-ticket-2 { animation-delay: 1.5s; }
+.login-ticket-3 { animation-delay: 3s; }
+
+.login-pulse-node {
+  animation: loginPulse 3s ease-in-out infinite;
+}
+
+.login-pulse-1 { animation-delay: 0s; }
+.login-pulse-2 { animation-delay: 1s; }
+.login-pulse-3 { animation-delay: 2s; }
+
+.login-draw-line {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: loginDraw 4s ease-in-out infinite;
+}
+
+@keyframes loginBoardFloat {
+  0%, 100% { transform: translate(-50%, -50%) rotateX(55deg) rotateZ(-35deg) translateZ(0); }
+  50% { transform: translate(-50%, -52%) rotateX(55deg) rotateZ(-35deg) translateZ(10px); }
+}
+
+@keyframes loginTicketFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-16px); }
+}
+
+@keyframes loginPulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.4); opacity: 1; }
+}
+
+@keyframes loginDraw {
+  0% { stroke-dashoffset: 400; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 400; }
+}

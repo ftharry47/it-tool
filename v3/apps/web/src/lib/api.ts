@@ -56,14 +56,19 @@ export function useAuth() {
 
   const token = user?.access_token
 
-  const authed = (init?: RequestInit): RequestInit => ({
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: token ? `Bearer ${token}` : '',
+  const authed = (init?: RequestInit): RequestInit => {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-    },
-  })
+      ...((init?.headers as Record<string, string>) || {}),
+    }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    return {
+      ...init,
+      headers,
+    }
+  }
 
   return { user, loaded, login, logout, token, authed }
 }

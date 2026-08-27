@@ -41,7 +41,6 @@ export default function CmdbPage() {
   const [selected, setSelected] = useState<CI | null>(null)
 
   const fetchCis = async () => {
-    if (!token) return
     setLoading(true)
     const res = await fetch(api('/api/cmdb'), authed())
     if (res.ok) setCis(await res.json())

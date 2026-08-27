@@ -63,7 +63,7 @@ export default function DashboardSubmitPage() {
         ) : !user ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Sign in to submit a ticket.</p>
-            <Link href="/login" className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+            <Link href="/login?returnTo=/dashboard/submit" className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Sign in
             </Link>
           </div>

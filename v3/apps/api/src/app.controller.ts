@@ -27,6 +27,7 @@ export class AppController {
   }
 
   @Get('cmdb')
+  @UseGuards(JwtAuthGuard)
   async cmdb() {
     const cis = await this.prisma.configurationItem.findMany({
       include: {

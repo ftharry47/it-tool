@@ -200,22 +200,31 @@ export class IssuesService {
     if (query.type) where.type = query.type
     if (query.status) where.status = query.status
     if (query.priority) where.priority = query.priority
-    if (query.requesterId) where.requesterId = query.requesterId
     if (query.assigneeId) where.assigneeId = query.assigneeId
-    if (!user.roles.includes('ADMIN') && !user.permissions.includes('issue:delete')) {
-      where.OR = [
-        { requesterId: user.userId },
-        { assigneeId: user.userId },
-      ]
-    }
+
+    const filters: Prisma.IssueWhereInput[] = []
+
+    if (query.requesterId) filters.push({ requesterId: query.requesterId })
 
     if (query.search) {
-      where.OR = [
-        ...(where.OR || []),
-        { title: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
-      ] as Prisma.IssueWhereInput[]
+      const q = query.search
+      filters.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { ticketId: { contains: q, mode: 'insensitive' } },
+        ],
+      })
     }
+
+    const isAdmin = user.roles.includes('ADMIN') || user.permissions.includes('admin:all')
+    if (!isAdmin) {
+      filters.push({
+        OR: [{ requesterId: user.userId }, { assigneeId: user.userId }],
+      })
+    }
+
+    if (filters.length) where.AND = filters
 
     return this.prisma.issue.findMany({
       where,
