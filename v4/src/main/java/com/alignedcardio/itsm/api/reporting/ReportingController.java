@@ -54,6 +54,39 @@ public class ReportingController {
         return reportingService.slaCompliance(user.getOrgId());
     }
 
+    @GetMapping("/priority-breakdown")
+    public AdHocQueryResponse priorityBreakdown(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.priorityBreakdown(user.getOrgId());
+    }
+
+    @GetMapping("/tickets-trend")
+    public List<Map<String, Object>> ticketsTrend(@AuthenticationPrincipal Jwt jwt,
+                                                    @RequestParam(defaultValue = "30") int days) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.ticketsTrend(user.getOrgId(), days);
+    }
+
+    @GetMapping("/sla-trend")
+    public List<Map<String, Object>> slaTrend(@AuthenticationPrincipal Jwt jwt,
+                                              @RequestParam(defaultValue = "30") int days) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceTrend(user.getOrgId(), days);
+    }
+
+    @GetMapping("/sla-trend/monthly")
+    public List<Map<String, Object>> slaTrendMonthly(@AuthenticationPrincipal Jwt jwt,
+                                                     @RequestParam(defaultValue = "12") int months) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceMonthly(user.getOrgId(), months);
+    }
+
+    @GetMapping("/sla-trend/overall")
+    public Map<String, Object> slaTrendOverall(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceOverall(user.getOrgId());
+    }
+
     @GetMapping("/agent-workload")
     public List<Map<String, Object>> agentWorkload(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);

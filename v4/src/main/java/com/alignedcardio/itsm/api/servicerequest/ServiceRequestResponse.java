@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record ServiceRequestResponse(
         UUID id,
-        Long number,
+        String number,
         UUID catalogItemId,
         String catalogItemName,
         UUID requesterId,

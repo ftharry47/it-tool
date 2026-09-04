@@ -60,7 +60,14 @@ Completed. Full test suite: **101 tests, 0 failures, 0 errors, 1 skipped**. `tar
   - `endUserCannotAccessReports`
   - `agentCanRunAdHocQuery`
 
+## Dashboard data shape
+
+- `GET /api/v1/reports/tickets-summary` returns `{ total, open, inProgress, resolvedToday }`.
+- `GET /api/v1/reports/sla-compliance` returns `{ total, breached, compliancePercent }`.
+- `GET /api/v1/reports/agent-workload` returns a list of `{ agentName, openCount }` where `agentName` is the assignee's display name (or email).
+- `GET /api/v1/reports/sprint-velocity` returns a list of `{ sprintName, committed, completed }` where `committed` is the issue count per sprint and `completed` is the count of issues whose `WorkflowStatus.category` is `DONE`.
+
 ## Assumptions / next refinements
 
-- `sprint-velocity` currently reports `committed` per sprint and sets `completed` to `0`. A real "completed" count requires a project-level decision on terminal `WorkflowStatus` names; this is the minimal, safe version.
+- `sprint-velocity` completed count is derived from `WorkflowStatus.Category.DONE` (terminal status). If your project uses a different terminal category/name, update `ReportingService.sprintVelocity` accordingly.
 - Saved report CRUD stores raw definition JSON; it does not store or cache result sets.

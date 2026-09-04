@@ -58,7 +58,7 @@ public class AutomationRuleEngine {
         log.setOrgId(rule.getOrgId());
         log.setRule(rule);
         log.setEntityType(event.triggerEntity());
-        log.setEntityId(event.entityId().toString());
+        log.setEntityId(event.entityId());
         log.setTriggeredEvent(eventName);
         log.setPayload(payloadJson);
 

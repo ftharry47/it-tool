@@ -16,7 +16,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/incidents")
-@PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
 public class IncidentController {
 
     private final UserService userService;
@@ -28,12 +27,21 @@ public class IncidentController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public List<IncidentSummary> list(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.list(user.getOrgId());
     }
 
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public List<IncidentSummary> listMy(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.listByReporter(user.getOrgId(), user.getId());
+    }
+
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<IncidentResponse> create(@AuthenticationPrincipal Jwt jwt,
                                                    @Valid @RequestBody IncidentCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -41,12 +49,14 @@ public class IncidentController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public IncidentResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.get(user.getOrgId(), id);
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public IncidentResponse update(@AuthenticationPrincipal Jwt jwt,
                                    @PathVariable UUID id,
                                    @Valid @RequestBody IncidentUpdateRequest request) {
@@ -55,12 +65,14 @@ public class IncidentController {
     }
 
     @GetMapping("/priorities")
+    @PreAuthorize("isAuthenticated()")
     public List<PriorityOption> priorities(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.priorities(user.getOrgId());
     }
 
     @GetMapping("/categories")
+    @PreAuthorize("isAuthenticated()")
     public List<CategoryOption> categories(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.categories(user.getOrgId());

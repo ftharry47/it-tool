@@ -25,7 +25,7 @@ public class CatalogItemController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public List<CatalogItemResponse> list(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return catalogService.list(user.getOrgId());
@@ -40,7 +40,7 @@ public class CatalogItemController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public CatalogItemResponse get(@AuthenticationPrincipal Jwt jwt,
                                    @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);

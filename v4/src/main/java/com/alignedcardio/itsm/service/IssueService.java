@@ -144,7 +144,7 @@ public class IssueService {
         List<BoardColumn> columns = new ArrayList<>();
         for (WorkflowStatus s : statuses) {
             List<IssueResponse> items = byStatus.getOrDefault(s.getId(), List.of()).stream().map(this::toResponse).toList();
-            columns.add(new BoardColumn(s.getName(), s.getCategory().name(), s.getDisplayOrder(), items));
+            columns.add(new BoardColumn(s.getId(), s.getName(), s.getCategory().name(), s.getDisplayOrder(), items));
         }
         return columns;
     }
@@ -162,7 +162,7 @@ public class IssueService {
         List<BoardColumn> columns = new ArrayList<>();
         for (WorkflowStatus s : statuses) {
             List<IssueResponse> items = byStatus.getOrDefault(s.getId(), List.of()).stream().map(this::toResponse).toList();
-            columns.add(new BoardColumn(s.getName(), s.getCategory().name(), s.getDisplayOrder(), items));
+            columns.add(new BoardColumn(s.getId(), s.getName(), s.getCategory().name(), s.getDisplayOrder(), items));
         }
         return columns;
     }

@@ -1,7 +1,9 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.auth.CurrentUser;
-import com.alignedcardio.itsm.api.incident.NotFoundException;
+import com.alignedcardio.itsm.api.auth.UpdateUserRequest;
+import com.alignedcardio.itsm.api.user.UserCreateRequest;
+import com.alignedcardio.itsm.api.user.UserResponse;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.entity.BaseEntity;
@@ -13,7 +15,9 @@ import com.alignedcardio.itsm.repository.RoleRepository;
 import com.alignedcardio.itsm.repository.UserRoleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.alignedcardio.itsm.api.auth.UpdateUserRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,8 @@ import java.util.UUID;
 
 @Service
 public class UserService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
     private static final String DEFAULT_ROLE = "END_USER";
 
@@ -95,6 +101,7 @@ public class UserService {
         UserRole userRole = new UserRole();
         userRole.setUser(user);
         userRole.setRole(role);
+        userRole.setOrgId(user.getOrgId());
         userRoleRepository.save(userRole);
 
         return user;
@@ -131,19 +138,31 @@ public class UserService {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        Role role = roleRepository.findByOrgIdAndName(BaseEntity.DEFAULT_ORG_ID, roleName)
+        Role role = roleRepository.findByOrgIdAndName(user.getOrgId(), roleName)
                 .orElseThrow(() -> new NotFoundException("Role not found"));
 
         List<String> beforeRoles = user.getUserRoles().stream()
                 .map(ur -> ur.getRole().getName())
                 .toList();
 
-        userRoleRepository.deleteAll(user.getUserRoles());
+        if (beforeRoles.size() == 1 && beforeRoles.get(0).equals(roleName)) {
+            return toCurrentUser(user);
+        }
+
+        user.getUserRoles().clear();
 
         UserRole userRole = new UserRole();
         userRole.setUser(user);
         userRole.setRole(role);
+        userRole.setOrgId(user.getOrgId());
+        userRole.setCreatedBy(actorId);
+        userRole.setUpdatedBy(actorId);
+        user.getUserRoles().add(userRole);
+
         userRoleRepository.save(userRole);
+
+        user.setUpdatedBy(actorId);
+        appUserRepository.save(user);
 
         writeAuditLog(user, actorId, "UPDATE_ROLE", beforeRoles, List.of(roleName), ipAddress);
 
@@ -168,8 +187,68 @@ public class UserService {
 
             auditLogRepository.save(log);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to write audit log for user role update", e);
+            logger.warn("Failed to write audit log for user role update", e);
         }
+    }
+
+    @Transactional
+    public UserResponse createLocalUser(UUID orgId, UserCreateRequest request) {
+        Role role = roleRepository.findByOrgIdAndName(orgId, request.roleName())
+                .orElseThrow(() -> new NotFoundException("Role not found"));
+
+        AppUser user = new AppUser();
+        user.setOrgId(orgId);
+        user.setObjectId(UUID.randomUUID().toString());
+        user.setEmail(request.email());
+        user.setDisplayName(request.displayName());
+        user.setJobTitle(request.jobTitle());
+        user.setDepartment(request.department());
+        user.setStatus(AppUser.Status.ACTIVE);
+        user.setActive(true);
+        user.setMfaEnabled(false);
+
+        user = appUserRepository.save(user);
+
+        UserRole userRole = new UserRole();
+        userRole.setUser(user);
+        userRole.setRole(role);
+        userRole.setOrgId(orgId);
+        userRoleRepository.save(userRole);
+
+        return toUserResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> listByOrg(UUID orgId) {
+        return appUserRepository.findByOrgId(orgId).stream()
+                .map(this::toUserResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> search(UUID orgId, String query, int limit) {
+        return appUserRepository.searchByText(orgId, query, PageRequest.of(0, limit)).stream()
+                .map(this::toUserResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getByOrgAndId(UUID orgId, UUID userId) {
+        AppUser user = appUserRepository.findByOrgIdAndId(orgId, userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        return toUserResponse(user);
+    }
+
+    private UserResponse toUserResponse(AppUser user) {
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getDisplayName(),
+                user.getJobTitle(),
+                user.getDepartment(),
+                user.isActive(),
+                user.getUserRoles().stream().map(ur -> ur.getRole().getName()).toList()
+        );
     }
 
     private CurrentUser toCurrentUser(AppUser user) {

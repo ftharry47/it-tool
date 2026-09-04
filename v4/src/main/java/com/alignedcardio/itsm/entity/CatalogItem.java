@@ -1,7 +1,10 @@
 package com.alignedcardio.itsm.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "catalog_item")
@@ -19,7 +22,8 @@ public class CatalogItem extends BaseEntity {
 
     @NotNull
     @Column(name = "form_schema", columnDefinition = "jsonb", nullable = false)
-    private String formSchema;
+    @JdbcTypeCode(SqlTypes.JSON)
+    private JsonNode formSchema;
 
     @Column(name = "approval_required", nullable = false)
     private boolean approvalRequired = false;
@@ -29,7 +33,8 @@ public class CatalogItem extends BaseEntity {
     private AppUser approver;
 
     @Column(name = "fulfillment_tasks", columnDefinition = "jsonb")
-    private String fulfillmentTasks;
+    @JdbcTypeCode(SqlTypes.JSON)
+    private JsonNode fulfillmentTasks;
 
     @Column(name = "active", nullable = false)
     private boolean active = true;
@@ -58,11 +63,11 @@ public class CatalogItem extends BaseEntity {
         this.category = category;
     }
 
-    public String getFormSchema() {
+    public JsonNode getFormSchema() {
         return formSchema;
     }
 
-    public void setFormSchema(String formSchema) {
+    public void setFormSchema(JsonNode formSchema) {
         this.formSchema = formSchema;
     }
 
@@ -82,11 +87,11 @@ public class CatalogItem extends BaseEntity {
         this.approver = approver;
     }
 
-    public String getFulfillmentTasks() {
+    public JsonNode getFulfillmentTasks() {
         return fulfillmentTasks;
     }
 
-    public void setFulfillmentTasks(String fulfillmentTasks) {
+    public void setFulfillmentTasks(JsonNode fulfillmentTasks) {
         this.fulfillmentTasks = fulfillmentTasks;
     }
 

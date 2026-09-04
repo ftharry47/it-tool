@@ -6,46 +6,53 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 4%;
-    --card: 0 0% 100%;
+    --card: 0 0% 98%;
     --card-foreground: 240 10% 4%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 4%;
-    --primary: 222 47% 31%;
+    --primary: 0 72% 51%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 5% 96%;
-    --secondary-foreground: 240 6% 10%;
+    --secondary-foreground: 240 10% 4%;
     --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 44%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 6% 10%;
-    --destructive: 0 75% 44%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5% 30%;
-    --input: 240 5% 30%;
-    --ring: 222 47% 31%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 0 72% 51%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 0 72% 51%;
     --radius: 0.5rem;
+
+    --chart-1: hsl(0 72% 51%);
+    --chart-2: hsl(240 5% 34%);
+    --chart-3: hsl(32 95% 44%);
+    --chart-4: hsl(18 86% 40%);
+    --chart-5: hsl(240 3% 55%);
+    --chart-6: hsl(240 4% 65%);
   }
 
   .dark {
-    --background: 0 0% 0%;
+    --background: 240 5% 4%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 3%;
+    --card: 240 5% 10%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3%;
+    --popover: 240 5% 11%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 14%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 5% 13%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 14%;
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 4% 64%;
+    --accent: 0 72% 51%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 75% 44%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 38%;
-    --input: 0 0% 38%;
-    --ring: 0 0% 83%;
+    --border: 240 5% 26%;
+    --input: 240 5% 26%;
+    --ring: 0 72% 51%;
     --radius: 0.5rem;
   }
 }
@@ -57,5 +64,9 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  .dark body {
+    background-image: radial-gradient(ellipse 80% 55% at 50% -10%, hsl(0 70% 12% / 0.12), transparent 55%);
+    background-attachment: fixed;
   }
 }

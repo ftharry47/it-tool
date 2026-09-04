@@ -4,7 +4,7 @@ import java.util.UUID;
 
 public record KbSearchResult(
         UUID id,
-        Long number,
+        String number,
         String title,
         String category,
         double rank

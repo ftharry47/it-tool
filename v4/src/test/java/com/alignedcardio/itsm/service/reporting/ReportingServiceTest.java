@@ -136,7 +136,7 @@ class ReportingServiceTest {
         assertEquals(1, response.rows().size());
 
         Map<String, Object> row = response.rows().get(0);
-        assertEquals(Incident.Status.NEW, row.get("group"));
+        assertEquals(Incident.Status.NEW.name(), row.get("group"));
         assertEquals(5L, row.get("count"));
 
         verify(criteriaBuilder).equal(path, orgId);

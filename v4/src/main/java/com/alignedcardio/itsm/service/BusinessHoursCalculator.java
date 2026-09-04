@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
+@Service
 public class BusinessHoursCalculator {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

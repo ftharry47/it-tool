@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
@@ -8,7 +8,7 @@ import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
-import { SchemaForm, isValidSchema } from '../../components/ui/SchemaForm'
+import { SchemaForm, isValidSchema, type SchemaField } from '../../components/ui/SchemaForm'
 
 interface CatalogItem {
   id: string
@@ -79,20 +79,27 @@ export function CatalogAdmin() {
     },
   })
 
-  const parsedSchema = (() => {
+  useEffect(() => {
     try {
       const parsed = JSON.parse(values.formSchema)
       if (!isValidSchema(parsed)) {
         setParseError('form_schema must be an array of fields with at least a "name" and a valid "type".')
-        return []
+      } else {
+        setParseError(null)
       }
-      setParseError(null)
-      return parsed
     } catch (e) {
       setParseError('form_schema is not valid JSON.')
+    }
+  }, [values.formSchema])
+
+  const parsedSchema = useMemo<SchemaField[]>(() => {
+    try {
+      const parsed = JSON.parse(values.formSchema)
+      return isValidSchema(parsed) ? parsed : []
+    } catch (e) {
       return []
     }
-  })()
+  }, [values.formSchema])
 
   const parsedFulfillment = (() => {
     try {
@@ -212,7 +219,7 @@ export function CatalogAdmin() {
           fields={[
             { name: 'name', label: 'Name', type: 'text', required: true },
             { name: 'description', label: 'Description', type: 'textarea' },
-            { name: 'category', label: 'Category', type: 'text' },
+            { name: 'category', label: 'Category', type: 'text', placeholder: 'e.g., Clinical Software, Workstation, Network' },
             { name: 'formSchema', label: 'Form Schema JSON', type: 'textarea' },
             { name: 'fulfillmentTasks', label: 'Fulfillment Tasks JSON', type: 'textarea' },
             { name: 'approverId', label: 'Approver ID (UUID)', type: 'text' },

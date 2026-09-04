@@ -102,6 +102,65 @@ class SlaEngineTest {
     }
 
     @Test
+    void waitingOnCustomerSetsPausedAt() {
+        SlaInstance instance = createInstance();
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.WAITING_ON_CUSTOMER);
+
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.of(instance));
+
+        slaEngine.onStatusChanged(incident);
+
+        verify(slaInstanceRepository).save(any(SlaInstance.class));
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+
+        assertNotNull(captor.getValue().getPausedAt());
+    }
+
+    @Test
+    void leavingWaitingOnCustomerExtendsDueDatesAndAccumulatesPausedMinutes() {
+        OffsetDateTime start = OffsetDateTime.parse("2026-01-01T12:00:00Z");
+        SlaInstance instance = createInstance();
+        instance.setCreatedAt(start);
+        instance.setResponseDueAt(start.plusMinutes(60));
+        instance.setResolutionDueAt(start.plusMinutes(240));
+        instance.setPausedAt(OffsetDateTime.now().minusMinutes(30));
+
+        // 24/7 calendar so the math is straightforward
+        BusinessCalendar calendar = create24x7Calendar();
+        SlaPolicy policy = new SlaPolicy();
+        policy.setResponseTargetMinutes(60);
+        policy.setResolutionTargetMinutes(240);
+        policy.setBusinessHoursCalendar(calendar);
+        instance.setPolicy(policy);
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.IN_PROGRESS);
+        incident.setCreatedAt(start);
+
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.of(instance));
+
+        slaEngine.onStatusChanged(incident);
+
+        verify(slaInstanceRepository).save(any(SlaInstance.class));
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+
+        SlaInstance saved = captor.getValue();
+        assertNull(saved.getPausedAt());
+        assertTrue(saved.getTotalPausedMinutes() >= 29 && saved.getTotalPausedMinutes() <= 31,
+                "Expected ~30 paused minutes, got " + saved.getTotalPausedMinutes());
+        assertTrue(saved.getResponseDueAt().isAfter(start.plusMinutes(60)),
+                "Response due date should be extended after a pause");
+        assertTrue(saved.getResolutionDueAt().isAfter(start.plusMinutes(240)),
+                "Resolution due date should be extended after a pause");
+    }
+
+    @Test
     void resolvingTicketSetsResolutionMetAt() {
         SlaInstance instance = createInstance();
 

@@ -12,7 +12,7 @@ import java.util.List;
 public class Incident extends BaseEntity {
 
     public enum Status {
-        NEW, IN_PROGRESS, ON_HOLD, RESOLVED, CLOSED, REOPENED
+        NEW, IN_PROGRESS, ON_HOLD, WAITING_ON_CUSTOMER, RESOLVED, CLOSED, REOPENED
     }
 
     @Column(name = "number", columnDefinition = "bigint not null default nextval('incident_number_seq')", insertable = false, updatable = false, nullable = false)
@@ -61,6 +61,15 @@ public class Incident extends BaseEntity {
 
     @Column(name = "closed_at", columnDefinition = "timestamptz")
     private OffsetDateTime closedAt;
+
+    @Column(name = "location", length = 255)
+    private String location;
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Column(name = "estimated_minutes")
+    private Integer estimatedMinutes;
 
     @OneToMany(mappedBy = "incident", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<IncidentComment> comments = new ArrayList<>();
@@ -175,5 +184,29 @@ public class Incident extends BaseEntity {
 
     public void setComments(List<IncidentComment> comments) {
         this.comments = comments;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public Integer getEstimatedMinutes() {
+        return estimatedMinutes;
+    }
+
+    public void setEstimatedMinutes(Integer estimatedMinutes) {
+        this.estimatedMinutes = estimatedMinutes;
     }
 }

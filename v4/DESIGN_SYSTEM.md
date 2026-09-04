@@ -9,29 +9,51 @@
 
 CSS variables are defined in `src/main/frontend/src/index.css`.
 
-### Light mode
-- Background: `#ffffff`
-- Foreground: `#0a0a0a`
-- Card: `#ffffff`
-- Primary: `#2c3e6b` (deep blue)
-- Secondary: `#f4f4f5`
-- Muted: `#f4f4f5`
-- Muted-foreground: `#6b6b74`
-- Accent: `#f4f4f5`
-- Destructive: `#c61c1c`
-- Border: `#4d4d56`
+### Dark tokens (CrowdStrike-inspired, default)
 
-### Dark mode
-- Background: `#000000`
-- Foreground: `#fafafa`
-- Card: `#080808`
-- Primary: `#fafafa`
-- Secondary: `#242424`
-- Muted: `#242424`
-- Muted-foreground: `#a1a1aa`
-- Accent: `#242424`
-- Destructive: `#c61c1c`
-- Border: `#616161`
+| Token | Hex | Usage |
+|-------|-----|-------|
+| Background | `#0A0A0B` | Page/outer background |
+| Foreground | `#FAFAFA` | Primary text |
+| Card | `#18181B` | Cards, panels, sidebar surface |
+| Popover | `#19191D` | Popover/drawer surfaces |
+| Primary | `#DC2626` | Primary buttons, active nav, links, focus rings, brand accents |
+| Primary-foreground | `#FAFAFA` | Text on primary buttons |
+| Secondary | `#1F1F23` | Secondary section backgrounds |
+| Muted | `#222226` | Muted hover backgrounds |
+| Muted-foreground | `#A1A1AA` | Secondary labels |
+| Accent | `#DC2626` | Focus/hover accents |
+| Destructive | `#EF4444` | Delete/cancel/reject actions |
+| Border | `#3F3F45` | Card borders and dividers |
+
+The dark background uses a subtle top-centre radial gradient (`hsl(0 70% 12% / 0.12)`) to add depth without changing layout.
+
+### Light tokens
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| Background | `#FFFFFF` | Page background |
+| Foreground | `#09090B` | Primary text |
+| Card | `#FAFAFA` | Cards, panels, sidebar surface |
+| Popover | `#FFFFFF` | Popover/drawer surfaces |
+| Primary | `#DC2626` | Same red accent |
+| Secondary | `#F3F3F5` | Secondary backgrounds |
+| Muted | `#F3F3F5` | Muted backgrounds |
+| Muted-foreground | `#71717A` | Secondary labels |
+| Border | `#E4E4E7` | Light borders |
+
+### Chart palette
+
+Chart colors are stored in `index.css` as CSS variables and consumed by Recharts:
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| `--chart-1` | `#DC2626` | Brand red — primary bar/line, "Open" pie segment |
+| `--chart-2` | `#52525B` | Slate neutral — secondary category, "Compliant" SLA |
+| `--chart-3` | `#D97706` | Muted amber — "In Progress" / warm accent |
+| `--chart-4` | `#C2410C` | Deep red-orange — "Closed" / tertiary category |
+| `--chart-5` | `#85858C` | Light zinc neutral |
+| `--chart-6` | `#A1A1AA` | Off-white/silver contrast |
 
 ## Spacing Scale (4-point grid)
 - 0.25rem (4px), 0.5rem (8px), 0.75rem (12px), 1rem (16px)

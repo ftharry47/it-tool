@@ -1,4 +1,24 @@
+param(
+    [string]$AzureClientId = $env:VITE_AZURE_CLIENT_ID,
+    [string]$AzureTenantId = $env:VITE_AZURE_TENANT_ID,
+    [string]$AppBaseUrl = $env:VITE_APP_BASE_URL
+)
+
 $ErrorActionPreference = "Stop"
+
+if (-not $AzureClientId) {
+    throw "VITE_AZURE_CLIENT_ID is required. Pass -AzureClientId or set the VITE_AZURE_CLIENT_ID environment variable."
+}
+if (-not $AzureTenantId) {
+    throw "VITE_AZURE_TENANT_ID is required. Pass -AzureTenantId or set the VITE_AZURE_TENANT_ID environment variable."
+}
+if (-not $AppBaseUrl) {
+    throw "VITE_APP_BASE_URL is required. Pass -AppBaseUrl or set the VITE_APP_BASE_URL environment variable."
+}
+
+$env:VITE_AZURE_CLIENT_ID = $AzureClientId
+$env:VITE_AZURE_TENANT_ID = $AzureTenantId
+$env:VITE_APP_BASE_URL = $AppBaseUrl
 
 $mvn = Get-Command mvn -ErrorAction SilentlyContinue
 if (-not $mvn) {

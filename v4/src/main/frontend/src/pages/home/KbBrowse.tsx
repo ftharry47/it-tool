@@ -29,6 +29,7 @@ export function KbBrowse() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
+    enabled: !!account,
   })
 
   const searchQuery = useQuery<KbArticleSummary[]>({
@@ -39,7 +40,7 @@ export function KbBrowse() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!query,
+    enabled: !!account && !!query,
   })
 
   const isLoading = query ? searchQuery.isLoading : listQuery.isLoading

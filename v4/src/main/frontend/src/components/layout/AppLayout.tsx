@@ -2,9 +2,10 @@ import { Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { getDefaultRoute } from '../../routes/utils'
 import { RoleNav } from './RoleNav'
+import { Header } from './Header'
 
 export function AppLayout() {
-  const { currentUser, logout } = useAuth()
+  const { currentUser } = useAuth()
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground">
@@ -15,15 +16,11 @@ export function AppLayout() {
         </div>
         <RoleNav />
         <div className="absolute bottom-0 w-64 border-t border-border p-3">
-          <button
-            onClick={logout}
-            className="w-full rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Sign out
-          </button>
+          <p className="text-xs text-muted-foreground text-center">© 2026 Srihari Thangavel. All rights reserved.</p>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
+      <main className="flex flex-1 flex-col overflow-auto">
+        <Header />
         <Outlet />
       </main>
     </div>

@@ -57,7 +57,7 @@ public class TsVectorKnowledgeBaseSearch implements KnowledgeBaseSearch {
     private KbSearchResult toResult(Object[] row) {
         return new KbSearchResult(
                 (UUID) row[0],
-                ((Number) row[1]).longValue(),
+                row[1] != null ? String.valueOf(row[1]) : null,
                 (String) row[2],
                 (String) row[3],
                 row[4] != null ? ((Number) row[4]).doubleValue() : 0.0

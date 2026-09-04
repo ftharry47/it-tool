@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { FileQuestion, FolderOpen } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
@@ -24,19 +24,83 @@ interface SlaCompliance {
 }
 
 interface AgentWorkload {
-  agentId: string
+  agentName: string
   openCount: number
 }
 
 interface SprintVelocity {
-  sprintId: string
+  sprintName: string
   committed: number
   completed: number
 }
 
+interface TrendPoint {
+  date: string
+  count?: number
+  compliancePercent?: number
+}
+
+interface AdHocRow {
+  group: string | null
+  count: number
+}
+
+interface AdHocQueryResponse {
+  orgId: string
+  entity: string
+  groupBy: string | null
+  rows: AdHocRow[]
+}
+
 function TicketsSummaryView({ data }: { data: TicketsSummary }) {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0]
+  const [days, setDays] = useState(30)
+
+  const trendQuery = useQuery<TrendPoint[]>({
+    queryKey: ['reports', 'tickets-trend', days],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/tickets-trend?days=${days}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const categoryQuery = useQuery<AdHocQueryResponse>({
+    queryKey: ['reports', 'category-breakdown'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/reports/query', {
+        method: 'POST',
+        body: JSON.stringify({ entity: 'incident', groupBy: 'category' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const priorityQuery = useQuery<AdHocQueryResponse>({
+    queryKey: ['reports', 'priority-breakdown'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/reports/query', {
+        method: 'POST',
+        body: JSON.stringify({ entity: 'incident', groupBy: 'priority' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
   const closed = Math.max(0, data.total - data.open - data.inProgress - data.resolvedToday)
-  const chartData = [
+  const statusChartData = [
     { name: 'Open', value: data.open },
     { name: 'In Progress', value: data.inProgress },
     { name: 'Resolved Today', value: data.resolvedToday },
@@ -44,30 +108,84 @@ function TicketsSummaryView({ data }: { data: TicketsSummary }) {
   ].filter((d) => d.value > 0)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <MetricCard label="Total" value={data.total} />
         <MetricCard label="Open" value={data.open} />
         <MetricCard label="In Progress" value={data.inProgress} />
         <MetricCard label="Resolved Today" value={data.resolvedToday} />
       </div>
-      <div className="h-72 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h3 className="mb-2 text-sm font-medium text-muted-foreground">Ticket distribution</h3>
-        <ResponsiveContainer width="100%" height="90%">
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={80} label>
-              {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-muted-foreground">Ticket volume trend</h3>
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+          </select>
+        </div>
+        {trendQuery.isLoading ? (
+          <Loading />
+        ) : trendQuery.error ? (
+          <ErrorFallback error={trendQuery.error} message="Could not load ticket trend." onRetry={() => trendQuery.refetch()} />
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendQuery.data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="count" stroke={COLORS[0]} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Tickets by status</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={statusChartData} dataKey="value" nameKey="name" outerRadius={70} label>
+                  {statusChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <BreakdownBarChart title="Tickets by category" query={categoryQuery} />
+        <BreakdownBarChart title="Tickets by priority" query={priorityQuery} />
       </div>
     </div>
   )
 }
 
 function SlaComplianceView({ data }: { data: SlaCompliance }) {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0]
+  const [days, setDays] = useState(30)
+
+  const trendQuery = useQuery<TrendPoint[]>({
+    queryKey: ['reports', 'sla-trend', days],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/sla-trend?days=${days}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
   const nonBreached = Math.max(0, data.total - data.breached)
   const chartData = [
     { name: 'Compliant', value: nonBreached },
@@ -75,12 +193,44 @@ function SlaComplianceView({ data }: { data: SlaCompliance }) {
   ].filter((d) => d.value > 0)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <MetricCard label="SLA Compliance" value={`${data.compliancePercent}%`} />
         <MetricCard label="Total SLAs" value={data.total} />
         <MetricCard label="Breached" value={data.breached} />
       </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-muted-foreground">SLA compliance trend</h3>
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+          </select>
+        </div>
+        {trendQuery.isLoading ? (
+          <Loading />
+        ) : trendQuery.error ? (
+          <ErrorFallback error={trendQuery.error} message="Could not load SLA trend." onRetry={() => trendQuery.refetch()} />
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendQuery.data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Line type="monotone" dataKey="compliancePercent" stroke={COLORS[2]} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       <div className="h-72 rounded-xl border border-border bg-card p-4 shadow-sm">
         <h3 className="mb-2 text-sm font-medium text-muted-foreground">SLA breaches</h3>
         <ResponsiveContainer width="100%" height="90%">
@@ -97,16 +247,54 @@ function SlaComplianceView({ data }: { data: SlaCompliance }) {
   )
 }
 
+function BreakdownBarChart({ title, query }: { title: string; query: { data?: AdHocQueryResponse; isLoading: boolean; error: Error | null; refetch: () => void } }) {
+  const chartData = (query.data?.rows ?? [])
+    .map((r) => ({ name: r.group ?? 'Unassigned', count: r.count }))
+    .filter((d) => d.count > 0)
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h3 className="mb-2 text-sm font-medium text-muted-foreground">{title}</h3>
+      {query.isLoading ? (
+        <Loading />
+      ) : query.error ? (
+        <ErrorFallback error={query.error} message={`Could not load ${title.toLowerCase()}.`} onRetry={() => query.refetch()} />
+      ) : chartData.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No data.</p>
+      ) : (
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" name="Tickets" fill={COLORS[0]} maxBarSize={60} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">No open incidents currently assigned to agents.</p>
+      </div>
+    )
+  }
   return (
     <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="agentId" tick={{ fontSize: 12 }} />
+          <XAxis dataKey="agentName" tick={{ fontSize: 12 }} />
           <YAxis />
           <Tooltip />
-          <Bar dataKey="openCount" name="Open Incidents" fill={COLORS[0]} />
+          <Bar dataKey="openCount" name="Open Incidents" fill={COLORS[0]} maxBarSize={80} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -114,12 +302,19 @@ function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
 }
 
 function SprintVelocityView({ data }: { data: SprintVelocity[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">No sprint data available.</p>
+      </div>
+    )
+  }
   return (
     <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="sprintId" tick={{ fontSize: 12 }} />
+          <XAxis dataKey="sprintName" tick={{ fontSize: 12 }} />
           <YAxis />
           <Tooltip />
           <Legend />
@@ -161,6 +356,9 @@ export function ReportsDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
   })
 
   return (

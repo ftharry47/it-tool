@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record ChangeResponse(
         UUID id,
-        Long number,
+        String number,
         String title,
         String description,
         ChangeRequest.ChangeType changeType,

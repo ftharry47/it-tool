@@ -10,6 +10,7 @@ import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.ProblemIncidentLinkRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
 import jakarta.persistence.EntityManager;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,10 +47,18 @@ public class ProblemService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ProblemResponse> search(UUID orgId, String query, int limit) {
+        return problemRepository.searchByText(orgId, query, PageRequest.of(0, limit)).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public ProblemResponse create(AppUser user, UUID orgId, ProblemCreateRequest request) {
         Problem problem = new Problem();
         problem.setOrgId(orgId);
+        problem.setNumber(generateProblemNumber());
         problem.setTitle(request.title());
         problem.setDescription(request.description());
         problem.setCreatedBy(user.getId());
@@ -176,6 +185,12 @@ public class ProblemService {
                 problem.getClosedAt(),
                 problem.getCreatedAt()
         );
+    }
+
+    private String generateProblemNumber() {
+        Long next = ((Number) entityManager.createNativeQuery("SELECT nextval('problem_number_seq')")
+                .getSingleResult()).longValue();
+        return "PROB-" + next;
     }
 
     private IncidentSummary toIncidentSummary(Incident incident) {

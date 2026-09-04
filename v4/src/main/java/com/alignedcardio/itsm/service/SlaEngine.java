@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class SlaEngine {
@@ -103,12 +104,16 @@ public class SlaEngine {
         });
     }
 
+    private static final Set<Incident.Status> PAUSED_STATUSES = Set.of(
+            Incident.Status.ON_HOLD,
+            Incident.Status.WAITING_ON_CUSTOMER);
+
     @Transactional
     public void onStatusChanged(Incident incident) {
         slaInstanceRepository.findByIncidentId(incident.getId()).ifPresent(instance -> {
             OffsetDateTime now = OffsetDateTime.now();
 
-            if (incident.getStatus() == Incident.Status.ON_HOLD) {
+            if (PAUSED_STATUSES.contains(incident.getStatus())) {
                 if (instance.getPausedAt() == null) {
                     instance.setPausedAt(now);
                 }

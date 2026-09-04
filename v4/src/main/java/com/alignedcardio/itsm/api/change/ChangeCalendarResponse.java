@@ -11,7 +11,7 @@ public record ChangeCalendarResponse(
 
     public record ChangeCalendarItem(
             UUID id,
-            Long number,
+            String number,
             String title,
             OffsetDateTime plannedStart,
             OffsetDateTime plannedEnd

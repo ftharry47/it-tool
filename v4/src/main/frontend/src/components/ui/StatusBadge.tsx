@@ -14,6 +14,7 @@ const statusStyles: Record<string, string> = {
   'KNOWN ERROR': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   KNOWN_ERROR: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   ON_HOLD: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
+  WAITING_ON_CUSTOMER: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   RESOLVED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   CLOSED: 'bg-muted text-muted-foreground',
 
@@ -45,11 +46,65 @@ const statusStyles: Record<string, string> = {
   DONE: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 }
 
+const statusLabels: Record<string, string> = {
+  // Incident / Problem
+  NEW: 'New',
+  OPEN: 'Open',
+  IN_PROGRESS: 'In Progress',
+  INVESTIGATING: 'Investigating',
+  KNOWN_ERROR: 'Known Error',
+  ON_HOLD: 'On Hold',
+  WAITING_ON_CUSTOMER: 'Waiting on Customer',
+  RESOLVED: 'Resolved',
+  CLOSED: 'Closed',
+  REOPENED: 'Reopened',
+
+  // Change
+  DRAFT: 'Draft',
+  PENDING: 'Pending',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  SCHEDULED: 'Scheduled',
+  COMPLETED: 'Completed',
+  FAILED: 'Failed',
+  ROLLED_BACK: 'Rolled Back',
+  REJECTED: 'Rejected',
+  CANCELLED: 'Cancelled',
+
+  // Service Request
+  SUBMITTED: 'Submitted',
+  IN_FULFILLMENT: 'In Fulfillment',
+  FULFILLED: 'Fulfilled',
+
+  // Knowledge Base
+  PENDING_REVIEW: 'Pending Review',
+  PUBLISHED: 'Published',
+  ARCHIVED: 'Archived',
+
+  // Workflow / Project / SLA
+  BACKLOG: 'Backlog',
+  TODO: 'To Do',
+  DONE: 'Done',
+  ON_TRACK: 'On Track',
+  AT_RISK: 'At Risk',
+  BREACHED: 'Breached',
+}
+
+export function formatStatusLabel(status?: string | null): string {
+  if (!status) return ''
+  if (statusLabels[status]) return statusLabels[status]
+  return status
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const style = statusStyles[status] ?? 'bg-secondary text-secondary-foreground'
+  const label = formatStatusLabel(status)
   return (
     <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', style, className)}>
-      {status}
+      {label}
     </span>
   )
 }

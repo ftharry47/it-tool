@@ -36,7 +36,7 @@ export function KbArticleView() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!id,
+    enabled: !!id && !!account,
   })
 
   const feedbackMutation = useMutation<KbArticle, Error, boolean>({
@@ -53,8 +53,9 @@ export function KbArticleView() {
     },
   })
 
-  if (articleQuery.isLoading || !articleQuery.data) return <Loading />
+  if (articleQuery.isLoading) return <Loading />
   if (articleQuery.error) return <ErrorFallback error={articleQuery.error} message="Could not load article." onRetry={() => articleQuery.refetch()} />
+  if (!articleQuery.data) return <Loading />
 
   const article = articleQuery.data
 

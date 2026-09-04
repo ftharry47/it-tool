@@ -11,8 +11,8 @@ public class KbArticle extends BaseEntity {
 
     public enum Status { DRAFT, PENDING_REVIEW, PUBLISHED, ARCHIVED }
 
-    @Column(name = "number", columnDefinition = "bigint not null default nextval('kb_article_number_seq')", insertable = false, updatable = false, nullable = false)
-    private Long number;
+    @Column(name = "number", nullable = false)
+    private String number;
 
     @NotNull
     @Column(name = "title", length = 500, nullable = false)
@@ -53,11 +53,11 @@ public class KbArticle extends BaseEntity {
     @Column(name = "archived_at")
     private OffsetDateTime archivedAt;
 
-    public Long getNumber() {
+    public String getNumber() {
         return number;
     }
 
-    public void setNumber(Long number) {
+    public void setNumber(String number) {
         this.number = number;
     }
 

@@ -15,8 +15,8 @@ public class ChangeRequest extends BaseEntity {
         DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SCHEDULED, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK, CANCELLED
     }
 
-    @Column(name = "number", columnDefinition = "bigint not null default nextval('change_number_seq')", insertable = false, updatable = false, nullable = false)
-    private Long number;
+    @Column(name = "number", nullable = false)
+    private String number;
 
     @NotNull
     @Column(name = "title", length = 500, nullable = false)
@@ -60,11 +60,11 @@ public class ChangeRequest extends BaseEntity {
     @JoinColumn(name = "linked_problem_id")
     private Problem linkedProblem;
 
-    public Long getNumber() {
+    public String getNumber() {
         return number;
     }
 
-    public void setNumber(Long number) {
+    public void setNumber(String number) {
         this.number = number;
     }
 

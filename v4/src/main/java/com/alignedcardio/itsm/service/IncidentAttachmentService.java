@@ -8,6 +8,8 @@ import com.alignedcardio.itsm.entity.IncidentAttachment;
 import com.alignedcardio.itsm.repository.IncidentAttachmentRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,6 +47,20 @@ public class IncidentAttachmentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public Resource getAttachmentResource(UUID orgId, UUID incidentId, UUID attachmentId) {
+        IncidentAttachment attachment = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new NotFoundException("Attachment not found"));
+        if (!attachment.getOrgId().equals(orgId) || !attachment.getIncident().getId().equals(incidentId)) {
+            throw new NotFoundException("Attachment not found");
+        }
+        Path file = Paths.get(storePath, orgId.toString(), incidentId.toString(), attachment.getFileName());
+        if (!Files.exists(file)) {
+            throw new NotFoundException("Attachment file not found");
+        }
+        return new FileSystemResource(file);
+    }
+
     @Transactional
     public IncidentAttachmentResponse storeAttachment(UUID orgId, UUID incidentId, AppUser user, MultipartFile file) {
         Incident incident = incidentRepository.findByOrgIdAndId(orgId, incidentId)
@@ -65,20 +81,28 @@ public class IncidentAttachmentService {
         attachment.setFileName(file.getOriginalFilename());
         attachment.setContentType(file.getContentType());
         attachment.setSizeBytes(file.getSize());
-        attachment.setBlobUrl("/api/v1/incidents/" + incident.getId() + "/attachments/" + attachment.getId());
         attachment.setCreatedBy(user.getId());
         attachment.setUpdatedBy(user.getId());
 
-        return toResponse(attachmentRepository.save(attachment));
+        attachment = attachmentRepository.save(attachment);
+        attachment.setBlobUrl("/api/v1/incidents/" + incident.getId() + "/attachments/" + attachment.getId());
+        attachment = attachmentRepository.save(attachment);
+
+        return toResponse(attachment);
     }
 
     private IncidentAttachmentResponse toResponse(IncidentAttachment attachment) {
+        String blobUrl = null;
+        if (attachment.getId() != null && attachment.getIncident() != null) {
+            blobUrl = "/api/v1/incidents/" + attachment.getIncident().getId() + "/attachments/" + attachment.getId();
+        }
         return new IncidentAttachmentResponse(
                 attachment.getId(),
                 attachment.getFileName(),
                 attachment.getContentType(),
                 attachment.getSizeBytes(),
-                attachment.getBlobUrl()
+                blobUrl,
+                attachment.getCreatedAt()
         );
     }
 }

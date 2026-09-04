@@ -75,6 +75,9 @@ public class Issue extends BaseEntity {
     @Column(name = "remaining_points")
     private Integer remainingPoints;
 
+    @Column(name = "estimated_minutes")
+    private Integer estimatedMinutes;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", length = 32)
     private Priority priority = Priority.MEDIUM;
@@ -208,6 +211,14 @@ public class Issue extends BaseEntity {
 
     public void setRemainingPoints(Integer remainingPoints) {
         this.remainingPoints = remainingPoints;
+    }
+
+    public Integer getEstimatedMinutes() {
+        return estimatedMinutes;
+    }
+
+    public void setEstimatedMinutes(Integer estimatedMinutes) {
+        this.estimatedMinutes = estimatedMinutes;
     }
 
     public Priority getPriority() {

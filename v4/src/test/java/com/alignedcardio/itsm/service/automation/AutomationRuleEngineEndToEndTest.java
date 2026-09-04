@@ -126,7 +126,7 @@ class AutomationRuleEngineEndToEndTest {
         AutomationRunLog log = logCaptor.getValue();
         assertEquals("EXECUTED", log.getStatus(), "output=" + log.getOutput() + ", error=" + log.getError());
         assertEquals("INCIDENT.CREATED", log.getTriggeredEvent());
-        assertEquals(entityId.toString(), log.getEntityId());
+        assertEquals(entityId, log.getEntityId());
 
         String output = log.getOutput();
         assertTrue(output.contains("SET_FIELD: OK"), output);

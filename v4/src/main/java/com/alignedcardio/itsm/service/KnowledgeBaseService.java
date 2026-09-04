@@ -48,6 +48,7 @@ public class KnowledgeBaseService {
         article.setAuthor(user);
         article.setCreatedBy(user.getId());
         article.setUpdatedBy(user.getId());
+        article.setNumber(generateArticleNumber());
 
         KbArticle saved = kbArticleRepository.save(article);
         entityManager.flush();
@@ -62,7 +63,7 @@ public class KnowledgeBaseService {
         if (status != null) {
             articles = kbArticleRepository.findByOrgIdAndStatusOrderByUpdatedAtDesc(orgId, status);
         } else {
-            articles = kbArticleRepository.findByOrgIdAndStatusOrderByUpdatedAtDesc(orgId, KbArticle.Status.PUBLISHED);
+            articles = kbArticleRepository.findByOrgIdOrderByUpdatedAtDesc(orgId);
         }
         return articles.stream()
                 .map(this::toSummary)
@@ -215,6 +216,12 @@ public class KnowledgeBaseService {
                 article.getHelpfulCount(),
                 article.getVersion()
         );
+    }
+
+    private String generateArticleNumber() {
+        Long next = ((Number) entityManager.createNativeQuery("SELECT nextval('kb_article_number_seq')")
+                .getSingleResult()).longValue();
+        return "KB-" + next;
     }
 
     private KbArticleVersionResponse toVersionResponse(KbArticleVersion version) {

@@ -26,6 +26,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public List<KbArticleSummary> list(@AuthenticationPrincipal Jwt jwt,
                                        @RequestParam(required = false) KbArticle.Status status) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -41,6 +42,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public KbArticleResponse get(@AuthenticationPrincipal Jwt jwt,
                                  @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -66,6 +68,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id}/versions")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public List<KbArticleVersionResponse> versions(@AuthenticationPrincipal Jwt jwt,
                                                    @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -73,6 +76,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/search")
+    @PreAuthorize("isAuthenticated()")
     public List<KbSearchResult> search(@AuthenticationPrincipal Jwt jwt,
                                        @RequestParam String q) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -80,6 +84,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/suggest")
+    @PreAuthorize("isAuthenticated()")
     public List<KbSearchResult> suggest(@AuthenticationPrincipal Jwt jwt,
                                         @RequestParam String description) {
         AppUser user = userService.syncFromJwt(jwt);

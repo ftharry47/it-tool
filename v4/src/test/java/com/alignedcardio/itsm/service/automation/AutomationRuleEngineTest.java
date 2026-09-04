@@ -81,7 +81,7 @@ class AutomationRuleEngineTest {
 
         AutomationRunLog log = captor.getValue();
         assertEquals(rule, log.getRule());
-        assertEquals(incidentId.toString(), log.getEntityId());
+        assertEquals(incidentId, log.getEntityId());
         assertEquals("INCIDENT.CREATED", log.getTriggeredEvent());
         assertEquals("EXECUTED", log.getStatus());
         Mockito.verify(actionExecutor).execute(Mockito.eq(rule), Mockito.any());

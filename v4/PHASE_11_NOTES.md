@@ -209,3 +209,33 @@ Completed.
 - [ ] Set `APPLICATIONINSIGHTS_CONNECTION_STRING` in Azure Application Settings.
 - [ ] Verify request, dependency, and exception telemetry flows to the Azure Application Insights instance.
 - [ ] Confirm the cloud role name is `itsm-portal` from `spring.application.name`.
+
+## 11.7 — KNOWN GAP: audience validation not yet active
+
+### What it is
+
+- The backend `SecurityConfig` now has a custom `JwtDecoder` that can validate the `aud` (audience) claim of incoming Bearer tokens.
+- The validator reads `spring.security.oauth2.resourceserver.jwt.audience`, which maps to the `AZURE_AD_AUDIENCE` Azure Application Setting.
+- **For the first internal pilot, `AZURE_AD_AUDIENCE` must be left unset.**
+
+### Why it must be left off
+
+- The frontend's MSAL configuration in `src/main/frontend/src/auth/authConfig.ts` currently requests `User.Read`.
+- Tokens from a `User.Read` request have `aud` = Microsoft Graph, not this app's own API.
+- If `AZURE_AD_AUDIENCE` is set before the frontend is changed, the backend will reject every valid token and sign-in will fail.
+
+### Why this is a real gap, not cosmetic
+
+- Without audience validation, the backend currently accepts **any valid Entra ID token from this tenant**, even if it was issued for a completely different application.
+- This is the documented tenant-wide token cross-application concern: signature + issuer only proves the token came from the right tenant, not that it was intended for this API.
+
+### What must happen before this is trusted with real sensitive data at scale
+
+1. In the Entra App Registration, **Expose an API** and add a scope (e.g. `access_as_user`) under an App ID URI such as `api://<client-id>`.
+2. Update `src/main/frontend/src/auth/authConfig.ts` so MSAL requests that API scope instead of `User.Read`.
+3. Set `AZURE_AD_AUDIENCE` in Azure Application Settings to the App ID URI (`api://<client-id>`).
+4. Rebuild `app.zip` with `\package.ps1` and redeploy.
+
+### Status
+
+- **Pending after Phase 11 pilot deploy.** Not urgent for an initial internal pilot, but must be scheduled before production trust.

@@ -10,8 +10,11 @@ import java.util.UUID;
 public record IncidentCreateRequest(
         @NotBlank String title,
         String description,
-        @NotNull @Min(1) @Max(5) Integer impact,
-        @NotNull @Min(1) @Max(5) Integer urgency,
-        @NotNull UUID categoryId
+        @Min(1) @Max(5) Integer impact,
+        @Min(1) @Max(5) Integer urgency,
+        @NotNull UUID categoryId,
+        UUID priorityId,
+        String location,
+        String phone
 ) {
 }

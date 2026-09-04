@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Calendar, Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
-import { StatusBadge } from '../../components/ui/StatusBadge'
+import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 
@@ -72,7 +72,7 @@ export function ChangeList() {
             className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">All</option>
-            {statusOptions.slice(1).map((s) => <option key={s} value={s}>{s}</option>)}
+            {statusOptions.slice(1).map((s) => <option key={s} value={s}>{formatStatusLabel(s)}</option>)}
           </select>
         </div>
 

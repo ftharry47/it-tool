@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { fetchWithToken } from '../../api/client'
@@ -34,23 +34,35 @@ export function CatalogBrowse() {
       const data = await res.json()
       return data.filter((item: CatalogItem) => item.active !== false)
     },
+    enabled: !!account,
   })
 
-  const schema: SchemaField[] = (() => {
-    if (!selectedItem) return []
+  useEffect(() => {
+    if (!selectedItem) {
+      setSchemaError(null)
+      return
+    }
     try {
       const parsed = JSON.parse(selectedItem.formSchema)
       if (!Array.isArray(parsed)) {
         setSchemaError('This catalog item has an invalid form schema (not an array).')
-        return []
+      } else {
+        setSchemaError(null)
       }
-      setSchemaError(null)
-      return parsed
     } catch (e) {
       setSchemaError('This catalog item has malformed form schema JSON.')
+    }
+  }, [selectedItem])
+
+  const schema = useMemo<SchemaField[]>(() => {
+    if (!selectedItem) return []
+    try {
+      const parsed = JSON.parse(selectedItem.formSchema)
+      return Array.isArray(parsed) ? parsed : []
+    } catch (e) {
       return []
     }
-  })()
+  }, [selectedItem])
 
   const createMutation = useMutation<CatalogItem, Error, { catalogItemId: string; formData: string }>({
     mutationFn: async (payload) => {
@@ -82,7 +94,7 @@ export function CatalogBrowse() {
     <div className="min-h-screen bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Service Catalog</h1>
-        <p className="text-sm text-muted-foreground">Choose a service below to submit a request.</p>
+        <p className="text-sm text-muted-foreground">Choose a service below to submit a request for your clinic.</p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {catalogQuery.data?.map((item) => (

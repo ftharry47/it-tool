@@ -60,7 +60,7 @@ export function KbArticleEditor() {
       setForm({ title: data.title ?? '', category: data.category ?? '', body: data.body ?? '' })
       return data
     },
-    enabled: !isNew && !!id,
+    enabled: !isNew && !!id && !!account,
   })
 
   const versionsQuery = useQuery<KbVersion[]>({
@@ -70,7 +70,7 @@ export function KbArticleEditor() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !isNew && !!id,
+    enabled: !isNew && !!id && !!account,
   })
 
   const saveMutation = useMutation<KbArticle, Error, { title: string; category: string; body: string; status?: string }>({
@@ -105,8 +105,9 @@ export function KbArticleEditor() {
     }
   }, [articleQuery.data, isNew])
 
-  if (!isNew && (articleQuery.isLoading || !articleQuery.data)) return <Loading />
+  if (!isNew && articleQuery.isLoading) return <Loading />
   if (!isNew && articleQuery.error) return <ErrorFallback error={articleQuery.error} message="Could not load article." onRetry={() => articleQuery.refetch()} />
+  if (!isNew && !articleQuery.data) return <Loading />
 
   const status = articleQuery.data?.status ?? 'DRAFT'
   const legalTransitions = statusTransitions[status] ?? []

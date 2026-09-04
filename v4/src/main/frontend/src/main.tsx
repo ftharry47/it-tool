@@ -6,24 +6,44 @@ import { MsalProvider } from '@azure/msal-react'
 import { msalInstance } from './auth/authConfig'
 import App from './App'
 import './index.css'
+import { ThemeProvider } from './components/theme/ThemeProvider'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
+      refetchInterval: 30 * 1000,
+      refetchOnWindowFocus: true,
       retry: 1,
     },
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <MsalProvider instance={msalInstance}>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </MsalProvider>
-  </React.StrictMode>
-)
+const root = ReactDOM.createRoot(document.getElementById('root')!)
+
+;(async () => {
+  try {
+    await msalInstance.initialize()
+  } catch (error) {
+    console.error('[main] MSAL initialization failed:', error)
+    return
+  }
+
+  msalInstance.handleRedirectPromise().catch((error) => {
+    console.error('[main] handleRedirectPromise error:', error)
+  })
+
+  root.render(
+    <React.StrictMode>
+      <MsalProvider instance={msalInstance}>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <ThemeProvider>
+              <App />
+            </ThemeProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </MsalProvider>
+    </React.StrictMode>
+  )
+})()

@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.config;
 
 import com.alignedcardio.itsm.service.BurndownSnapshotJob;
 import com.alignedcardio.itsm.service.SlaBreachMonitorJob;
+import com.alignedcardio.itsm.service.notification.NotificationDigestJob;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
 import org.quartz.SimpleScheduleBuilder;
@@ -51,6 +52,27 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(burndownSnapshotJobDetail())
                 .withIdentity("burndown-snapshot-trigger")
+                .withSchedule(schedule)
+                .build();
+    }
+
+    @Bean
+    public JobDetail notificationDigestJobDetail() {
+        return JobBuilder.newJob(NotificationDigestJob.class)
+                .withIdentity("notification-digest")
+                .storeDurably()
+                .build();
+    }
+
+    @Bean
+    public Trigger notificationDigestTrigger() {
+        SimpleScheduleBuilder schedule = SimpleScheduleBuilder.simpleSchedule()
+                .withIntervalInHours(1)
+                .repeatForever();
+
+        return TriggerBuilder.newTrigger()
+                .forJob(notificationDigestJobDetail())
+                .withIdentity("notification-digest-trigger")
                 .withSchedule(schedule)
                 .build();
     }

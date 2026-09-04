@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public record KbArticleResponse(
         UUID id,
-        Long number,
+        String number,
         String title,
         String category,
         String body,

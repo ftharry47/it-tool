@@ -10,7 +10,7 @@ import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
-import { StatusBadge } from '../../components/ui/StatusBadge'
+import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import type { Problem } from './ProblemList'
 
 interface LinkedIncident {
@@ -64,7 +64,7 @@ export function ProblemDetail() {
       })
       return data
     },
-    enabled: !!id,
+    enabled: !!id && !!account,
   })
 
   const linkedQuery = useQuery<LinkedIncident[]>({
@@ -74,16 +74,17 @@ export function ProblemDetail() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!id,
+    enabled: !!id && !!account,
   })
 
   const allIncidentsQuery = useQuery<IncidentOption[]>({
     queryKey: ['incidents'],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account!, '/api/incidents')
+      const res = await fetchWithToken(instance, account!, '/api/v1/incidents')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
+    enabled: !!account,
   })
 
   const editMutation = useMutation<Problem, Error, Record<string, string>>({
@@ -151,8 +152,9 @@ export function ProblemDetail() {
     },
   })
 
-  if (problemQuery.isLoading || !problemQuery.data) return <Loading />
+  if (problemQuery.isLoading) return <Loading />
   if (problemQuery.error) return <ErrorFallback error={problemQuery.error} message="Could not load problem." onRetry={() => problemQuery.refetch()} />
+  if (!problemQuery.data) return <Loading />
 
   const problem = problemQuery.data
   const legalNextStatuses = statusTransitions[problem.status] ?? []
@@ -218,7 +220,7 @@ export function ProblemDetail() {
                     >
                       <option value="">Select…</option>
                       {legalNextStatuses.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>{formatStatusLabel(s)}</option>
                       ))}
                     </select>
                   </div>

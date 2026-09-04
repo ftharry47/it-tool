@@ -1,5 +1,6 @@
 package com.alignedcardio.itsm.api.incident;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record IncidentAttachmentResponse(
@@ -7,6 +8,7 @@ public record IncidentAttachmentResponse(
         String fileName,
         String contentType,
         Long sizeBytes,
-        String blobUrl
+        String blobUrl,
+        OffsetDateTime createdAt
 ) {
 }

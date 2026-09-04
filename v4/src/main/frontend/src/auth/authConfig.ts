@@ -1,16 +1,25 @@
 import { Configuration, LogLevel, PublicClientApplication } from '@azure/msal-browser'
 
-const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || 'dummy-client-id'
-const tenantId = import.meta.env.VITE_AZURE_TENANT_ID || 'common'
-const baseUrl = import.meta.env.VITE_APP_BASE_URL || 'http://localhost:3000'
+const clientId = import.meta.env.VITE_AZURE_CLIENT_ID
+const tenantId = import.meta.env.VITE_AZURE_TENANT_ID
+const baseUrl = import.meta.env.VITE_APP_BASE_URL
+
+if (import.meta.env.PROD) {
+  if (!clientId) throw new Error('VITE_AZURE_CLIENT_ID is required for production builds')
+  if (!tenantId) throw new Error('VITE_AZURE_TENANT_ID is required for production builds')
+}
+
+const effectiveClientId = clientId || 'dummy-client-id'
+const effectiveTenantId = tenantId || 'common'
+const effectiveBaseUrl = (baseUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')).replace(/\/$/, '')
 
 const msalConfig: Configuration = {
   auth: {
-    clientId,
-    authority: `https://login.microsoftonline.com/${tenantId}`,
-    redirectUri: baseUrl,
-    postLogoutRedirectUri: `${baseUrl}/`,
-    navigateToLoginRequestUrl: true,
+    clientId: effectiveClientId,
+    authority: `https://login.microsoftonline.com/${effectiveTenantId}`,
+    redirectUri: effectiveBaseUrl,
+    postLogoutRedirectUri: `${effectiveBaseUrl}/`,
+    navigateToLoginRequestUrl: false,
   },
   cache: {
     cacheLocation: 'localStorage',
@@ -33,5 +42,5 @@ const msalConfig: Configuration = {
 export const msalInstance = new PublicClientApplication(msalConfig)
 
 export const loginRequest = {
-  scopes: ['openid', 'profile', 'email', 'User.Read'],
+  scopes: ['openid', 'profile', 'email', 'offline_access'],
 }

@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.service.notification;
 
 import com.alignedcardio.itsm.entity.Notification;
 import com.alignedcardio.itsm.entity.NotificationPreference;
+import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.NotificationPreferenceRepository;
 import com.alignedcardio.itsm.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
@@ -35,10 +36,13 @@ class NotificationServiceTest {
     @Mock
     private JavaMailSender mailSender;
 
+    @Mock
+    private AppUserRepository appUserRepository;
+
     @Test
     void inAppSendPushesToCorrectUserSession() {
         NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, mailSender);
+                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -70,7 +74,7 @@ class NotificationServiceTest {
     @Test
     void emailSendRespectsDigestMode() {
         NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, mailSender);
+                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -98,7 +102,7 @@ class NotificationServiceTest {
     @Test
     void immediateEmailIsSentWhenNoDigest() {
         NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, mailSender);
+                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();

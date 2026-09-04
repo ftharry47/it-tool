@@ -3,9 +3,11 @@ import type { ReactNode, FormEvent } from 'react'
 export interface Field {
   name: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'number' | 'boolean'
+  type: 'text' | 'textarea' | 'select' | 'number' | 'boolean' | 'datetime-local'
   options?: { value: string; label: string }[]
   required?: boolean
+  placeholder?: string
+  disabled?: boolean
 }
 
 interface EntityFormProps {
@@ -35,8 +37,10 @@ export function EntityForm({ fields, values, onChange, onSubmit, children, submi
                 value={values[field.name] ?? ''}
                 onChange={(e) => onChange(field.name, e.target.value)}
                 required={field.required}
+                placeholder={field.placeholder}
                 rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                disabled={field.disabled}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
               />
             ) : field.type === 'select' ? (
               <select
@@ -45,7 +49,8 @@ export function EntityForm({ fields, values, onChange, onSubmit, children, submi
                 value={values[field.name] ?? ''}
                 onChange={(e) => onChange(field.name, e.target.value)}
                 required={field.required}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                disabled={field.disabled}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Select…</option>
                 {field.options?.map((opt) => (
@@ -62,7 +67,9 @@ export function EntityForm({ fields, values, onChange, onSubmit, children, submi
                 value={values[field.name] ?? ''}
                 onChange={(e) => onChange(field.name, e.target.value)}
                 required={field.required}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                placeholder={field.placeholder}
+                disabled={field.disabled}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
               />
             ) : field.type === 'boolean' ? (
               <label className="inline-flex items-center gap-2">
@@ -73,10 +80,23 @@ export function EntityForm({ fields, values, onChange, onSubmit, children, submi
                   checked={values[field.name] === 'true'}
                   onChange={(e) => onChange(field.name, e.target.checked ? 'true' : 'false')}
                   required={field.required}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                  disabled={field.disabled}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <span className="text-sm text-muted-foreground">{field.label}</span>
               </label>
+            ) : field.type === 'datetime-local' ? (
+              <input
+                id={field.name}
+                name={field.name}
+                type="datetime-local"
+                value={values[field.name] ?? ''}
+                onChange={(e) => onChange(field.name, e.target.value)}
+                required={field.required}
+                placeholder={field.placeholder}
+                disabled={field.disabled}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
+              />
             ) : (
               <input
                 id={field.name}
@@ -85,7 +105,9 @@ export function EntityForm({ fields, values, onChange, onSubmit, children, submi
                 value={values[field.name] ?? ''}
                 onChange={(e) => onChange(field.name, e.target.value)}
                 required={field.required}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                placeholder={field.placeholder}
+                disabled={field.disabled}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
               />
             )}
           </div>

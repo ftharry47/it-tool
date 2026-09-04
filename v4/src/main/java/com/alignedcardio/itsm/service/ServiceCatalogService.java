@@ -6,6 +6,8 @@ import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.CatalogItemRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,19 +21,22 @@ public class ServiceCatalogService {
 
     private final CatalogItemRepository catalogItemRepository;
     private final AppUserRepository appUserRepository;
+    private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
 
     public ServiceCatalogService(CatalogItemRepository catalogItemRepository,
                                  AppUserRepository appUserRepository,
+                                 ObjectMapper objectMapper,
                                  EntityManager entityManager) {
         this.catalogItemRepository = catalogItemRepository;
         this.appUserRepository = appUserRepository;
+        this.objectMapper = objectMapper;
         this.entityManager = entityManager;
     }
 
     @Transactional(readOnly = true)
     public List<CatalogItemResponse> list(UUID orgId) {
-        return catalogItemRepository.findByOrgIdAndActiveTrueOrderByNameAsc(orgId).stream()
+        return catalogItemRepository.findByOrgIdOrderByNameAsc(orgId).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -43,7 +48,11 @@ public class ServiceCatalogService {
         item.setName(request.name());
         item.setDescription(request.description());
         item.setCategory(request.category());
-        item.setFormSchema(request.formSchema());
+        try {
+            item.setFormSchema(objectMapper.readTree(request.formSchema()));
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid form schema JSON", e);
+        }
         item.setApprovalRequired(request.approvalRequired());
         item.setActive(request.active());
         item.setCreatedBy(user.getId());
@@ -55,7 +64,7 @@ public class ServiceCatalogService {
             item.setApprover(approver);
         }
 
-        item.setFulfillmentTasks(request.fulfillmentTasks());
+        item.setFulfillmentTasks(parseJson(request.fulfillmentTasks()));
 
         CatalogItem saved = catalogItemRepository.save(item);
         entityManager.flush();
@@ -79,7 +88,11 @@ public class ServiceCatalogService {
         item.setName(request.name());
         item.setDescription(request.description());
         item.setCategory(request.category());
-        item.setFormSchema(request.formSchema());
+        try {
+            item.setFormSchema(objectMapper.readTree(request.formSchema()));
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid form schema JSON", e);
+        }
         item.setApprovalRequired(request.approvalRequired());
         item.setActive(request.active());
 
@@ -91,11 +104,22 @@ public class ServiceCatalogService {
             item.setApprover(null);
         }
 
-        item.setFulfillmentTasks(request.fulfillmentTasks());
+        item.setFulfillmentTasks(parseJson(request.fulfillmentTasks()));
         item.setUpdatedBy(user.getId());
         item.setUpdatedAt(OffsetDateTime.now());
 
         return toResponse(catalogItemRepository.save(item));
+    }
+
+    private JsonNode parseJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid JSON: " + json, e);
+        }
     }
 
     private CatalogItemResponse toResponse(CatalogItem item) {
@@ -104,11 +128,11 @@ public class ServiceCatalogService {
                 item.getName(),
                 item.getDescription(),
                 item.getCategory(),
-                item.getFormSchema(),
+                item.getFormSchema().toString(),
                 item.isApprovalRequired(),
                 item.getApprover() != null ? item.getApprover().getId() : null,
                 item.getApprover() != null ? item.getApprover().getDisplayName() : null,
-                item.getFulfillmentTasks(),
+                item.getFulfillmentTasks() != null ? item.getFulfillmentTasks().toString() : "[]",
                 item.isActive(),
                 item.getCreatedAt()
         );

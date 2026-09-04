@@ -13,6 +13,8 @@ import java.util.UUID;
 @Repository
 public interface KbArticleRepository extends JpaRepository<KbArticle, UUID> {
 
+    List<KbArticle> findByOrgIdOrderByUpdatedAtDesc(UUID orgId);
+
     List<KbArticle> findByOrgIdAndStatusOrderByUpdatedAtDesc(UUID orgId, KbArticle.Status status);
 
     Optional<KbArticle> findByOrgIdAndId(UUID orgId, UUID id);

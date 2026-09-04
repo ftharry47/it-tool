@@ -33,7 +33,7 @@ class IlikeKnowledgeBaseSearchTest {
 
         KbArticle article = new KbArticle();
         article.setId(articleId);
-        article.setNumber(42L);
+        article.setNumber("42");
         article.setTitle("Reset password");
         article.setCategory("Password");
 
@@ -54,7 +54,7 @@ class IlikeKnowledgeBaseSearchTest {
 
         KbArticle article = new KbArticle();
         article.setId(articleId);
-        article.setNumber(7L);
+        article.setNumber("7");
         article.setTitle("VPN setup");
         article.setCategory("Network");
 

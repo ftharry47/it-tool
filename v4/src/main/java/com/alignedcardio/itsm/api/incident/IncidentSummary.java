@@ -10,6 +10,8 @@ public record IncidentSummary(
         String status,
         String priority,
         String category,
+        String location,
+        String phone,
         String requester,
         String assignee,
         OffsetDateTime createdAt

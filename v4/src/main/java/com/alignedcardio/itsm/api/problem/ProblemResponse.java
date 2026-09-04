@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public record ProblemResponse(
         UUID id,
-        Long number,
+        String number,
         String title,
         String description,
         Problem.Status status,

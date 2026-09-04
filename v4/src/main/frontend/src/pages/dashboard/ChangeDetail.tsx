@@ -28,6 +28,7 @@ interface Change {
   changeType: string
   risk: string
   status: string
+  requestedById: string | null
   requestedByName: string
   plannedStart: string | null
   plannedEnd: string | null
@@ -35,6 +36,18 @@ interface Change {
   postImplementationReview: string
   linkedProblemId: string | null
   approvals: ChangeApproval[]
+}
+
+interface User {
+  id: string
+  displayName: string
+  email: string
+}
+
+interface Problem {
+  id: string
+  number: string
+  title: string
 }
 
 const statusTransitions: Record<string, string[]> = {
@@ -57,8 +70,10 @@ function toLocalInput(iso: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const DATETIME_LOCAL_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+
 function toIso(input: string) {
-  if (!input) return null
+  if (!input || !DATETIME_LOCAL_RE.test(input)) return null
   return input + ':00Z'
 }
 
@@ -101,6 +116,26 @@ export function ChangeDetail() {
     enabled: !isNew && !!id,
   })
 
+  const usersQuery = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/users')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  const problemsQuery = useQuery<Problem[]>({
+    queryKey: ['problems'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/problems')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
   useEffect(() => {
     if (changeQuery.data) {
       const c = changeQuery.data
@@ -114,7 +149,7 @@ export function ChangeDetail() {
         rollbackPlan: c.rollbackPlan ?? '',
         postImplementationReview: c.postImplementationReview ?? '',
         linkedProblemId: c.linkedProblemId ?? '',
-        requestedById: '',
+        requestedById: c.requestedById ?? '',
       })
     }
   }, [changeQuery.data])
@@ -295,12 +330,12 @@ export function ChangeDetail() {
               { name: 'description', label: 'Description', type: 'textarea' },
               { name: 'changeType', label: 'Change Type', type: 'select', options: ['STANDARD', 'NORMAL', 'EMERGENCY'].map((v) => ({ value: v, label: v })), required: true },
               { name: 'risk', label: 'Risk', type: 'select', options: ['LOW', 'MEDIUM', 'HIGH'].map((v) => ({ value: v, label: v })), required: true },
-              { name: 'plannedStart', label: 'Planned Start', type: 'text' },
-              { name: 'plannedEnd', label: 'Planned End', type: 'text' },
+              { name: 'plannedStart', label: 'Planned Start', type: 'datetime-local' as const },
+              { name: 'plannedEnd', label: 'Planned End', type: 'datetime-local' as const },
               { name: 'rollbackPlan', label: 'Rollback Plan', type: 'textarea' },
               ...(currentType === 'EMERGENCY' ? [{ name: 'postImplementationReview', label: 'Post-Implementation Review', type: 'textarea' as const }] : []),
-              { name: 'linkedProblemId', label: 'Linked Problem ID', type: 'text' },
-              ...(isNew ? [{ name: 'requestedById', label: 'Requested By ID', type: 'text' as const }] : []),
+              { name: 'linkedProblemId', label: 'Linked Problem', type: 'select' as const, options: (problemsQuery.data ?? []).map((p) => ({ value: p.id, label: `${p.number} — ${p.title}` })) },
+              ...(isNew ? [{ name: 'requestedById', label: 'Requested By', type: 'select' as const, options: (usersQuery.data ?? []).map((u) => ({ value: u.id, label: u.displayName })) }] : []),
             ]}
             values={form}
             onChange={(name, value) => setForm({ ...form, [name]: value })}

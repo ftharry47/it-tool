@@ -5,6 +5,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "automation_run_log")
@@ -18,7 +19,7 @@ public class AutomationRunLog extends BaseEntity {
     private String entityType;
 
     @Column(name = "entity_id", nullable = false)
-    private String entityId;
+    private UUID entityId;
 
     @Column(name = "triggered_event", nullable = false, length = 128)
     private String triggeredEvent;
@@ -57,11 +58,11 @@ public class AutomationRunLog extends BaseEntity {
         this.entityType = entityType;
     }
 
-    public String getEntityId() {
+    public UUID getEntityId() {
         return entityId;
     }
 
-    public void setEntityId(String entityId) {
+    public void setEntityId(UUID entityId) {
         this.entityId = entityId;
     }
 

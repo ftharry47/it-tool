@@ -4,7 +4,7 @@ import { EntityForm, type Field } from './EntityForm'
 export interface SchemaField {
   name: string
   label?: string
-  type?: 'string' | 'number' | 'boolean' | 'select'
+  type?: 'string' | 'textarea' | 'number' | 'boolean' | 'select'
   required?: boolean
   options?: Array<{ value: string; label: string } | string>
 }
@@ -23,7 +23,7 @@ function isValidSchemaField(f: unknown): f is SchemaField {
   if (typeof f !== 'object' || f === null) return false
   const field = f as Record<string, unknown>
   if (typeof field.name !== 'string' || !field.name) return false
-  const allowedTypes = ['string', 'number', 'boolean', 'select']
+  const allowedTypes = ['string', 'textarea', 'number', 'boolean', 'select']
   if (field.type !== undefined && !allowedTypes.includes(field.type as string)) return false
   return true
 }
@@ -56,12 +56,12 @@ export function validateSchema(values: Record<string, string>, schema: SchemaFie
 
 export function toEntityFields(schema: SchemaField[]): Field[] {
   return schema.map((field) => {
-    const type = (field.type ?? 'string') as 'string' | 'number' | 'boolean' | 'select'
+    const type = (field.type ?? 'string') as 'string' | 'textarea' | 'number' | 'boolean' | 'select'
     const options = field.options?.map((opt) =>
       typeof opt === 'string' ? { value: opt, label: opt } : opt
     )
     const entityType: Field['type'] =
-      type === 'select' ? 'select' : type === 'number' ? 'number' : type === 'boolean' ? 'boolean' : 'text'
+      type === 'select' ? 'select' : type === 'number' ? 'number' : type === 'boolean' ? 'boolean' : type === 'textarea' ? 'textarea' : 'text'
     return {
       name: field.name,
       label: field.label || field.name,

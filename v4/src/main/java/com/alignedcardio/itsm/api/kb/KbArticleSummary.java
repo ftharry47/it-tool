@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public record KbArticleSummary(
         UUID id,
-        Long number,
+        String number,
         String title,
         String category,
         KbArticle.Status status,

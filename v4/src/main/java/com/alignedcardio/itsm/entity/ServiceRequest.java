@@ -1,7 +1,10 @@
 package com.alignedcardio.itsm.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 
@@ -17,8 +20,8 @@ public class ServiceRequest extends BaseEntity {
         PENDING, APPROVED, REJECTED
     }
 
-    @Column(name = "number", columnDefinition = "bigint not null default nextval('service_request_number_seq')", insertable = false, updatable = false, nullable = false)
-    private Long number;
+    @Column(name = "number", nullable = false)
+    private String number;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -37,7 +40,8 @@ public class ServiceRequest extends BaseEntity {
 
     @NotNull
     @Column(name = "form_data", columnDefinition = "jsonb", nullable = false)
-    private String formData;
+    @JdbcTypeCode(SqlTypes.JSON)
+    private JsonNode formData;
 
     @Column(name = "approval_required", nullable = false)
     private boolean approvalRequired = false;
@@ -59,11 +63,11 @@ public class ServiceRequest extends BaseEntity {
     @Column(name = "needed_by")
     private OffsetDateTime neededBy;
 
-    public Long getNumber() {
+    public String getNumber() {
         return number;
     }
 
-    public void setNumber(Long number) {
+    public void setNumber(String number) {
         this.number = number;
     }
 
@@ -91,11 +95,11 @@ public class ServiceRequest extends BaseEntity {
         this.status = status;
     }
 
-    public String getFormData() {
+    public JsonNode getFormData() {
         return formData;
     }
 
-    public void setFormData(String formData) {
+    public void setFormData(JsonNode formData) {
         this.formData = formData;
     }
 

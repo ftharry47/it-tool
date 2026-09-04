@@ -109,8 +109,9 @@ export function ServiceRequestDetail() {
     },
   })
 
-  if (requestQuery.isLoading || !requestQuery.data) return <Loading />
+  if (requestQuery.isLoading) return <Loading />
   if (requestQuery.error) return <ErrorFallback error={requestQuery.error} message="Could not load request." onRetry={() => requestQuery.refetch()} />
+  if (!requestQuery.data) return <Loading />
 
   const request = requestQuery.data
   const formDataDisplay = (() => {

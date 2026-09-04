@@ -13,5 +13,7 @@ public interface CatalogItemRepository extends JpaRepository<CatalogItem, UUID> 
 
     List<CatalogItem> findByOrgIdAndActiveTrueOrderByNameAsc(UUID orgId);
 
+    List<CatalogItem> findByOrgIdOrderByNameAsc(UUID orgId);
+
     Optional<CatalogItem> findByOrgIdAndId(UUID orgId, UUID id);
 }

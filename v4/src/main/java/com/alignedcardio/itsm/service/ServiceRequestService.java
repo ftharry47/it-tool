@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -60,13 +59,18 @@ public class ServiceRequestService {
         CatalogItem item = catalogItemRepository.findByOrgIdAndId(orgId, request.catalogItemId())
                 .orElseThrow(() -> new NotFoundException("Catalog item not found"));
 
-        formSchemaValidator.validate(item.getFormSchema(), request.formData());
+        formSchemaValidator.validate(item.getFormSchema().toString(), request.formData());
 
         ServiceRequest sr = new ServiceRequest();
         sr.setOrgId(orgId);
+        sr.setNumber(generateServiceRequestNumber());
         sr.setCatalogItem(item);
         sr.setRequester(user);
-        sr.setFormData(request.formData());
+        try {
+            sr.setFormData(objectMapper.readTree(request.formData()));
+        } catch (Exception e) {
+            throw new IllegalStateException("Invalid form data JSON", e);
+        }
         sr.setNeededBy(request.neededBy());
         sr.setApprovalRequired(item.isApprovalRequired());
         sr.setCreatedBy(user.getId());
@@ -76,7 +80,7 @@ public class ServiceRequestService {
         entityManager.flush();
         entityManager.refresh(saved);
 
-        return toResponse(saved);
+        return submit(user, orgId, saved.getId());
     }
 
     @Transactional(readOnly = true)
@@ -187,41 +191,39 @@ public class ServiceRequestService {
 
     private void seedFulfillmentTasks(AppUser user, ServiceRequest sr) {
         CatalogItem item = sr.getCatalogItem();
-        if (item.getFulfillmentTasks() == null || item.getFulfillmentTasks().isBlank()) {
+        JsonNode template = item.getFulfillmentTasks();
+        if (template == null || !template.isArray()) {
             return;
         }
 
-        try {
-            JsonNode template = objectMapper.readTree(item.getFulfillmentTasks());
-            if (!template.isArray()) {
-                return;
+        int order = 0;
+        for (JsonNode t : template) {
+            FulfillmentTask task = new FulfillmentTask();
+            task.setServiceRequest(sr);
+            task.setDescription(t.hasNonNull("description") ? t.get("description").asText() : "Fulfillment task");
+            task.setSequenceOrder(t.hasNonNull("sequenceOrder") ? t.get("sequenceOrder").asInt() : order++);
+            task.setCreatedBy(user.getId());
+            task.setUpdatedBy(user.getId());
+
+            if (t.hasNonNull("assigneeId")) {
+                UUID assigneeId = UUID.fromString(t.get("assigneeId").asText());
+                AppUser assignee = appUserRepository.findById(assigneeId).orElse(null);
+                task.setAssignee(assignee);
             }
 
-            int order = 0;
-            for (JsonNode t : template) {
-                FulfillmentTask task = new FulfillmentTask();
-                task.setServiceRequest(sr);
-                task.setDescription(t.hasNonNull("description") ? t.get("description").asText() : "Fulfillment task");
-                task.setSequenceOrder(t.hasNonNull("sequenceOrder") ? t.get("sequenceOrder").asInt() : order++);
-                task.setCreatedBy(user.getId());
-                task.setUpdatedBy(user.getId());
-
-                if (t.hasNonNull("assigneeId")) {
-                    UUID assigneeId = UUID.fromString(t.get("assigneeId").asText());
-                    AppUser assignee = appUserRepository.findById(assigneeId).orElse(null);
-                    task.setAssignee(assignee);
-                }
-
-                fulfillmentTaskRepository.save(task);
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("Invalid fulfillment task template", e);
+            fulfillmentTaskRepository.save(task);
         }
     }
 
     private boolean areAllTasksCompleted(ServiceRequest sr) {
         List<FulfillmentTask> tasks = fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(sr.getId());
         return !tasks.isEmpty() && tasks.stream().allMatch(t -> t.getStatus() == FulfillmentTask.Status.COMPLETED);
+    }
+
+    private String generateServiceRequestNumber() {
+        Long next = ((Number) entityManager.createNativeQuery("SELECT nextval('service_request_number_seq')")
+                .getSingleResult()).longValue();
+        return "SR-" + next;
     }
 
     private ServiceRequestResponse toResponse(ServiceRequest sr) {
@@ -235,7 +237,7 @@ public class ServiceRequestService {
                 sr.getRequester().getId(),
                 sr.getRequester().getDisplayName(),
                 sr.getStatus(),
-                sr.getFormData(),
+                sr.getFormData().toString(),
                 sr.isApprovalRequired(),
                 sr.getApprover() != null ? sr.getApprover().getId() : null,
                 sr.getApprover() != null ? sr.getApprover().getDisplayName() : null,

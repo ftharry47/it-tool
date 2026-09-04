@@ -193,6 +193,67 @@ When a change is `EMERGENCY` and the `postImplementationReview` field is blank, 
 
 `/dashboard/changes/calendar` shows a 7-day week. Each `SCHEDULED`/`IN_PROGRESS` change is a horizontal bar positioned by `plannedStart` and `plannedEnd`. Any item whose `id` appears in the backend `conflicts` array gets a red border. A red warning box lists each overlapping pair. Users can navigate previous/next weeks.
 
+## 12.5a — Project + Issue CRUD and Board (completed)
+
+### Build result
+
+- `npm run build` passed with `@dnd-kit/core`, `@dnd-kit/sortable`, and `@dnd-kit/utilities` added.
+- `package.ps1` passed: **105 tests, 0 failures, 0 errors, 1 skipped**.
+- `target/app.zip` rebuilt cleanly.
+
+### Backend tweak
+
+- Added `workflowStatusId` to `BoardColumn` record so the board UI can call `POST /api/v1/issues/{id}/status` with the target status UUID. Updated `IssueService.board` and `boardByProject` to populate it.
+
+### What was built
+
+- `src/main/frontend/src/pages/dashboard/ProjectList.tsx` — lists projects with key/name/lead/status and a link to detail.
+- `src/main/frontend/src/pages/dashboard/ProjectDetail.tsx` — project header with board/backlog tabs. Board tab embeds `IssueBoard`; backlog tab lists unsprinted issues linking to detail.
+- `src/main/frontend/src/pages/dashboard/IssueBoard.tsx` — dnd-kit board. Columns come from `GET /api/v1/projects/{key}/board?workflowId=...`, sorted by `BACKLOG`/`TODO`/`IN_PROGRESS`/`DONE` category then `displayOrder`. Cards display key, summary, assignee, and story points. Dragging a card to a new column calls `POST /api/v1/issues/{id}/status` with the column's `workflowStatusId`. On rejection the UI shows `Illegal drop: <message>` and does not optimistically move the card; on success it refetches the board.
+- `src/main/frontend/src/pages/dashboard/IssueDetail.tsx` — issue header, description, comments with add, issue links with add (BLOCKS/BLOCKED_BY/RELATES_TO/DUPLICATES), and subtasks filtered from the project's issue list.
+- `src/main/frontend/src/routes/index.tsx` — wired `/dashboard/projects`, `/dashboard/projects/:id`, and `/dashboard/projects/:projectId/issues/:issueId`.
+
+### Board drag-and-drop
+
+- Library: `@dnd-kit/core`.
+- `useDraggable` on issue cards; `useDroppable` on each column.
+- `DndContext.onDragEnd` posts to `POST /api/v1/issues/{id}/status`.
+- No optimistic UI update — the board only refetches on a successful `2xx`. A `4xx` from `WorkflowTransitionValidator` is rendered in a red banner: `Illegal drop: ...`.
+
+## 12.5b — Sprint Lifecycle + Burndown (completed)
+
+### Build result
+
+- `npm run build` passed.
+- `package.ps1` passed: **105 tests, 0 failures, 0 errors, 1 skipped**.
+- `target/app.zip` rebuilt cleanly.
+
+### What was built
+
+- `src/main/frontend/src/pages/dashboard/SprintPanel.tsx` — added to the `Sprints` tab in `ProjectDetail`.
+- Lists sprints for the project, creates sprints, starts `PLANNING` sprints, and completes `ACTIVE` sprints.
+- **Explicit destination enforcement for sprint completion:** the `Destination` dropdown starts with a disabled `— Select destination —` placeholder, with `BACKLOG` and `NEXT_SPRINT` as the only two options. The `Confirm Complete` button is disabled until a destination is explicitly chosen. If `NEXT_SPRINT` is selected, a second `nextSprintId` select (also with a disabled placeholder) is required, and the confirm button stays disabled until both are set.
+- Burndown chart on completed sprints uses `recharts` `LineChart` rendering `GET /api/v1/projects/{projectId}/sprints/{id}/burndown` precomputed `BurndownSnapshotResponse` data — `remainingPoints` and `totalPoints` by `snapshotDate`. No client-side recalculation.
+- `src/main/frontend/src/pages/dashboard/ProjectDetail.tsx` — added a `sprints` tab.
+
+## 12.5c — Workflow Builder Admin UI (completed)
+
+### Build result
+
+- `npm run build` passed.
+- `package.ps1` passed: **105 tests, 0 failures, 0 errors, 1 skipped**.
+- `target/app.zip` rebuilt cleanly.
+
+### What was built
+
+- `src/main/frontend/src/pages/admin/WorkflowAdmin.tsx` — structured form/list workflow builder at `/admin/workflows`.
+- Lists workflows, creates new workflows with name/description/project association.
+- Editing a workflow shows:
+  - **Statuses** table with name, category (`BACKLOG`/`TODO`/`IN_PROGRESS`/`DONE`), display order, terminal flag; add/remove forms.
+  - **Transitions** table with `fromStatus`/`toStatus` names and optional `screen`; add/remove forms.
+- Uses `POST /api/v1/workflows`, `POST /api/v1/workflows/{id}/statuses`, `DELETE /api/v1/workflows/{id}/statuses/{statusId}`, `POST /api/v1/workflows/{id}/transitions`, `DELETE /api/v1/workflows/{id}/transitions/{transitionId}`.
+- `src/main/frontend/src/routes/index.tsx` — wired `/admin/workflows` to `WorkflowAdmin`.
+
 ## 12.7 — Reporting Dashboards UI (completed)
 
 ### Build result
@@ -360,3 +421,73 @@ To call the whole product complete, the following must still happen:
 - Perform the manual Microsoft login, keyboard, screen-reader, and Kudu checklists from `PHASE_11_NOTES.md`.
 
 This is the boundary between the hardening work in Phase 11 and the new feature-completion work in Phase 12.
+
+## 12.8 — Notification Preferences UI (completed)
+
+### Build result
+
+- `npm run build` passed.
+- `package.ps1` passed: **105 tests, 0 failures, 0 errors, 1 skipped**.
+- `target/app.zip` rebuilt cleanly.
+
+### Backend added
+
+- `src/main/java/com/alignedcardio/itsm/api/notification/NotificationPreferenceController.java` — `GET /api/v1/users/me/notification-preferences` and `PUT /api/v1/users/me/notification-preferences`.
+- `src/main/java/com/alignedcardio/itsm/api/notification/NotificationPreferenceResponse.java`
+- `src/main/java/com/alignedcardio/itsm/api/notification/NotificationPreferenceUpdateRequest.java`
+
+### Frontend
+
+- `src/main/frontend/src/pages/dashboard/NotificationPreferences.tsx` — `/dashboard/notifications`.
+- In-app enabled toggle, email enabled toggle + email address input, digest mode (`NONE`/`HOURLY`/`DAILY`) select.
+- Wired in `src/main/frontend/src/routes/index.tsx`.
+
+### Scope honesty
+
+- Original Section 13 spec called for **per-notification-type** preferences. The existing `notification_preference` table is a **single row per user** with `inAppEnabled`, `emailEnabled`, `emailAddress`, and `digestMode`.
+- 12.8 deliberately implemented **per-user** preferences matching the actual table; per-type is a future enhancement.
+- **Notification bell with real-time WebSocket updates is out of scope for this build.** It needs a backend notification-list endpoint, a STOMP/WebSocket client library in the frontend, and a bell/toast UI component — none of which exist yet.
+
+## 12.6 — Automation Rule Admin UI (completed)
+
+### Build result
+
+- `npm run build` passed.
+- `package.ps1` passed: **105 tests, 0 failures, 0 errors, 1 skipped**.
+- `target/app.zip` rebuilt cleanly.
+
+### Backend
+
+- Added `AutomationRunLogResponse.java`.
+- Added `GET /api/v1/automation/rules/{id}/runs` to `AutomationRuleController` using the existing `AutomationRunLogRepository`.
+
+### Frontend
+
+- `src/main/frontend/src/pages/admin/AutomationAdmin.tsx` — wired to `/admin/automation`.
+- Rule list `DataTable` with name, trigger entity/type, active status, edit/runs/delete actions.
+- Create/edit form with name, description, trigger type/entity, trigger config JSON, conditions builder (field/op/value(s)), and actions builder (type + dynamic config fields).
+- Action config fields are derived directly from the handler source classes and commented in `ACTION_CONFIG_FIELDS` so future handler changes are traceable.
+- Dry-run panel calling `POST /api/v1/automation/rules/{id}/test` with sample payload JSON and optional entity ID.
+- Run log panel calling `GET /api/v1/automation/rules/{id}/runs` showing status (`EXECUTED`/`FAILED`/`NO_MATCH`/`ERROR`), output, error, and executed timestamp.
+
+## Phase 12 — Overall status
+
+| Sub-phase | Status | Notes |
+|---|---|---|
+| 12.0 Shared scaffolding | Complete | Auth, layout, DataTable, EntityForm, routes |
+| 12.1 Problem Management | Complete | List/detail, linked incidents |
+| 12.2 Change Management | Complete | List/detail/calendar with conflict highlighting |
+| 12.3 Service Catalog + Requests | Complete | Browse, request forms, fulfillment view |
+| 12.4 Knowledge Base | Complete | Article list/editor; `KB suggest in incident form` is a follow-up |
+| 12.5 Project Management | Complete | a/b/c all approved |
+| 12.6 Automation Engine | Complete | Rule admin list/form, dry-run, run log |
+| 12.7 Reporting Dashboards | Complete | Fixed dashboards, saved reports, ad-hoc query |
+| 12.8 Notification Preferences | Complete | Per-user form; per-type and bell deferred |
+
+### Deferred / follow-up items explicitly not in this build
+
+- Notification bell + WebSocket real-time updates (12.8 follow-up).
+- Per-notification-type preferences (12.8 follow-up).
+- Visual workflow canvas builder (12.5 used structured form/list by design).
+- KB `GET /api/v1/kb/suggest` wired into the incident form (12.4 follow-up).
+- Burndown chart visual confirmation with real snapshot data (requires deployed app + running sprint).

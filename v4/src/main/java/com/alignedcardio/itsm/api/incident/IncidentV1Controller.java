@@ -7,13 +7,17 @@ import com.alignedcardio.itsm.service.IncidentCommentService;
 import com.alignedcardio.itsm.service.IncidentService;
 import com.alignedcardio.itsm.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,12 +42,83 @@ public class IncidentV1Controller {
 
     @GetMapping
     public List<IncidentSummary> search(@AuthenticationPrincipal Jwt jwt,
-                                        @RequestParam(name = "search", required = false) String query) {
+                                        @RequestParam(name = "search", required = false) String query,
+                                        @RequestParam(required = false) String status,
+                                        @RequestParam(required = false) UUID assigneeId,
+                                        @RequestParam(required = false) Boolean unassigned,
+                                        @RequestParam(required = false, defaultValue = "20") int limit) {
         AppUser user = userService.syncFromJwt(jwt);
-        if (query == null || query.isBlank()) {
-            return incidentService.list(user.getOrgId());
+        if (query != null && !query.isBlank()) {
+            return incidentService.search(user.getOrgId(), query);
         }
-        return incidentService.search(user.getOrgId(), query);
+        if (status != null && !status.isBlank()) {
+            List<Incident.Status> statuses = Arrays.stream(status.split(","))
+                    .map(String::trim)
+                    .map(Incident.Status::valueOf)
+                    .toList();
+            if (unassigned != null && unassigned) {
+                return incidentService.listUnassigned(user.getOrgId(), statuses, limit);
+            }
+            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, limit);
+        }
+        if (unassigned != null && unassigned) {
+            return incidentService.listUnassigned(user.getOrgId(), null, limit);
+        }
+        if (assigneeId != null) {
+            List<Incident.Status> statuses = List.of(
+                    Incident.Status.NEW,
+                    Incident.Status.IN_PROGRESS,
+                    Incident.Status.ON_HOLD,
+                    Incident.Status.RESOLVED,
+                    Incident.Status.REOPENED);
+            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, limit);
+        }
+        return incidentService.list(user.getOrgId());
+    }
+
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    public IncidentResponse create(@AuthenticationPrincipal Jwt jwt,
+                                   @Valid @RequestBody IncidentCreateRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.create(user, request);
+    }
+
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public List<IncidentSummary> myIncidents(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.listByReporter(user.getOrgId(), user.getId());
+    }
+
+    @GetMapping("/priorities")
+    @PreAuthorize("isAuthenticated()")
+    public List<PriorityOption> priorities(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.priorities(user.getOrgId());
+    }
+
+    @GetMapping("/categories")
+    @PreAuthorize("isAuthenticated()")
+    public List<CategoryOption> categories(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.categories(user.getOrgId());
+    }
+
+    @GetMapping("/{id}")
+    public IncidentResponse get(@AuthenticationPrincipal Jwt jwt,
+                                @PathVariable UUID id) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.get(user.getOrgId(), id);
+    }
+
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public IncidentResponse update(@AuthenticationPrincipal Jwt jwt,
+                                   @PathVariable UUID id,
+                                   @Valid @RequestBody IncidentUpdateRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.superAdminUpdate(user, user.getOrgId(), id, request);
     }
 
     @PatchMapping("/{id}/status")
@@ -52,6 +127,32 @@ public class IncidentV1Controller {
                                          @Valid @RequestBody StatusUpdateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.updateStatus(user, user.getOrgId(), id, Incident.Status.valueOf(request.status()));
+    }
+
+    @PostMapping("/{id}/time")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public IncidentResponse logTime(@AuthenticationPrincipal Jwt jwt,
+                                    @PathVariable UUID id,
+                                    @Valid @RequestBody TimeLogRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.logTime(user, user.getOrgId(), id, request.timeSpentMinutes(), request.description());
+    }
+
+    @GetMapping("/{id}/time-entries")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public List<TimeEntryResponse> listTimeEntries(@AuthenticationPrincipal Jwt jwt,
+                                                   @PathVariable UUID id) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.listTimeEntries(user.getOrgId(), id);
+    }
+
+    @PatchMapping("/{id}/estimate")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public IncidentResponse updateEstimate(@AuthenticationPrincipal Jwt jwt,
+                                           @PathVariable UUID id,
+                                           @Valid @RequestBody EstimateUpdateRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.setEstimatedMinutes(user, user.getOrgId(), id, request.estimatedMinutes());
     }
 
     @PatchMapping("/{id}/assign")
@@ -83,6 +184,18 @@ public class IncidentV1Controller {
                                                             @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
         return attachmentService.listAttachments(user.getOrgId(), id);
+    }
+
+    @GetMapping("/{id}/attachments/{attachmentId}")
+    public ResponseEntity<Resource> getAttachment(@AuthenticationPrincipal Jwt jwt,
+                                                  @PathVariable UUID id,
+                                                  @PathVariable UUID attachmentId) {
+        AppUser user = userService.syncFromJwt(jwt);
+        Resource resource = attachmentService.getAttachmentResource(user.getOrgId(), id, attachmentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
+                .body(resource);
     }
 
     @PostMapping(value = "/{id}/attachments", consumes = "multipart/form-data")

@@ -10,6 +10,7 @@ import com.alignedcardio.itsm.repository.ChangeApprovalRepository;
 import com.alignedcardio.itsm.repository.ChangeRequestRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
 import jakarta.persistence.EntityManager;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +48,13 @@ public class ChangeService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ChangeResponse> search(UUID orgId, String query, int limit) {
+        return changeRequestRepository.searchByText(orgId, query, PageRequest.of(0, limit)).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public ChangeResponse create(AppUser user, UUID orgId, ChangeCreateRequest request) {
         ChangeRequest change = new ChangeRequest();
@@ -58,6 +66,7 @@ public class ChangeService {
         change.setPlannedStart(request.plannedStart());
         change.setPlannedEnd(request.plannedEnd());
         change.setRollbackPlan(request.rollbackPlan());
+        change.setNumber(generateChangeNumber());
         change.setCreatedBy(user.getId());
         change.setUpdatedBy(user.getId());
 
@@ -270,6 +279,12 @@ public class ChangeService {
         }
 
         return new ChangeCalendarResponse(items, conflicts);
+    }
+
+    private String generateChangeNumber() {
+        Long next = ((Number) entityManager.createNativeQuery("SELECT nextval('change_number_seq')")
+                .getSingleResult()).longValue();
+        return "CR-" + next;
     }
 
     private ChangeResponse toResponse(ChangeRequest change) {

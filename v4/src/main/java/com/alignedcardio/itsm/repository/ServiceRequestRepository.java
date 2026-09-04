@@ -15,5 +15,5 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     Optional<ServiceRequest> findByOrgIdAndId(UUID orgId, UUID id);
 
-    Optional<ServiceRequest> findByNumberAndOrgId(Long number, UUID orgId);
+    Optional<ServiceRequest> findByNumberAndOrgId(String number, UUID orgId);
 }

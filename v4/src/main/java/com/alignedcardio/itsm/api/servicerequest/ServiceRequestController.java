@@ -26,7 +26,7 @@ public class ServiceRequestController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public List<ServiceRequestResponse> list(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return serviceRequestService.list(user.getOrgId());

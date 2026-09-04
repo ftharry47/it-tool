@@ -4,11 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ITSM Portal</title>
+    <script>
+      (function () {
+        const key = 'itsm-ui-theme'
+        let stored = localStorage.getItem(key)
+        let resolved = stored || 'dark'
+        if (resolved === 'system') {
+          resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        if (resolved === 'dark') {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/index-dfSneM1P.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BylsXwFw.css">
+    <script type="module" crossorigin src="/assets/index-TimtzYof.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-OAo-kWgP.css">
   </head>
   <body>
     <div id="root"></div>

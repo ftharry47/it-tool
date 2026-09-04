@@ -8,8 +8,12 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.*;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,11 +31,11 @@ public class ReportingService {
             "service_request", ServiceRequest.class);
 
     private static final Map<String, Set<String>> FIELDS_BY_ENTITY = Map.of(
-            "incident", Set.of("orgId", "status", "priority", "category", "createdAt", "resolvedAt", "closedAt", "impact", "urgency"),
-            "issue", Set.of("orgId", "status", "priority", "createdAt", "type"),
+            "incident", Set.of("orgId", "status", "priority", "category", "assignee", "requester", "createdAt", "resolvedAt", "closedAt", "impact", "urgency"),
+            "issue", Set.of("orgId", "status", "priority", "createdAt", "assignee", "reporter", "type"),
             "problem", Set.of("orgId", "status", "createdAt"),
-            "change", Set.of("orgId", "status", "createdAt"),
-            "service_request", Set.of("orgId", "status", "createdAt"));
+            "change", Set.of("orgId", "status", "createdAt", "requester"),
+            "service_request", Set.of("orgId", "status", "createdAt", "requester", "catalogItem"));
 
     private static final Map<String, String> DATE_FIELD_BY_ENTITY = Map.of(
             "incident", "createdAt",
@@ -65,6 +69,7 @@ public class ReportingService {
         return new ReportMetadataResponse(entities, fieldsByEntity, operators, DATE_FIELD_BY_ENTITY);
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AdHocQueryResponse adHocQuery(UUID orgId, AdHocQueryRequest request) {
         Class<?> entityClass = ENTITY_WHITELIST.get(request.entity());
         if (entityClass == null) {
@@ -110,29 +115,77 @@ public class ReportingService {
 
         cq.where(predicates.toArray(new Predicate[0]));
 
-        if (request.groupBy() != null && !request.groupBy().isBlank()) {
-            Path<?> groupPath = root.get(request.groupBy());
-            cq.groupBy(groupPath);
-            cq.multiselect(groupPath, cb.count(root));
+        boolean hasGroupBy = request.groupBy() != null && !request.groupBy().isBlank();
+
+        if (hasGroupBy) {
+            Path<?> rawPath = root.get(request.groupBy());
+            Expression<?> groupExpr;
+            if (BaseEntity.class.isAssignableFrom(rawPath.getJavaType())) {
+                Join<?, ?> join = root.join(request.groupBy(), JoinType.LEFT);
+                Path<String> namePath = join.get("name");
+                groupExpr = cb.coalesce(namePath, cb.literal("Unassigned"));
+            } else {
+                groupExpr = rawPath;
+            }
+            cq.groupBy(groupExpr);
+            cq.multiselect(groupExpr, cb.count(root));
         } else {
-            cq.multiselect(root, cb.count(root));
+            cq.multiselect(cb.count(root));
         }
 
         TypedQuery<Tuple> query = entityManager.createQuery(cq);
-        query.setMaxResults(MAX_RESULT_ROWS);
+        if (hasGroupBy) {
+            query.setMaxResults(MAX_RESULT_ROWS);
+        }
 
         List<Tuple> tuples = query.getResultList();
 
-        List<Map<String, Object>> rows = tuples.stream()
-                .map(t -> {
-                    Map<String, Object> row = new HashMap<>();
-                    row.put("group", t.get(0));
-                    row.put("count", t.get(1));
-                    return row;
-                })
-                .collect(Collectors.toList());
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : tuples) {
+            Map<String, Object> row = new HashMap<>();
+            if (hasGroupBy) {
+                row.put("group", formatGroupValue(t.get(0)));
+                row.put("count", t.get(1));
+            } else {
+                row.put("group", null);
+                row.put("count", t.get(0));
+            }
+            rows.add(row);
+        }
 
         return new AdHocQueryResponse(orgId, request.entity(), request.groupBy(), rows);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public AdHocQueryResponse priorityBreakdown(UUID orgId) {
+        String jpql = """
+                SELECT COALESCE(p.name, 'Unassigned'), COUNT(i)
+                FROM Incident i
+                LEFT JOIN i.priority p
+                WHERE i.orgId = :orgId
+                  AND i.status IN :statuses
+                GROUP BY p.name
+                """;
+
+        List<Incident.Status> statuses = List.of(
+                Incident.Status.NEW,
+                Incident.Status.IN_PROGRESS,
+                Incident.Status.ON_HOLD,
+                Incident.Status.REOPENED);
+
+        TypedQuery<Tuple> query = entityManager.createQuery(jpql, Tuple.class);
+        query.setParameter("orgId", orgId);
+        query.setParameter("statuses", statuses);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : query.getResultList()) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("group", t.get(0, String.class));
+            row.put("count", t.get(1, Long.class));
+            rows.add(row);
+        }
+
+        return new AdHocQueryResponse(orgId, "incident", "priority", rows);
     }
 
     public Map<String, Object> ticketsSummary(UUID orgId) {
@@ -170,11 +223,21 @@ public class ReportingService {
                 cb.greaterThanOrEqualTo(resRoot.get("resolvedAt"), startOfDay));
         long resolvedToday = entityManager.createQuery(resolved).getSingleResult();
 
+        CriteriaQuery<Long> unassigned = cb.createQuery(Long.class);
+        Root<Incident> unRoot = unassigned.from(Incident.class);
+        unassigned.select(cb.count(unRoot));
+        unassigned.where(
+                cb.equal(unRoot.get("orgId"), orgId),
+                cb.isNull(unRoot.get("assignee")),
+                unRoot.get("status").in(Incident.Status.NEW, Incident.Status.IN_PROGRESS, Incident.Status.ON_HOLD, Incident.Status.REOPENED));
+        long unassignedCount = entityManager.createQuery(unassigned).getSingleResult();
+
         return Map.of(
                 "total", totalCount,
                 "open", openCount,
                 "inProgress", inProgressCount,
-                "resolvedToday", resolvedToday);
+                "resolvedToday", resolvedToday,
+                "unassigned", unassignedCount);
     }
 
     public Map<String, Object> slaCompliance(UUID orgId) {
@@ -204,49 +267,214 @@ public class ReportingService {
                 "compliancePercent", Math.round(compliance * 100.0) / 100.0);
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> ticketsTrend(UUID orgId, int days) {
+        if (days < 1 || days > 365) {
+            throw new IllegalArgumentException("days must be between 1 and 365");
+        }
+        OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days).truncatedTo(ChronoUnit.DAYS);
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<OffsetDateTime> cq = cb.createQuery(OffsetDateTime.class);
+        Root<Incident> root = cq.from(Incident.class);
+        cq.select(root.get("createdAt"));
+        cq.where(
+                cb.equal(root.get("orgId"), orgId),
+                cb.greaterThanOrEqualTo(root.get("createdAt"), start));
+
+        List<OffsetDateTime> dates = entityManager.createQuery(cq).getResultList();
+
+        Map<LocalDate, Long> counts = dates.stream()
+                .collect(Collectors.groupingBy(
+                        d -> d.toInstant().atZone(ZoneOffset.UTC).toLocalDate(),
+                        TreeMap::new,
+                        Collectors.counting()));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate date = OffsetDateTime.now(ZoneOffset.UTC).minusDays(i).toLocalDate();
+            long count = counts.getOrDefault(date, 0L);
+            result.add(Map.of("date", date.toString(), "count", count));
+        }
+        return result;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> slaComplianceTrend(UUID orgId, int days) {
+        if (days < 1 || days > 365) {
+            throw new IllegalArgumentException("days must be between 1 and 365");
+        }
+        OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).minusDays(days).truncatedTo(ChronoUnit.DAYS);
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<SlaInstance> root = cq.from(SlaInstance.class);
+        cq.multiselect(root.get("createdAt"), root.get("breachStatus"));
+        cq.where(
+                cb.equal(root.get("orgId"), orgId),
+                cb.greaterThanOrEqualTo(root.get("createdAt"), start));
+
+        List<Tuple> rows = entityManager.createQuery(cq).getResultList();
+
+        record DailySla(long total, long breached) {}
+
+        Map<LocalDate, DailySla> byDay = new TreeMap<>();
+        for (Tuple t : rows) {
+            OffsetDateTime createdAt = t.get(0, OffsetDateTime.class);
+            SlaInstance.BreachStatus status = t.get(1, SlaInstance.BreachStatus.class);
+            if (createdAt == null) continue;
+            LocalDate date = createdAt.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+            DailySla current = byDay.getOrDefault(date, new DailySla(0L, 0L));
+            boolean isBreached = status == SlaInstance.BreachStatus.BREACHED;
+            byDay.put(date, new DailySla(current.total() + 1, current.breached() + (isBreached ? 1 : 0)));
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate date = OffsetDateTime.now(ZoneOffset.UTC).minusDays(i).toLocalDate();
+            DailySla daily = byDay.getOrDefault(date, new DailySla(0L, 0L));
+            double compliance = daily.total() == 0 ? 100.0
+                    : ((daily.total() - daily.breached()) * 100.0 / daily.total());
+            result.add(Map.of(
+                    "date", date.toString(),
+                    "total", daily.total(),
+                    "breached", daily.breached(),
+                    "compliancePercent", Math.round(compliance * 100.0) / 100.0));
+        }
+        return result;
+    }
+
     public List<Map<String, Object>> agentWorkload(UUID orgId) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<Incident> root = cq.from(Incident.class);
+        Join<Incident, AppUser> assignee = root.join("assignee");
+        Expression<String> agentName = cb.coalesce(assignee.get("displayName"), assignee.get("email"));
 
-        cq.multiselect(root.get("assignee").get("id"), cb.count(root));
+        cq.multiselect(agentName, cb.count(root));
         cq.where(
                 cb.equal(root.get("orgId"), orgId),
-                cb.isNotNull(root.get("assignee")),
-                cb.notEqual(root.get("status"), Incident.Status.CLOSED));
-        cq.groupBy(root.get("assignee").get("id"));
+                root.get("status").in(
+                        Incident.Status.NEW,
+                        Incident.Status.IN_PROGRESS,
+                        Incident.Status.ON_HOLD,
+                        Incident.Status.WAITING_ON_CUSTOMER,
+                        Incident.Status.REOPENED));
+        cq.groupBy(agentName);
 
         return entityManager.createQuery(cq)
                 .getResultList()
                 .stream()
                 .map(t -> {
                     Map<String, Object> row = new HashMap<>();
-                    row.put("agentId", t.get(0, UUID.class));
+                    row.put("agentName", t.get(0, String.class));
                     row.put("openCount", t.get(1, Long.class));
                     return row;
                 })
                 .collect(Collectors.toList());
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> slaComplianceMonthly(UUID orgId, int months) {
+        if (months < 1 || months > 60) {
+            throw new IllegalArgumentException("months must be between 1 and 60");
+        }
+        OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC).minusMonths(months).withDayOfMonth(1).truncatedTo(ChronoUnit.DAYS);
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<SlaInstance> root = cq.from(SlaInstance.class);
+        cq.multiselect(root.get("createdAt"), root.get("breachStatus"));
+        cq.where(
+                cb.equal(root.get("orgId"), orgId),
+                cb.greaterThanOrEqualTo(root.get("createdAt"), start));
+
+        List<Tuple> rows = entityManager.createQuery(cq).getResultList();
+
+        record MonthlySla(long total, long breached) {}
+
+        Map<YearMonth, MonthlySla> byMonth = new TreeMap<>();
+        for (Tuple t : rows) {
+            OffsetDateTime createdAt = t.get(0, OffsetDateTime.class);
+            SlaInstance.BreachStatus status = t.get(1, SlaInstance.BreachStatus.class);
+            if (createdAt == null) continue;
+            YearMonth month = YearMonth.from(createdAt);
+            MonthlySla current = byMonth.getOrDefault(month, new MonthlySla(0L, 0L));
+            boolean isBreached = status == SlaInstance.BreachStatus.BREACHED;
+            byMonth.put(month, new MonthlySla(current.total() + 1, current.breached() + (isBreached ? 1 : 0)));
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int i = months - 1; i >= 0; i--) {
+            YearMonth month = YearMonth.now(ZoneOffset.UTC).minusMonths(i);
+            MonthlySla monthly = byMonth.getOrDefault(month, new MonthlySla(0L, 0L));
+            double compliance = monthly.total() == 0 ? 100.0
+                    : ((monthly.total() - monthly.breached()) * 100.0 / monthly.total());
+            result.add(Map.of(
+                    "month", month.toString(),
+                    "total", monthly.total(),
+                    "breached", monthly.breached(),
+                    "compliancePercent", Math.round(compliance * 100.0) / 100.0));
+        }
+        return result;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> slaComplianceOverall(UUID orgId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+
+        CriteriaQuery<Long> total = cb.createQuery(Long.class);
+        Root<SlaInstance> totalRoot = total.from(SlaInstance.class);
+        total.select(cb.count(totalRoot));
+        total.where(cb.equal(totalRoot.get("orgId"), orgId));
+        long totalCount = entityManager.createQuery(total).getSingleResult();
+
+        CriteriaQuery<Long> breached = cb.createQuery(Long.class);
+        Root<SlaInstance> breachRoot = breached.from(SlaInstance.class);
+        breached.select(cb.count(breachRoot));
+        breached.where(
+                cb.equal(breachRoot.get("orgId"), orgId),
+                cb.equal(breachRoot.get("breachStatus"), SlaInstance.BreachStatus.BREACHED));
+        long breachedCount = entityManager.createQuery(breached).getSingleResult();
+
+        double compliance = totalCount == 0 ? 100.0
+                : ((totalCount - breachedCount) * 100.0 / totalCount);
+
+        return Map.of(
+                "total", totalCount,
+                "breached", breachedCount,
+                "compliancePercent", Math.round(compliance * 100.0) / 100.0);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> sprintVelocity(UUID orgId) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<Issue> root = cq.from(Issue.class);
+        Join<Issue, Sprint> sprint = root.join("sprint");
+        Join<Issue, WorkflowStatus> workflowStatus = root.join("workflowStatus");
 
-        cq.multiselect(root.get("sprint").get("id"), cb.count(root));
+        Expression<Long> committed = cb.count(root);
+        Expression<Long> completed = cb.sum(
+                cb.<Long>selectCase()
+                        .when(cb.equal(workflowStatus.get("category"), WorkflowStatus.Category.DONE), 1L)
+                        .otherwise(0L));
+
+        cq.multiselect(sprint.get("name"), committed, completed);
         cq.where(
                 cb.equal(root.get("orgId"), orgId),
-                cb.isNotNull(root.get("sprint")));
-        cq.groupBy(root.get("sprint").get("id"));
+                cb.isNull(root.get("deletedAt")),
+                cb.isNull(sprint.get("deletedAt")));
+        cq.groupBy(sprint.get("id"), sprint.get("name"));
 
         return entityManager.createQuery(cq)
                 .getResultList()
                 .stream()
                 .map(t -> {
                     Map<String, Object> row = new HashMap<>();
-                    row.put("sprintId", t.get(0, UUID.class));
+                    row.put("sprintName", t.get(0, String.class));
                     row.put("committed", t.get(1, Long.class));
-                    row.put("completed", 0L);
+                    row.put("completed", t.get(2, Long.class));
                     return row;
                 })
                 .collect(Collectors.toList());
@@ -276,10 +504,14 @@ public class ReportingService {
         return Optional.of(cb.between(path, dateRange.from(), dateRange.to()));
     }
 
-    @SuppressWarnings("unchecked")
     private Predicate buildPredicate(CriteriaBuilder cb, Root<?> root, AdHocQueryFilter filter, Class<?> entityClass) {
         Path<Object> path = root.get(filter.field());
         Class<?> fieldClass = path.getJavaType();
+
+        if (BaseEntity.class.isAssignableFrom(fieldClass)) {
+            return buildEntityPredicate(cb, path, filter, fieldClass);
+        }
+
         Object parsedValue = parseValue(filter.value(), fieldClass);
 
         return switch (filter.op()) {
@@ -296,6 +528,23 @@ public class ReportingService {
         };
     }
 
+    @SuppressWarnings("unchecked")
+    private Predicate buildEntityPredicate(CriteriaBuilder cb, Path<Object> path, AdHocQueryFilter filter, Class<?> fieldClass) {
+        return switch (filter.op()) {
+            case "eq" -> cb.equal(path, entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(filter.value())));
+            case "ne" -> cb.notEqual(path, entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(filter.value())));
+            case "in" -> {
+                List<BaseEntity> values = Arrays.stream(filter.value().split(","))
+                        .map(String::trim)
+                        .map(v -> entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(v)))
+                        .collect(Collectors.toList());
+                yield path.in(values);
+            }
+            default -> throw new IllegalArgumentException("Unsupported operator: " + filter.op());
+        };
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private Object parseValue(String value, Class<?> fieldClass) {
         if (fieldClass.isEnum()) {
             return Enum.valueOf((Class<Enum>) fieldClass, value);
@@ -313,5 +562,35 @@ public class ReportingService {
             return Long.parseLong(value);
         }
         return value;
+    }
+
+    private Object formatGroupValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Enum<?>) {
+            return ((Enum<?>) value).name();
+        }
+        if (value instanceof BaseEntity entity) {
+            return labelForEntity(entity);
+        }
+        return value;
+    }
+
+    private String labelForEntity(BaseEntity entity) {
+        if (entity.getId() == null) {
+            return "Unknown";
+        }
+        for (String method : List.of("getDisplayName", "getEmail", "getName")) {
+            try {
+                java.lang.reflect.Method getter = entity.getClass().getMethod(method);
+                Object name = getter.invoke(entity);
+                if (name != null && !name.toString().isBlank()) {
+                    return name.toString();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return entity.getId().toString();
     }
 }

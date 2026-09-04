@@ -1,6 +1,7 @@
 package com.alignedcardio.itsm.api.automation;
 
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.repository.AutomationRunLogRepository;
 import com.alignedcardio.itsm.service.AutomationRuleService;
 import com.alignedcardio.itsm.service.UserService;
 import com.alignedcardio.itsm.service.automation.AutomationRuleTestService;
@@ -22,13 +23,16 @@ public class AutomationRuleController {
     private final AutomationRuleService ruleService;
     private final AutomationRuleTestService ruleTestService;
     private final UserService userService;
+    private final AutomationRunLogRepository runLogRepository;
 
     public AutomationRuleController(AutomationRuleService ruleService,
                                     AutomationRuleTestService ruleTestService,
-                                    UserService userService) {
+                                    UserService userService,
+                                    AutomationRunLogRepository runLogRepository) {
         this.ruleService = ruleService;
         this.ruleTestService = ruleTestService;
         this.userService = userService;
+        this.runLogRepository = runLogRepository;
     }
 
     @PostMapping
@@ -89,5 +93,33 @@ public class AutomationRuleController {
             @RequestBody @Valid AutomationRuleTestRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
         return ResponseEntity.ok(ruleTestService.test(user.getOrgId(), id, request));
+    }
+
+    @GetMapping("/{id}/runs")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<List<AutomationRunLogResponse>> runs(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID id) {
+        AppUser user = userService.syncFromJwt(jwt);
+        List<AutomationRunLogResponse> responses = runLogRepository
+                .findByOrgIdAndRuleIdOrderByCreatedAtDesc(user.getOrgId(), id)
+                .stream()
+                .map(this::toRunLogResponse)
+                .toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    private AutomationRunLogResponse toRunLogResponse(com.alignedcardio.itsm.entity.AutomationRunLog log) {
+        return new AutomationRunLogResponse(
+                log.getId(),
+                log.getRule().getId(),
+                log.getEntityType(),
+                log.getEntityId().toString(),
+                log.getTriggeredEvent(),
+                log.getStatus(),
+                log.getOutput(),
+                log.getError(),
+                log.getExecutedAt()
+        );
     }
 }

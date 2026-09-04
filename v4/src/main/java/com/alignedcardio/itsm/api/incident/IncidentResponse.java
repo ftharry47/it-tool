@@ -13,6 +13,10 @@ public record IncidentResponse(
         String category,
         String requester,
         String assignee,
+        String location,
+        String phone,
+        Integer estimatedMinutes,
+        Integer totalLoggedMinutes,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

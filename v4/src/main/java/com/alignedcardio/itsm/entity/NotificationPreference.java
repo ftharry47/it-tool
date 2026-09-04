@@ -26,6 +26,18 @@ public class NotificationPreference extends BaseEntity {
     @Column(name = "digest_mode", nullable = false, length = 16)
     private DigestMode digestMode = DigestMode.NONE;
 
+    @Column(name = "notify_status_change", nullable = false)
+    private boolean notifyStatusChange = true;
+
+    @Column(name = "notify_assignment", nullable = false)
+    private boolean notifyAssignment = true;
+
+    @Column(name = "notify_comment", nullable = false)
+    private boolean notifyComment = true;
+
+    @Column(name = "notify_mention", nullable = false)
+    private boolean notifyMention = true;
+
     public java.util.UUID getUserId() {
         return userId;
     }
@@ -64,5 +76,37 @@ public class NotificationPreference extends BaseEntity {
 
     public void setDigestMode(DigestMode digestMode) {
         this.digestMode = digestMode;
+    }
+
+    public boolean isNotifyStatusChange() {
+        return notifyStatusChange;
+    }
+
+    public void setNotifyStatusChange(boolean notifyStatusChange) {
+        this.notifyStatusChange = notifyStatusChange;
+    }
+
+    public boolean isNotifyAssignment() {
+        return notifyAssignment;
+    }
+
+    public void setNotifyAssignment(boolean notifyAssignment) {
+        this.notifyAssignment = notifyAssignment;
+    }
+
+    public boolean isNotifyComment() {
+        return notifyComment;
+    }
+
+    public void setNotifyComment(boolean notifyComment) {
+        this.notifyComment = notifyComment;
+    }
+
+    public boolean isNotifyMention() {
+        return notifyMention;
+    }
+
+    public void setNotifyMention(boolean notifyMention) {
+        this.notifyMention = notifyMention;
     }
 }

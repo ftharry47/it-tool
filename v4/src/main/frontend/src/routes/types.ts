@@ -5,5 +5,6 @@ export interface RouteDefinition {
   label: string
   element: ReactNode
   icon?: string
+  hidden?: boolean
   children?: RouteDefinition[]
 }

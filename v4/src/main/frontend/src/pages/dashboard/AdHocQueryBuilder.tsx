@@ -96,7 +96,7 @@ export function AdHocQueryBuilder() {
         <h1 className="text-2xl font-semibold tracking-tight">Ad-Hoc Query Builder</h1>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Entity</label>
               <select
@@ -122,20 +122,20 @@ export function AdHocQueryBuilder() {
               </select>
             </div>
 
-            <div className="space-y-2 md:col-span-1">
+            <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium">Date Range</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   type="datetime-local"
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
                 <input
                   type="datetime-local"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
