@@ -30,6 +30,7 @@ interface WorkflowResponse {
   id: string
   name: string
   projectId: string
+  statuses?: { id: string }[]
 }
 
 const CATEGORY_ORDER: Record<string, number> = {
@@ -74,7 +75,7 @@ function DroppableColumn({ column, projectId }: { column: BoardColumn; projectId
         <span className="text-sm font-semibold">{formatStatusLabel(column.status)}</span>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{column.issues.length}</span>
       </div>
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto scrollbar-themed">
         {column.issues.map((issue) => (
           <BoardIssueCard key={issue.id} issue={issue} projectId={projectId} />
         ))}
@@ -101,7 +102,8 @@ export function IssueBoard({ projectId, projectKey, sprintId }: { projectId: str
     enabled: !!account,
   })
 
-  const workflowId = workflowsQuery.data?.find((w) => w.projectId === projectId)?.id
+  const projectWorkflows = (workflowsQuery.data ?? []).filter((w) => w.projectId === projectId)
+  const workflowId = (projectWorkflows.find((w) => (w.statuses?.length ?? 0) > 0) ?? projectWorkflows[0])?.id
 
   const boardQuery = useQuery<BoardColumn[]>({
     queryKey: ['project-board', projectKey, workflowId, sprintId ?? 'all'],
@@ -152,6 +154,17 @@ export function IssueBoard({ projectId, projectKey, sprintId }: { projectId: str
     return catA - catB || a.displayOrder - b.displayOrder
   })
 
+  if (columns.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <p className="text-sm font-medium">This workflow has no statuses configured.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Add statuses to the workflow in the admin area to see board columns.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {dropError && (
@@ -165,7 +178,7 @@ export function IssueBoard({ projectId, projectKey, sprintId }: { projectId: str
         if (active.id === over.id) return
         changeStatusMutation.mutate({ issueId: String(active.id), workflowStatusId: String(over.id) })
       }}>
-        <div className="flex min-h-[500px] gap-4 overflow-x-auto rounded-xl border border-border bg-card p-4">
+        <div className="flex min-h-[500px] gap-4 overflow-x-auto scrollbar-themed rounded-xl border border-border bg-card p-4">
           {columns.map((column) => (
             <DroppableColumn key={column.workflowStatusId} column={column} projectId={projectId} />
           ))}

@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
@@ -32,4 +33,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             UUID orgId, OffsetDateTime to, Pageable pageable);
 
     Page<AuditLog> findByOrgId(UUID orgId, Pageable pageable);
+
+    List<AuditLog> findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(
+            UUID orgId, String entityType, UUID entityId);
+
+    Page<AuditLog> findByOrgIdAndEntityTypeAndActionInOrderByCreatedAtDesc(
+            UUID orgId, String entityType, java.util.Collection<String> actions, Pageable pageable);
 }

@@ -27,7 +27,7 @@ const cards = [
 
 export function Home() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-full flex-col items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-4xl space-y-6 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-card-foreground">Self-Service Portal</h1>
         <p className="mx-auto max-w-xl text-sm text-muted-foreground">

@@ -3,13 +3,14 @@ package com.alignedcardio.itsm.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "fulfillment_task")
 public class FulfillmentTask extends BaseEntity {
 
-    public enum Status { PENDING, COMPLETED }
+    public enum Status { PENDING, ORDERED, DELIVERY_DATE_SET, DELIVERED, COMPLETED }
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -32,8 +33,27 @@ public class FulfillmentTask extends BaseEntity {
     @JoinColumn(name = "assignee_id")
     private AppUser assignee;
 
+    @Column(name = "assigned_at")
+    private OffsetDateTime assignedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_by_id")
+    private AppUser assignedBy;
+
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
+
+    @Column(name = "expected_delivery_date")
+    private LocalDate expectedDeliveryDate;
+
+    @Column(name = "delivered_at")
+    private OffsetDateTime deliveredAt;
+
+    @Column(name = "last_reminded_on")
+    private LocalDate lastRemindedOn;
+
+    @Column(name = "closing_notes", columnDefinition = "TEXT")
+    private String closingNotes;
 
     public ServiceRequest getServiceRequest() {
         return serviceRequest;
@@ -75,11 +95,59 @@ public class FulfillmentTask extends BaseEntity {
         this.assignee = assignee;
     }
 
+    public OffsetDateTime getAssignedAt() {
+        return assignedAt;
+    }
+
+    public void setAssignedAt(OffsetDateTime assignedAt) {
+        this.assignedAt = assignedAt;
+    }
+
+    public AppUser getAssignedBy() {
+        return assignedBy;
+    }
+
+    public void setAssignedBy(AppUser assignedBy) {
+        this.assignedBy = assignedBy;
+    }
+
     public OffsetDateTime getCompletedAt() {
         return completedAt;
     }
 
     public void setCompletedAt(OffsetDateTime completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public LocalDate getExpectedDeliveryDate() {
+        return expectedDeliveryDate;
+    }
+
+    public void setExpectedDeliveryDate(LocalDate expectedDeliveryDate) {
+        this.expectedDeliveryDate = expectedDeliveryDate;
+    }
+
+    public OffsetDateTime getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public void setDeliveredAt(OffsetDateTime deliveredAt) {
+        this.deliveredAt = deliveredAt;
+    }
+
+    public LocalDate getLastRemindedOn() {
+        return lastRemindedOn;
+    }
+
+    public void setLastRemindedOn(LocalDate lastRemindedOn) {
+        this.lastRemindedOn = lastRemindedOn;
+    }
+
+    public String getClosingNotes() {
+        return closingNotes;
+    }
+
+    public void setClosingNotes(String closingNotes) {
+        this.closingNotes = closingNotes;
     }
 }

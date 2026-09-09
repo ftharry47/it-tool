@@ -13,7 +13,8 @@ public final class ChangeStatusMachine {
             Map.entry(ChangeRequest.Status.APPROVED, Set.of(ChangeRequest.Status.SCHEDULED, ChangeRequest.Status.CANCELLED)),
             Map.entry(ChangeRequest.Status.SCHEDULED, Set.of(ChangeRequest.Status.IN_PROGRESS, ChangeRequest.Status.CANCELLED)),
             Map.entry(ChangeRequest.Status.IN_PROGRESS, Set.of(ChangeRequest.Status.COMPLETED, ChangeRequest.Status.FAILED, ChangeRequest.Status.ROLLED_BACK, ChangeRequest.Status.CANCELLED)),
-            Map.entry(ChangeRequest.Status.COMPLETED, Set.of()),
+            Map.entry(ChangeRequest.Status.COMPLETED, Set.of(ChangeRequest.Status.CLOSED)),
+            Map.entry(ChangeRequest.Status.CLOSED, Set.of()),
             Map.entry(ChangeRequest.Status.FAILED, Set.of(ChangeRequest.Status.ROLLED_BACK, ChangeRequest.Status.CANCELLED)),
             Map.entry(ChangeRequest.Status.ROLLED_BACK, Set.of()),
             Map.entry(ChangeRequest.Status.REJECTED, Set.of(ChangeRequest.Status.CANCELLED)),
@@ -36,10 +37,9 @@ public final class ChangeStatusMachine {
     public static void validate(ChangeRequest change, ChangeRequest.Status to) {
         validate(change.getStatus(), to);
 
-        if (to == ChangeRequest.Status.COMPLETED
-                && change.getChangeType() == ChangeRequest.ChangeType.EMERGENCY
+        if (to == ChangeRequest.Status.CLOSED
                 && (change.getPostImplementationReview() == null || change.getPostImplementationReview().isBlank())) {
-            throw new IllegalStateException("EMERGENCY change cannot be marked COMPLETED without post_implementation_review");
+            throw new IllegalStateException("Change cannot be closed without post_implementation_review");
         }
     }
 }

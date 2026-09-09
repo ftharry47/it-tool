@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AccountInfo, IPublicClientApplication } from '@azure/msal-browser'
 import { fetchWithToken } from '../../api/client'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 
 interface PriorityOption {
   id: string
@@ -19,6 +20,7 @@ interface CreateSlaPolicyFormProps {
   priorities: PriorityOption[]
   calendars: CalendarOption[]
   onCreated: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export function CreateSlaPolicyForm({
@@ -27,6 +29,7 @@ export function CreateSlaPolicyForm({
   priorities,
   calendars,
   onCreated,
+  onDirtyChange,
 }: CreateSlaPolicyFormProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
@@ -35,6 +38,19 @@ export function CreateSlaPolicyForm({
   const [responseTargetMinutes, setResponseTargetMinutes] = useState('')
   const [resolutionTargetMinutes, setResolutionTargetMinutes] = useState('')
   const [businessHoursCalendarId, setBusinessHoursCalendarId] = useState('')
+  const [confirmCancel, setConfirmCancel] = useState(false)
+
+  const isDirty =
+    name !== '' ||
+    appliesTo !== 'INCIDENT' ||
+    priorityFilter !== '' ||
+    responseTargetMinutes !== '' ||
+    resolutionTargetMinutes !== '' ||
+    businessHoursCalendarId !== ''
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const createPolicy = useMutation({
     mutationFn: async () => {
@@ -170,12 +186,27 @@ export function CreateSlaPolicyForm({
         </button>
         <button
           type="button"
-          onClick={onCreated}
+          onClick={() => {
+            if (isDirty) setConfirmCancel(true)
+            else onCreated()
+          }}
           className="rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
         >
           Cancel
         </button>
       </div>
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this policy that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          setConfirmCancel(false)
+          onCreated()
+        }}
+        onCancel={() => setConfirmCancel(false)}
+      />
     </form>
   )
 }

@@ -3,18 +3,18 @@ package com.alignedcardio.itsm.api.reporting;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.SavedReport;
 import com.alignedcardio.itsm.service.UserService;
-import com.alignedcardio.itsm.api.reporting.ReportMetadataResponse;
 import com.alignedcardio.itsm.service.reporting.AdHocQueryRequest;
 import com.alignedcardio.itsm.service.reporting.AdHocQueryResponse;
+import com.alignedcardio.itsm.service.reporting.AgentPerformanceService;
 import com.alignedcardio.itsm.service.reporting.ReportingService;
 import com.alignedcardio.itsm.service.reporting.SavedReportService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,14 +26,26 @@ public class ReportingController {
 
     private final ReportingService reportingService;
     private final SavedReportService savedReportService;
+    private final AgentPerformanceService agentPerformanceService;
     private final UserService userService;
 
     public ReportingController(ReportingService reportingService,
                                SavedReportService savedReportService,
+                               AgentPerformanceService agentPerformanceService,
                                UserService userService) {
         this.reportingService = reportingService;
         this.savedReportService = savedReportService;
+        this.agentPerformanceService = agentPerformanceService;
         this.userService = userService;
+    }
+
+    @GetMapping("/tickets-by-location")
+    public List<TicketsByLocationResponse> ticketsByLocation(@AuthenticationPrincipal Jwt jwt,
+                                                              @RequestParam(required = false, defaultValue = "OPEN") String status,
+                                                              @RequestParam(required = false) OffsetDateTime from,
+                                                              @RequestParam(required = false) OffsetDateTime to) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.ticketsByLocation(user.getOrgId(), status, from, to);
     }
 
     @GetMapping("/metadata")
@@ -106,10 +118,28 @@ public class ReportingController {
         return reportingService.adHocQuery(user.getOrgId(), request);
     }
 
+    /** Live current-month performance metrics for the calling agent. */
+    @GetMapping("/agent-performance/me")
+    public Map<String, Object> myPerformance(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("report", agentPerformanceService.currentMonth(user));
+        out.put("rollingSlaCompliancePct", agentPerformanceService.rollingSlaCompliance(user));
+        return out;
+    }
+
+    /** All agents' generated performance reports — SUPER_ADMIN aggregate view. */
+    @GetMapping("/agent-performance/all")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public List<SavedReport> allAgentPerformance(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return savedReportService.listByType(user.getOrgId(), "AGENT_PERFORMANCE");
+    }
+
     @GetMapping("/saved")
     public List<SavedReport> listSaved(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
-        return savedReportService.list(user.getOrgId());
+        return savedReportService.listForUser(user.getOrgId(), user.getId());
     }
 
     @PostMapping("/saved")

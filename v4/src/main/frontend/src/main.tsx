@@ -7,6 +7,7 @@ import { msalInstance } from './auth/authConfig'
 import App from './App'
 import './index.css'
 import { ThemeProvider } from './components/theme/ThemeProvider'
+import { registerServiceWorker } from './api/push'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,8 @@ const root = ReactDOM.createRoot(document.getElementById('root')!)
   msalInstance.handleRedirectPromise().catch((error) => {
     console.error('[main] handleRedirectPromise error:', error)
   })
+
+  registerServiceWorker()
 
   root.render(
     <React.StrictMode>

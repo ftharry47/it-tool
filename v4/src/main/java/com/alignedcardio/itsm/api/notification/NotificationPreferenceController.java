@@ -53,6 +53,9 @@ public class NotificationPreferenceController {
         preference.setNotifyAssignment(request.notifyAssignment());
         preference.setNotifyComment(request.notifyComment());
         preference.setNotifyMention(request.notifyMention());
+        if (request.pushEnabled() != null) {
+            preference.setPushEnabled(request.pushEnabled());
+        }
 
         preferenceRepository.save(preference);
         return ResponseEntity.ok(toResponse(preference));
@@ -93,7 +96,8 @@ public class NotificationPreferenceController {
                 preference.isNotifyStatusChange(),
                 preference.isNotifyAssignment(),
                 preference.isNotifyComment(),
-                preference.isNotifyMention()
+                preference.isNotifyMention(),
+                preference.isPushEnabled()
         );
     }
 }

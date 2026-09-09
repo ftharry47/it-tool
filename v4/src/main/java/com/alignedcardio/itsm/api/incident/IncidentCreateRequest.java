@@ -14,7 +14,7 @@ public record IncidentCreateRequest(
         @Min(1) @Max(5) Integer urgency,
         @NotNull UUID categoryId,
         UUID priorityId,
-        String location,
+        UUID locationId,
         String phone
 ) {
 }

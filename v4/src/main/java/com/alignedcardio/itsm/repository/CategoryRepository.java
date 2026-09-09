@@ -11,4 +11,10 @@ import java.util.UUID;
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
 
     List<Category> findByOrgIdAndStatusOrderByDisplayOrderAsc(UUID orgId, Category.Status status);
+
+    List<Category> findByOrgIdAndDeletedAtIsNullOrderByDisplayOrderAsc(UUID orgId);
+
+    java.util.Optional<Category> findByOrgIdAndIdAndDeletedAtIsNull(UUID orgId, UUID id);
+
+    java.util.Optional<Category> findByOrgIdAndNameIgnoreCaseAndDeletedAtIsNull(UUID orgId, String name);
 }

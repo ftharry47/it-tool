@@ -27,20 +27,20 @@ public class SlaAdminController {
     }
 
     @GetMapping("/sla-policies")
-    public List<SlaPolicy> listPolicies(@AuthenticationPrincipal Jwt jwt) {
+    public List<SlaPolicyResponse> listPolicies(@AuthenticationPrincipal Jwt jwt) {
         var user = userService.syncFromJwt(jwt);
         return slaAdminService.listPolicies(user.getOrgId());
     }
 
     @PostMapping("/sla-policies")
-    public SlaPolicy createPolicy(@AuthenticationPrincipal Jwt jwt,
+    public SlaPolicyResponse createPolicy(@AuthenticationPrincipal Jwt jwt,
                                   @Valid @RequestBody SlaPolicyRequest request) {
         var user = userService.syncFromJwt(jwt);
         return slaAdminService.createPolicy(user.getOrgId(), user.getId(), request);
     }
 
     @PutMapping("/sla-policies/{id}")
-    public SlaPolicy updatePolicy(@AuthenticationPrincipal Jwt jwt,
+    public SlaPolicyResponse updatePolicy(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody SlaPolicyRequest request) {
         var user = userService.syncFromJwt(jwt);

@@ -2,7 +2,9 @@ import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { IssueBoard } from './IssueBoard'
@@ -43,6 +45,10 @@ export function ProjectDetail() {
     enabled: !!id,
   })
 
+  useDocumentTitle(
+    projectQuery.data ? `Project ${projectQuery.data.key}` : 'Project Detail'
+  )
+
   const backlogQuery = useQuery<IssueResponse[]>({
     queryKey: ['project-backlog', id],
     queryFn: async () => {
@@ -59,8 +65,17 @@ export function ProjectDetail() {
   const project = projectQuery.data
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-4">
+        <div>
+          <Link
+            to="/dashboard/projects"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Link>
+        </div>
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{project.key} — {project.name}</h1>

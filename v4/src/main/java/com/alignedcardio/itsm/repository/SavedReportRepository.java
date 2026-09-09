@@ -12,4 +12,10 @@ public interface SavedReportRepository extends JpaRepository<SavedReport, UUID> 
     List<SavedReport> findByOrgIdOrderByCreatedAtDesc(UUID orgId);
 
     Optional<SavedReport> findByIdAndOrgId(UUID id, UUID orgId);
+
+    /** Ad-hoc org reports + generated reports owned by the given user. */
+    List<SavedReport> findByOrgIdAndOwnerUserIdIsNullOrOwnerUserIdOrderByCreatedAtDesc(UUID orgId, UUID ownerUserId);
+
+    /** All generated performance reports for a period (SUPER_ADMIN aggregate view). */
+    List<SavedReport> findByOrgIdAndReportTypeOrderByCreatedAtDesc(UUID orgId, String reportType);
 }

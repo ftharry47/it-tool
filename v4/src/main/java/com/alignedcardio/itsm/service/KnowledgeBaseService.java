@@ -39,6 +39,9 @@ public class KnowledgeBaseService {
 
     @Transactional
     public KbArticleResponse create(AppUser user, UUID orgId, KbArticleCreateRequest request) {
+        if (!isKbContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can create KB articles");
+        }
         KbArticle article = new KbArticle();
         article.setOrgId(orgId);
         article.setTitle(request.title());
@@ -54,7 +57,7 @@ public class KnowledgeBaseService {
         entityManager.flush();
         entityManager.refresh(saved);
 
-        return toResponse(saved);
+        return toResponse(saved, user.getId());
     }
 
     @Transactional(readOnly = true)
@@ -70,22 +73,40 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public KbArticleResponse get(UUID orgId, UUID id) {
+    @Transactional
+    public KbArticleResponse get(UUID orgId, UUID id, UUID userId) {
         KbArticle article = kbArticleRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Knowledge base article not found"));
         article.setViewCount(article.getViewCount() + 1);
         kbArticleRepository.save(article);
-        return toResponse(article);
+        return toResponse(article, userId);
     }
 
     @Transactional
     public KbArticleResponse update(AppUser user, UUID orgId, UUID id, KbArticleUpdateRequest request) {
+        if (!isKbContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can update KB articles");
+        }
         KbArticle article = kbArticleRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Knowledge base article not found"));
 
         KbArticle.Status newStatus = request.status() != null ? request.status() : article.getStatus();
         KbStatusMachine.validate(article.getStatus(), newStatus);
+
+        if (request.status() != null && request.status() != article.getStatus()) {
+            KbArticle.Status to = request.status();
+            if (to == KbArticle.Status.PENDING_REVIEW) {
+                if (!isAuthor(user, article) && !isKbAdmin(user)) {
+                    throw new IllegalStateException("Only the author or an ADMIN / SUPER_ADMIN can submit an article for review");
+                }
+            } else if (to == KbArticle.Status.PUBLISHED
+                    || to == KbArticle.Status.ARCHIVED
+                    || to == KbArticle.Status.DRAFT) {
+                if (!isKbAdmin(user)) {
+                    throw new IllegalStateException("Only ADMIN or SUPER_ADMIN can publish, archive, or restore articles");
+                }
+            }
+        }
 
         // Snapshot only when the live article is currently PUBLISHED and content is changing.
         boolean contentChanged = contentChanged(article, request);
@@ -112,14 +133,18 @@ public class KnowledgeBaseService {
         article.setUpdatedBy(user.getId());
         article.setUpdatedAt(OffsetDateTime.now());
 
-        return toResponse(kbArticleRepository.save(article));
+        return toResponse(kbArticleRepository.save(article), user.getId());
     }
 
     @Transactional
-    public void delete(UUID orgId, UUID id) {
+    public void delete(AppUser user, UUID orgId, UUID id) {
+        if (!isKbAdmin(user)) {
+            throw new IllegalStateException("Only ADMIN or SUPER_ADMIN can delete KB articles");
+        }
         KbArticle article = kbArticleRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Knowledge base article not found"));
         article.setDeletedAt(OffsetDateTime.now());
+        article.setUpdatedBy(user.getId());
         kbArticleRepository.save(article);
     }
 
@@ -128,21 +153,42 @@ public class KnowledgeBaseService {
         KbArticle article = kbArticleRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Knowledge base article not found"));
 
-        KbFeedback feedback = new KbFeedback();
-        feedback.setKbArticle(article);
-        feedback.setHelpful(request.helpful());
-        feedback.setComment(request.comment());
-        feedback.setCreatedBy(user.getId());
-        feedback.setOrgId(orgId);
-        kbFeedbackRepository.save(feedback);
-
-        if (request.helpful()) {
-            article.setHelpfulCount(article.getHelpfulCount() + 1);
+        // One vote per user: re-voting with the same value is a no-op,
+        // voting the other way flips the existing vote and adjusts counts.
+        KbFeedback feedback = kbFeedbackRepository
+                .findByKbArticleIdAndCreatedBy(article.getId(), user.getId())
+                .orElse(null);
+        if (feedback != null && feedback.isHelpful() == request.helpful()) {
+            return toResponse(article, user.getId());
+        }
+        if (feedback != null) {
+            if (feedback.isHelpful()) {
+                article.setHelpfulCount(article.getHelpfulCount() - 1);
+                article.setNotHelpfulCount(article.getNotHelpfulCount() + 1);
+            } else {
+                article.setNotHelpfulCount(article.getNotHelpfulCount() - 1);
+                article.setHelpfulCount(article.getHelpfulCount() + 1);
+            }
+            feedback.setHelpful(request.helpful());
+            feedback.setComment(request.comment());
+            kbFeedbackRepository.save(feedback);
         } else {
-            article.setNotHelpfulCount(article.getNotHelpfulCount() + 1);
+            feedback = new KbFeedback();
+            feedback.setKbArticle(article);
+            feedback.setHelpful(request.helpful());
+            feedback.setComment(request.comment());
+            feedback.setCreatedBy(user.getId());
+            feedback.setOrgId(orgId);
+            kbFeedbackRepository.save(feedback);
+
+            if (request.helpful()) {
+                article.setHelpfulCount(article.getHelpfulCount() + 1);
+            } else {
+                article.setNotHelpfulCount(article.getNotHelpfulCount() + 1);
+            }
         }
 
-        return toResponse(kbArticleRepository.save(article));
+        return toResponse(kbArticleRepository.save(article), user.getId());
     }
 
     @Transactional(readOnly = true)
@@ -185,7 +231,11 @@ public class KnowledgeBaseService {
                 || !body.equals(article.getBody());
     }
 
-    private KbArticleResponse toResponse(KbArticle article) {
+    private KbArticleResponse toResponse(KbArticle article, UUID userId) {
+        Boolean myVote = userId == null ? null : kbFeedbackRepository
+                .findByKbArticleIdAndCreatedBy(article.getId(), userId)
+                .map(KbFeedback::isHelpful)
+                .orElse(null);
         return new KbArticleResponse(
                 article.getId(),
                 article.getNumber(),
@@ -201,7 +251,9 @@ public class KnowledgeBaseService {
                 article.getVersion(),
                 article.getPublishedAt(),
                 article.getArchivedAt(),
-                article.getCreatedAt()
+                article.getCreatedAt(),
+                article.getUpdatedAt(),
+                myVote
         );
     }
 
@@ -214,8 +266,52 @@ public class KnowledgeBaseService {
                 article.getStatus(),
                 article.getViewCount(),
                 article.getHelpfulCount(),
-                article.getVersion()
+                article.getNotHelpfulCount(),
+                article.getVersion(),
+                excerpt(article.getBody()),
+                article.getUpdatedAt()
         );
+    }
+
+    private String excerpt(String body) {
+        if (body == null) {
+            return null;
+        }
+        String plain = body
+                .replaceAll("```[\\s\\S]*?```", " ")          // fenced code blocks
+                .replaceAll("`([^`]*)`", "$1")               // inline code
+                .replaceAll("!\\[[^]]*]\\([^)]*\\)", " ")    // images
+                .replaceAll("\\[([^]]*)]\\([^)]*\\)", "$1")  // links -> text
+                .replaceAll("(?m)^#{1,6}\\s*", "")           // headings
+                .replaceAll("[*_~>]", "")                    // emphasis/quotes
+                .replaceAll("(?m)^\\s*[-*+]\\s+", "")        // list bullets
+                .replaceAll("\\s+", " ")
+                .trim();
+        return plain.length() <= 160 ? plain : plain.substring(0, 157) + "...";
+    }
+
+    private boolean isKbAdmin(AppUser user) {
+        return hasAnyRole(user, "ADMIN", "SUPER_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+    }
+
+    private boolean isKbContributor(AppUser user) {
+        return hasAnyRole(user, "AGENT", "TEAM_LEAD", "ADMIN", "SUPER_ADMIN",
+                "ROLE_AGENT", "ROLE_TEAM_LEAD", "ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+    }
+
+    private boolean isAuthor(AppUser user, KbArticle article) {
+        return article.getAuthor() != null && article.getAuthor().getId().equals(user.getId());
+    }
+
+    private boolean hasAnyRole(AppUser user, String... names) {
+        if (user == null || user.getUserRoles() == null) {
+            return false;
+        }
+        List<String> targets = List.of(names);
+        return user.getUserRoles().stream()
+                .filter(ur -> ur.getRole() != null)
+                .map(ur -> ur.getRole().getName())
+                .anyMatch(targets::contains);
     }
 
     private String generateArticleNumber() {

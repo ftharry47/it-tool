@@ -1,10 +1,13 @@
-import { useMsal } from '@azure/msal-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMsal } from '@azure/msal-react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fetchWithToken } from '../../api/client'
-import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { DateTimeInput } from '../../components/ui/DateTimeInput'
 import { Loading } from '../../components/ui/Loading'
+import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { formatDate, toEasternInputValue } from '../../lib/date'
 
 interface SprintResponse {
   id: string
@@ -25,10 +28,7 @@ interface BurndownSnapshot {
 }
 
 function toLocalInput(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return toEasternInputValue(iso)
 }
 
 function toIso(input: string) {
@@ -50,6 +50,7 @@ export function SprintPanel({ projectId }: { projectId: string }) {
   const [destination, setDestination] = useState<'BACKLOG' | 'NEXT_SPRINT' | ''>('')
   const [nextSprintId, setNextSprintId] = useState('')
   const [burndownId, setBurndownId] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<{ type: 'start' | 'complete'; sprint: SprintResponse } | null>(null)
 
   const sprintsQuery = useQuery<SprintResponse[]>({
     queryKey: ['project-sprints', projectId],
@@ -133,13 +134,32 @@ export function SprintPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      {pendingAction && (
+        <ConfirmDialog
+          open={pendingAction !== null}
+          title={pendingAction.type === 'start' ? 'Start sprint?' : 'Complete sprint?'}
+          description={`Are you sure you want to ${pendingAction.type} "${pendingAction.sprint.name}"?`}
+          confirmLabel={pendingAction.type === 'start' ? 'Start' : 'Complete'}
+          destructive={pendingAction.type === 'complete'}
+          onConfirm={() => {
+            const { type, sprint } = pendingAction
+            if (type === 'start') {
+              startMutation.mutate(sprint.id)
+            } else {
+              setCompleting(sprint)
+            }
+            setPendingAction(null)
+          }}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold">Create Sprint</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
           <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Goal" className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start" className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End" className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+          <DateTimeInput value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start" />
+          <DateTimeInput value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End" />
         </div>
         <button
           onClick={() => createMutation.mutate()}
@@ -162,10 +182,10 @@ export function SprintPanel({ projectId }: { projectId: string }) {
               </div>
               <div className="flex gap-2">
                 {sprint.status === 'PLANNING' && (
-                  <button onClick={() => startMutation.mutate(sprint.id)} disabled={startMutation.isPending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">Start</button>
+                  <button onClick={() => setPendingAction({ type: 'start', sprint })} disabled={startMutation.isPending} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">Start</button>
                 )}
                 {sprint.status === 'ACTIVE' && (
-                  <button onClick={() => setCompleting(sprint)} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">Complete</button>
+                  <button onClick={() => setPendingAction({ type: 'complete', sprint })} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">Complete</button>
                 )}
                 {sprint.status === 'COMPLETED' && (
                   <button onClick={() => setBurndownId(sprint.id)} className="rounded-md border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted">Burndown</button>
@@ -225,7 +245,7 @@ export function SprintPanel({ projectId }: { projectId: string }) {
           {burndownQuery.data && burndownQuery.data.length > 0 && (
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={burndownQuery.data.map((s) => ({ date: new Date(s.snapshotDate).toLocaleDateString(), remaining: s.remainingPoints, total: s.totalPoints }))}>
+                <LineChart data={burndownQuery.data.map((s) => ({ date: formatDate(s.snapshotDate), remaining: s.remainingPoints, total: s.totalPoints }))}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />

@@ -8,6 +8,8 @@ import java.util.UUID;
 public record ServiceRequestCreateRequest(
         @NotNull UUID catalogItemId,
         @NotNull String formData,
-        OffsetDateTime neededBy
+        OffsetDateTime neededBy,
+        UUID locationId,
+        String phone
 ) {
 }

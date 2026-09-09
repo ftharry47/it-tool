@@ -8,6 +8,8 @@ import { useAuth } from '../../auth/AuthProvider'
 import { SlaCountdown } from '../../components/sla/SlaCountdown'
 import { CreateSlaPolicyForm } from '../../components/sla/CreateSlaPolicyForm'
 import { DataTable } from '../../components/ui/DataTable'
+import { DateInput } from '../../components/ui/DateInput'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 
@@ -239,6 +241,9 @@ export function SlaDetails() {
 
   const [editing, setEditing] = useState<Record<string, PolicyEditState>>({})
   const [showCreate, setShowCreate] = useState(false)
+  const [createFormDirty, setCreateFormDirty] = useState(false)
+  const [confirmCloseCreate, setConfirmCloseCreate] = useState(false)
+  const [confirmCancelPolicyId, setConfirmCancelPolicyId] = useState<string | null>(null)
 
   const instancesQuery = useQuery<SlaInstanceRow[]>({
     queryKey: ['sla-instances', filters],
@@ -372,6 +377,26 @@ export function SlaDetails() {
     }))
   }
 
+  function isPolicyEditDirty(policy: SlaPolicy, edit: PolicyEditState): boolean {
+    return (
+      edit.responseTargetMinutes !== policy.responseTargetMinutes ||
+      edit.resolutionTargetMinutes !== policy.resolutionTargetMinutes ||
+      edit.businessHoursCalendarId !== (policy.businessHoursCalendar?.id ?? null)
+    )
+  }
+
+  function cancelEdit(policy: SlaPolicy) {
+    const edit = editing[policy.id]
+    const clear = () =>
+      setEditing((prev) => {
+        const next = { ...prev }
+        delete next[policy.id]
+        return next
+      })
+    if (edit && isPolicyEditDirty(policy, edit)) setConfirmCancelPolicyId(policy.id)
+    else clear()
+  }
+
   function updateEditField(id: string, field: keyof PolicyEditState, value: string | number) {
     setEditing((prev) => ({
       ...prev,
@@ -389,7 +414,39 @@ export function SlaDetails() {
   const hasError = instancesQuery.error || prioritiesQuery.error
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ConfirmDialog
+        open={confirmCloseCreate}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes in the new policy form that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          setConfirmCloseCreate(false)
+          setShowCreate(false)
+          setCreateFormDirty(false)
+        }}
+        onCancel={() => setConfirmCloseCreate(false)}
+      />
+      <ConfirmDialog
+        open={confirmCancelPolicyId !== null}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this policy that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const id = confirmCancelPolicyId
+          setConfirmCancelPolicyId(null)
+          if (id) {
+            setEditing((prev) => {
+              const next = { ...prev }
+              delete next[id]
+              return next
+            })
+          }
+        }}
+        onCancel={() => setConfirmCancelPolicyId(null)}
+      />
       <div className="mx-auto max-w-7xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">SLA Details</h1>
@@ -435,21 +492,19 @@ export function SlaDetails() {
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">From</label>
-              <input
-                type="date"
+              <DateInput
                 value={filters.dateFrom}
                 onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="border-border px-3 py-2 text-sm"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">To</label>
-              <input
-                type="date"
+              <DateInput
                 value={filters.dateTo}
                 onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="border-border px-3 py-2 text-sm"
               />
             </div>
 
@@ -491,7 +546,10 @@ export function SlaDetails() {
                 <p className="text-sm text-muted-foreground">Edit response/resolution targets and business calendars.</p>
               </div>
               <button
-                onClick={() => setShowCreate((v) => !v)}
+                onClick={() => {
+                  if (showCreate && createFormDirty) setConfirmCloseCreate(true)
+                  else setShowCreate((v) => !v)
+                }}
                 className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 {showCreate ? 'Cancel' : 'Create Policy'}
@@ -504,7 +562,11 @@ export function SlaDetails() {
                 account={account}
                 priorities={prioritiesQuery.data ?? []}
                 calendars={calendarsQuery.data ?? []}
-                onCreated={() => setShowCreate(false)}
+                onCreated={() => {
+                  setShowCreate(false)
+                  setCreateFormDirty(false)
+                }}
+                onDirtyChange={setCreateFormDirty}
               />
             )}
 
@@ -605,7 +667,7 @@ export function SlaDetails() {
                             {updatePolicy.isPending ? 'Saving…' : 'Save'}
                           </button>
                           <button
-                            onClick={() => setEditing((prev) => { const next = { ...prev }; delete next[policy.id]; return next })}
+                            onClick={() => cancelEdit(policy)}
                             className="rounded-md border border-border px-2 py-1 text-xs font-medium transition hover:bg-muted"
                           >
                             Cancel

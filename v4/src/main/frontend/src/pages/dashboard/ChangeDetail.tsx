@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Check, CheckCircle2, XCircle } from 'lucide-react'
+import { ArrowLeft, Check, CheckCircle2, History, MessageCircle, XCircle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { formatDateTime, toEasternInputValue } from '../../lib/date'
 
 interface ChangeApproval {
   id: string
@@ -35,7 +39,10 @@ interface Change {
   rollbackPlan: string
   postImplementationReview: string
   linkedProblemId: string | null
+  locationId: string | null
+  locationName: string | null
   approvals: ChangeApproval[]
+  createdAt: string
 }
 
 interface User {
@@ -50,13 +57,20 @@ interface Problem {
   title: string
 }
 
+interface Location {
+  id: string
+  name: string
+  address: string | null
+}
+
 const statusTransitions: Record<string, string[]> = {
   DRAFT: ['PENDING_APPROVAL', 'CANCELLED'],
   PENDING_APPROVAL: ['APPROVED', 'REJECTED', 'CANCELLED'],
   APPROVED: ['SCHEDULED', 'CANCELLED'],
   SCHEDULED: ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'FAILED', 'ROLLED_BACK', 'CANCELLED'],
-  COMPLETED: [],
+  COMPLETED: ['CLOSED'],
+  CLOSED: [],
   FAILED: ['ROLLED_BACK', 'CANCELLED'],
   ROLLED_BACK: [],
   REJECTED: ['CANCELLED'],
@@ -64,10 +78,7 @@ const statusTransitions: Record<string, string[]> = {
 }
 
 function toLocalInput(iso: string | null) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return toEasternInputValue(iso)
 }
 
 const DATETIME_LOCAL_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
@@ -96,6 +107,7 @@ export function ChangeDetail() {
     postImplementationReview: '',
     linkedProblemId: '',
     requestedById: '',
+    locationId: '',
   })
   const [selectedStatus, setSelectedStatus] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
@@ -105,6 +117,7 @@ export function ChangeDetail() {
   const [approvalComment, setApprovalComment] = useState('')
   const [newApproverId, setNewApproverId] = useState('')
   const [newApproverOrder, setNewApproverOrder] = useState('1')
+  const [confirmBack, setConfirmBack] = useState(false)
 
   const changeQuery = useQuery<Change>({
     queryKey: ['change', id],
@@ -115,6 +128,20 @@ export function ChangeDetail() {
     },
     enabled: !isNew && !!id,
   })
+
+  const activityQuery = useQuery<AuditEntry[]>({
+    queryKey: ['change-activity', id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/changes/${id}/activity`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !isNew && !!id,
+  })
+
+  useDocumentTitle(
+    isNew ? 'New Change' : changeQuery.data ? `Change #${changeQuery.data.number}` : 'Change Detail'
+  )
 
   const usersQuery = useQuery<User[]>({
     queryKey: ['users'],
@@ -136,6 +163,16 @@ export function ChangeDetail() {
     enabled: !!account,
   })
 
+  const locationsQuery = useQuery<Location[]>({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/locations')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
   useEffect(() => {
     if (changeQuery.data) {
       const c = changeQuery.data
@@ -150,6 +187,7 @@ export function ChangeDetail() {
         postImplementationReview: c.postImplementationReview ?? '',
         linkedProblemId: c.linkedProblemId ?? '',
         requestedById: c.requestedById ?? '',
+        locationId: c.locationId ?? '',
       })
     }
   }, [changeQuery.data])
@@ -172,6 +210,7 @@ export function ChangeDetail() {
         navigate(`/dashboard/changes/${data.id}`)
       } else {
         queryClient.invalidateQueries({ queryKey: ['change', id] })
+        queryClient.invalidateQueries({ queryKey: ['change-activity', id] })
       }
     },
     onError: (error) => setActionError(error.message),
@@ -190,6 +229,7 @@ export function ChangeDetail() {
       setSelectedStatus('')
       setActionError(null)
       queryClient.invalidateQueries({ queryKey: ['change', id] })
+      queryClient.invalidateQueries({ queryKey: ['change-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['changes'] })
     },
     onError: (error) => setActionError(error.message),
@@ -204,6 +244,7 @@ export function ChangeDetail() {
     onSuccess: () => {
       setActionError(null)
       queryClient.invalidateQueries({ queryKey: ['change', id] })
+      queryClient.invalidateQueries({ queryKey: ['change-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['changes'] })
     },
     onError: (error) => setActionError(error.message),
@@ -225,6 +266,7 @@ export function ChangeDetail() {
       setApprovalStep(null)
       setActionError(null)
       queryClient.invalidateQueries({ queryKey: ['change', id] })
+      queryClient.invalidateQueries({ queryKey: ['change-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['changes'] })
     },
     onError: (error) => setActionError(error.message),
@@ -244,18 +286,94 @@ export function ChangeDetail() {
       setNewApproverOrder('1')
       setActionError(null)
       queryClient.invalidateQueries({ queryKey: ['change', id] })
+      queryClient.invalidateQueries({ queryKey: ['change-activity', id] })
     },
     onError: (error) => setActionError(error.message),
   })
+
+  const activities = useMemo<Activity[]>(() => {
+    if (!changeQuery.data) return []
+    const change = changeQuery.data
+    const list: Activity[] = []
+    list.push({
+      id: `${change.id}-created`,
+      title: 'Change request created',
+      description: `Change #${change.number} opened by ${change.requestedByName || 'Unknown'}`,
+      createdAt: change.createdAt,
+      icon: <History className="h-4 w-4" />,
+    })
+    list.push({
+      id: `${change.id}-status`,
+      title: `Status updated to ${change.status}`,
+      createdAt: change.createdAt,
+      icon: <MessageCircle className="h-4 w-4" />,
+    })
+    ;(activityQuery.data ?? []).forEach((entry) => {
+      list.push({
+        id: `audit-${entry.id}`,
+        title: auditTitle(entry),
+        description: auditDescription(entry),
+        createdAt: entry.createdAt,
+        icon: <History className="h-4 w-4" />,
+      })
+    })
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [changeQuery.data, activityQuery.data])
+
+  const initialForm = useMemo(() => {
+    if (isNew) {
+      return {
+        title: '',
+        description: '',
+        changeType: 'NORMAL',
+        risk: 'MEDIUM',
+        plannedStart: '',
+        plannedEnd: '',
+        rollbackPlan: '',
+        postImplementationReview: '',
+        linkedProblemId: '',
+        requestedById: '',
+        locationId: '',
+      } as Record<string, string>
+    }
+    const c = changeQuery.data
+    return (c
+      ? {
+          title: c.title ?? '',
+          description: c.description ?? '',
+          changeType: c.changeType ?? 'NORMAL',
+          risk: c.risk ?? 'MEDIUM',
+          plannedStart: toLocalInput(c.plannedStart),
+          plannedEnd: toLocalInput(c.plannedEnd),
+          rollbackPlan: c.rollbackPlan ?? '',
+          postImplementationReview: c.postImplementationReview ?? '',
+          linkedProblemId: c.linkedProblemId ?? '',
+          requestedById: c.requestedById ?? '',
+          locationId: c.locationId ?? '',
+        }
+      : {}) as Record<string, string>
+  }, [changeQuery.data, isNew])
+
+  const formDirty = useMemo(() => {
+    const baseDirty = Object.keys(initialForm).some((key) => form[key] !== initialForm[key])
+    return baseDirty || selectedStatus !== ''
+  }, [form, initialForm, selectedStatus])
+
+  const handleBack = () => {
+    if (formDirty) {
+      setConfirmBack(true)
+    } else {
+      navigate('/dashboard/changes')
+    }
+  }
 
   if (!isNew && (changeQuery.isLoading || !changeQuery.data)) return <Loading />
   if (!isNew && changeQuery.error) return <ErrorFallback error={changeQuery.error} message="Could not load change." onRetry={() => changeQuery.refetch()} />
 
   const change = changeQuery.data
   const currentStatus = change?.status ?? 'DRAFT'
-  const currentType = form.changeType
   const legalNextStatuses = statusTransitions[currentStatus] ?? []
-  const pirsMissing = currentType === 'EMERGENCY' && !form.postImplementationReview.trim()
+  const pirsMissing = !form.postImplementationReview.trim()
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
@@ -268,6 +386,7 @@ export function ChangeDetail() {
       plannedEnd: toIso(form.plannedEnd),
       rollbackPlan: form.rollbackPlan,
       linkedProblemId: form.linkedProblemId || null,
+      locationId: form.locationId || null,
     }
     if (!isNew) {
       payload.postImplementationReview = form.postImplementationReview
@@ -280,8 +399,8 @@ export function ChangeDetail() {
 
   const handleStatusChange = () => {
     if (!selectedStatus) return
-    if (selectedStatus === 'COMPLETED' && pirsMissing) {
-      setActionError('A Post-Implementation Review is required before an EMERGENCY change can be marked COMPLETED.')
+    if (selectedStatus === 'CLOSED' && pirsMissing) {
+      setActionError('A Post-Implementation Review is required before a change can be closed.')
       return
     }
     statusMutation.mutate(selectedStatus)
@@ -299,13 +418,17 @@ export function ChangeDetail() {
   })()
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/dashboard/changes" className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Link>
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">
             {isNew ? 'New Change Request' : `Change #${change?.number}`}
           </h1>
@@ -333,8 +456,9 @@ export function ChangeDetail() {
               { name: 'plannedStart', label: 'Planned Start', type: 'datetime-local' as const },
               { name: 'plannedEnd', label: 'Planned End', type: 'datetime-local' as const },
               { name: 'rollbackPlan', label: 'Rollback Plan', type: 'textarea' },
-              ...(currentType === 'EMERGENCY' ? [{ name: 'postImplementationReview', label: 'Post-Implementation Review', type: 'textarea' as const }] : []),
+              { name: 'postImplementationReview', label: 'Post-Implementation Review', type: 'textarea' as const },
               { name: 'linkedProblemId', label: 'Linked Problem', type: 'select' as const, options: (problemsQuery.data ?? []).map((p) => ({ value: p.id, label: `${p.number} — ${p.title}` })) },
+              { name: 'locationId', label: 'Affected Location', type: 'select' as const, options: (locationsQuery.data ?? []).map((l) => ({ value: l.id, label: l.name })) },
               ...(isNew ? [{ name: 'requestedById', label: 'Requested By', type: 'select' as const, options: (usersQuery.data ?? []).map((u) => ({ value: u.id, label: u.displayName })) }] : []),
             ]}
             values={form}
@@ -360,7 +484,7 @@ export function ChangeDetail() {
                 >
                   <option value="">Select…</option>
                   {legalNextStatuses.map((s) => (
-                    <option key={s} value={s} disabled={s === 'COMPLETED' && pirsMissing}>{s}</option>
+                    <option key={s} value={s} disabled={s === 'CLOSED' && pirsMissing}>{s}</option>
                   ))}
                 </select>
               </div>
@@ -408,7 +532,7 @@ export function ChangeDetail() {
                       <div className="text-sm">
                         <p className="font-medium">{a.sequenceOrder}. {a.approverName}</p>
                         {a.comment && <p className="text-muted-foreground">{a.comment}</p>}
-                        {a.decidedAt && <p className="text-xs text-muted-foreground">{new Date(a.decidedAt).toLocaleString()}</p>}
+                        {a.decidedAt && <p className="text-xs text-muted-foreground">{formatDateTime(a.decidedAt)}</p>}
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={a.status} />
@@ -453,15 +577,17 @@ export function ChangeDetail() {
           </section>
         )}
 
-        {pirsMissing && (
+        {pirsMissing && change?.status === 'COMPLETED' && (
           <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 p-4 text-sm text-yellow-900">
-            <p className="font-semibold">EMERGENCY change — Post-Implementation Review required</p>
-            <p>Marking this change COMPLETED is blocked until the Post-Implementation Review field is filled.</p>
+            <p className="font-semibold">Post-Implementation Review required</p>
+            <p>Marking this change CLOSED is blocked until the Post-Implementation Review field is filled.</p>
           </div>
         )}
+
+        {!isNew && <ActivityTimeline activities={activities} />}
       </div>
 
-      <FormDrawer open={approvalOpen} title="Approve / Reject" onClose={() => { setApprovalOpen(false); setApprovalComment(''); setApprovalStep(null) }}>
+      <FormDrawer open={approvalOpen} title="Approve / Reject" dirty={approvalComment.trim() !== ''} onClose={() => { setApprovalOpen(false); setApprovalComment(''); setApprovalStep(null) }}>
         <div className="space-y-4">
           <label className="text-sm font-medium">Approver step {approvalStep}</label>
           <textarea
@@ -491,6 +617,20 @@ export function ChangeDetail() {
           </div>
         </div>
       </FormDrawer>
+
+      <ConfirmDialog
+        open={confirmBack}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes that will be lost if you leave this page."
+        confirmLabel="Discard"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmBack(false)
+          navigate('/dashboard/changes')
+        }}
+        onCancel={() => setConfirmBack(false)}
+      />
     </div>
   )
 }

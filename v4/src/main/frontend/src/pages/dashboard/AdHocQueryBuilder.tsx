@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { DateTimeInput } from '../../components/ui/DateTimeInput'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -91,7 +92,7 @@ export function AdHocQueryBuilder() {
   if (metaQuery.error) return <ErrorFallback error={metaQuery.error} message="Could not load query metadata." onRetry={() => metaQuery.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Ad-Hoc Query Builder</h1>
 
@@ -125,17 +126,15 @@ export function AdHocQueryBuilder() {
             <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium">Date Range</label>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input
-                  type="datetime-local"
+                <DateTimeInput
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
-                  className="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="min-w-0"
                 />
-                <input
-                  type="datetime-local"
+                <DateTimeInput
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
-                  className="min-w-0 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="min-w-0"
                 />
               </div>
             </div>

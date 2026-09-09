@@ -15,6 +15,7 @@ public record ChangeUpdateRequest(
         OffsetDateTime plannedEnd,
         String rollbackPlan,
         String postImplementationReview,
-        UUID linkedProblemId
+        UUID linkedProblemId,
+        UUID locationId
 ) {
 }

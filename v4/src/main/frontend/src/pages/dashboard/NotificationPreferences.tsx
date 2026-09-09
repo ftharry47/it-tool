@@ -2,6 +2,7 @@ import { useMsal } from '@azure/msal-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { fetchWithToken } from '../../api/client'
+import { isPushSupported, subscribeToPush, unsubscribeFromPush } from '../../api/push'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 
@@ -28,6 +29,7 @@ interface NotificationPreferenceResponse {
   notifyAssignment: boolean
   notifyComment: boolean
   notifyMention: boolean
+  pushEnabled: boolean
 }
 
 const MODES: NotificationPreferenceResponse['digestMode'][] = ['NONE', 'HOURLY', 'DAILY']
@@ -45,6 +47,9 @@ export function NotificationPreferences() {
   const [notifyAssignment, setNotifyAssignment] = useState(true)
   const [notifyComment, setNotifyComment] = useState(true)
   const [notifyMention, setNotifyMention] = useState(true)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushMessage, setPushMessage] = useState<string | null>(null)
 
   const query = useQuery<NotificationPreferenceResponse>({
     queryKey: ['notification-preferences'],
@@ -66,6 +71,7 @@ export function NotificationPreferences() {
       setNotifyAssignment(query.data.notifyAssignment)
       setNotifyComment(query.data.notifyComment)
       setNotifyMention(query.data.notifyMention)
+      setPushEnabled(query.data.pushEnabled)
     }
   }, [query.data])
 
@@ -82,6 +88,7 @@ export function NotificationPreferences() {
           notifyAssignment,
           notifyComment,
           notifyMention,
+          pushEnabled,
         }),
       })
       if (!res.ok) {
@@ -97,7 +104,7 @@ export function NotificationPreferences() {
   if (query.error) return <ErrorFallback error={query.error} message="Could not load preferences." onRetry={() => query.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-2xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Notification Preferences</h1>
@@ -115,6 +122,49 @@ export function NotificationPreferences() {
                 type="checkbox"
                 checked={inAppEnabled}
                 onChange={(e) => setInAppEnabled(e.target.checked)}
+                className="h-5 w-5"
+              />
+            </label>
+
+            <label className="flex items-center justify-between rounded-md border border-border p-4">
+              <div>
+                <p className="font-medium">Browser push notifications</p>
+                <p className="text-sm text-muted-foreground">
+                  {isPushSupported()
+                    ? 'Get notified even when this tab is closed.'
+                    : 'Not supported in this browser.'}
+                </p>
+                {pushMessage && <p className="mt-1 text-xs text-muted-foreground">{pushMessage}</p>}
+              </div>
+              <input
+                type="checkbox"
+                checked={pushEnabled}
+                disabled={!isPushSupported() || pushBusy}
+                onChange={async (e) => {
+                  const want = e.target.checked
+                  setPushBusy(true)
+                  setPushMessage(null)
+                  try {
+                    if (want) {
+                      const ok = await subscribeToPush(instance, account)
+                      if (ok) {
+                        setPushEnabled(true)
+                        setPushMessage('Push enabled for this browser.')
+                      } else {
+                        setPushEnabled(false)
+                        setPushMessage('Permission not granted — push not enabled.')
+                      }
+                    } else {
+                      await unsubscribeFromPush(instance, account)
+                      setPushEnabled(false)
+                      setPushMessage('Push disabled for this browser.')
+                    }
+                  } catch {
+                    setPushMessage('Push setup failed.')
+                  } finally {
+                    setPushBusy(false)
+                  }
+                }}
                 className="h-5 w-5"
               />
             </label>

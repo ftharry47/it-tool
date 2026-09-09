@@ -65,7 +65,7 @@ export function BoardPage() {
 
   if (projects.length === 0) {
     return (
-      <div className="min-h-screen bg-background p-6 text-foreground">
+      <div className="min-h-full bg-background p-6 text-foreground">
         <div className="mx-auto max-w-7xl">
           <h1 className="text-2xl font-semibold tracking-tight">Board</h1>
           <p className="mt-4 text-sm text-muted-foreground">No projects available. Create a project first.</p>
@@ -77,7 +77,7 @@ export function BoardPage() {
   const activeSprints = (sprintsQuery.data ?? []).filter((s) => s.status === 'ACTIVE')
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-7xl space-y-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>

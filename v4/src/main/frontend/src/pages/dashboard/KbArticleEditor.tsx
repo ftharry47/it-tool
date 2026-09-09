@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
 import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
@@ -35,7 +36,7 @@ const statusTransitions: Record<string, string[]> = {
   DRAFT: ['PENDING_REVIEW'],
   PENDING_REVIEW: ['PUBLISHED', 'DRAFT'],
   PUBLISHED: ['ARCHIVED'],
-  ARCHIVED: [],
+  ARCHIVED: ['DRAFT'],
 }
 
 export function KbArticleEditor() {
@@ -62,6 +63,10 @@ export function KbArticleEditor() {
     },
     enabled: !isNew && !!id && !!account,
   })
+
+  useDocumentTitle(
+    isNew ? 'New Article' : articleQuery.data ? `KB Editor: ${articleQuery.data.title}` : 'KB Editor'
+  )
 
   const versionsQuery = useQuery<KbVersion[]>({
     queryKey: ['kb-versions', id],
@@ -114,7 +119,7 @@ export function KbArticleEditor() {
   const editingPublished = status === 'PUBLISHED' && (form.title !== articleQuery.data?.title || form.category !== (articleQuery.data?.category ?? '') || form.body !== articleQuery.data?.body)
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
           <Link to="/dashboard/kb" className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

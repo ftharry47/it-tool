@@ -29,6 +29,21 @@ public class SavedReportService {
         return repository.findByOrgIdOrderByCreatedAtDesc(orgId);
     }
 
+    /**
+     * Reports visible to a specific user: org-wide ad-hoc reports plus any
+     * generated reports (e.g. AGENT_PERFORMANCE) owned by that user.
+     */
+    @Transactional(readOnly = true)
+    public List<SavedReport> listForUser(UUID orgId, UUID userId) {
+        return repository.findByOrgIdAndOwnerUserIdIsNullOrOwnerUserIdOrderByCreatedAtDesc(orgId, userId);
+    }
+
+    /** All generated reports of a type — SUPER_ADMIN aggregate view. */
+    @Transactional(readOnly = true)
+    public List<SavedReport> listByType(UUID orgId, String reportType) {
+        return repository.findByOrgIdAndReportTypeOrderByCreatedAtDesc(orgId, reportType);
+    }
+
     @Transactional(readOnly = true)
     public Optional<SavedReport> get(UUID id, UUID orgId) {
         return repository.findByIdAndOrgId(id, orgId);

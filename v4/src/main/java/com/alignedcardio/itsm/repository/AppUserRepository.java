@@ -27,4 +27,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
             "AND (lower(u.displayName) LIKE lower(concat('%', ?2, '%')) OR lower(u.email) LIKE lower(concat('%', ?2, '%'))) " +
             "ORDER BY u.displayName")
     List<AppUser> searchByText(UUID orgId, String query, Pageable pageable);
+
+    @Query("SELECT DISTINCT u FROM AppUser u JOIN u.userRoles ur JOIN ur.role r " +
+            "WHERE u.orgId = ?1 AND u.deletedAt IS NULL AND r.name IN ?2")
+    List<AppUser> findByOrgIdAndRoleNames(UUID orgId, List<String> roleNames);
 }

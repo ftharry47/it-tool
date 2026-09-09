@@ -3,6 +3,7 @@ package com.alignedcardio.itsm.api.auth;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.Role;
 import com.alignedcardio.itsm.entity.UserRole;
+import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ class AuthControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private LocationRepository locationRepository;
 
     private Jwt testJwt;
 
@@ -71,6 +75,10 @@ class AuthControllerTest {
         user.setUserRoles(userRoles);
 
         when(userService.syncFromJwt(any(Jwt.class))).thenReturn(user);
+        when(userService.toCurrentUser(any(AppUser.class))).thenReturn(new CurrentUser(
+                user.getId(), user.getObjectId(), user.getEmail(), user.getDisplayName(),
+                null, null, java.util.List.of("END_USER"), true, false, null, false,
+                java.util.List.of(), java.util.List.of()));
 
         mockMvc.perform(get("/api/auth/me")
                 .with(jwt().jwt(testJwt)))

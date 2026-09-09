@@ -58,4 +58,55 @@ class FormSchemaValidatorTest {
                 () -> validator.validate(SCHEMA, data));
         assertTrue(e.getMessage().contains("invalid option"));
     }
+
+    private static final String OTHER_SCHEMA = """
+            [
+              {"name": "need", "label": "What do you need", "type": "select_with_other",
+               "options": ["Laptop issue", "Software install", "Access request"], "required": true}
+            ]
+            """;
+
+    @Test
+    void selectWithOtherAcceptsPresetOption() {
+        assertDoesNotThrow(() -> validator.validate(OTHER_SCHEMA, "{\"need\": \"Laptop issue\"}"));
+    }
+
+    @Test
+    void selectWithOtherAcceptsFreeText() {
+        assertDoesNotThrow(() -> validator.validate(OTHER_SCHEMA, "{\"need\": \"Custom request not in list\"}"));
+    }
+
+    @Test
+    void selectWithOtherRejectsBlankOnRequiredField() {
+        Exception e = assertThrows(IllegalStateException.class,
+                () -> validator.validate(OTHER_SCHEMA, "{\"need\": \"\"}"));
+        assertTrue(e.getMessage().contains("is required"));
+    }
+
+    @Test
+    void selectWithOtherRejectsMissingOnRequiredField() {
+        assertThrows(IllegalStateException.class,
+                () -> validator.validate(OTHER_SCHEMA, "{}"));
+    }
+
+    @Test
+    void selectWithOtherRejectsOtherValueOver255Chars() {
+        String longValue = "x".repeat(256);
+        Exception e = assertThrows(IllegalStateException.class,
+                () -> validator.validate(OTHER_SCHEMA, "{\"need\": \"" + longValue + "\"}"));
+        assertTrue(e.getMessage().contains("255 characters or fewer"));
+    }
+
+    @Test
+    void selectWithOtherAcceptsOtherValueAt255Chars() {
+        String maxValue = "x".repeat(255);
+        assertDoesNotThrow(() -> validator.validate(OTHER_SCHEMA, "{\"need\": \"" + maxValue + "\"}"));
+    }
+
+    @Test
+    void selectWithOtherRejectsNonTextualValue() {
+        Exception e = assertThrows(IllegalStateException.class,
+                () -> validator.validate(OTHER_SCHEMA, "{\"need\": 42}"));
+        assertTrue(e.getMessage().contains("must be a string"));
+    }
 }

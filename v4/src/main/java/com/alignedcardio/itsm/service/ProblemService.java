@@ -2,42 +2,57 @@ package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.problem.*;
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.entity.Incident;
 import com.alignedcardio.itsm.entity.Problem;
 import com.alignedcardio.itsm.entity.ProblemIncidentLink;
 import com.alignedcardio.itsm.repository.AppUserRepository;
+import com.alignedcardio.itsm.repository.AuditLogRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.ProblemIncidentLinkRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class ProblemService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProblemService.class);
+
     private final ProblemRepository problemRepository;
     private final ProblemIncidentLinkRepository problemIncidentLinkRepository;
     private final IncidentRepository incidentRepository;
     private final AppUserRepository appUserRepository;
     private final EntityManager entityManager;
+    private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper objectMapper;
 
     public ProblemService(ProblemRepository problemRepository,
                           ProblemIncidentLinkRepository problemIncidentLinkRepository,
                           IncidentRepository incidentRepository,
                           AppUserRepository appUserRepository,
-                          EntityManager entityManager) {
+                          EntityManager entityManager,
+                          AuditLogRepository auditLogRepository,
+                          ObjectMapper objectMapper) {
         this.problemRepository = problemRepository;
         this.problemIncidentLinkRepository = problemIncidentLinkRepository;
         this.incidentRepository = incidentRepository;
         this.appUserRepository = appUserRepository;
         this.entityManager = entityManager;
+        this.auditLogRepository = auditLogRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +71,10 @@ public class ProblemService {
 
     @Transactional
     public ProblemResponse create(AppUser user, UUID orgId, ProblemCreateRequest request) {
+        if (!isProblemContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can create problems");
+        }
+
         Problem problem = new Problem();
         problem.setOrgId(orgId);
         problem.setNumber(generateProblemNumber());
@@ -73,6 +92,7 @@ public class ProblemService {
         Problem saved = problemRepository.save(problem);
         entityManager.flush();
         entityManager.refresh(saved);
+        writeProblemAudit(saved, user.getId(), "CREATE", null, problemAuditState(saved));
 
         return toResponse(saved);
     }
@@ -86,8 +106,14 @@ public class ProblemService {
 
     @Transactional
     public ProblemResponse update(AppUser user, UUID orgId, UUID id, ProblemUpdateRequest request) {
+        if (!isProblemContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can update problems");
+        }
+
         Problem problem = problemRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Problem not found"));
+        Map<String, Object> beforeState = problemAuditState(problem);
+        Problem.Status oldStatus = problem.getStatus();
 
         if (request.title() != null) problem.setTitle(request.title());
         if (request.description() != null) problem.setDescription(request.description());
@@ -102,6 +128,7 @@ public class ProblemService {
 
         if (request.status() != null && request.status() != problem.getStatus()) {
             ProblemStatusMachine.validate(problem.getStatus(), request.status());
+            validateProblemTransition(user, problem.getStatus(), request.status());
             setStatusTimestamps(problem, request.status());
             problem.setStatus(request.status());
         }
@@ -109,25 +136,48 @@ public class ProblemService {
         problem.setUpdatedBy(user.getId());
         problem.setUpdatedAt(OffsetDateTime.now());
 
-        return toResponse(problemRepository.save(problem));
+        Problem saved = problemRepository.save(problem);
+        if (saved.getStatus() != oldStatus) {
+            writeProblemAudit(saved, user.getId(), "STATUS",
+                    Map.of("status", oldStatus.name()),
+                    Map.of("status", saved.getStatus().name()));
+        }
+        writeProblemFieldUpdateAudit(saved, user.getId(), beforeState, saved.getStatus() != oldStatus);
+
+        return toResponse(saved);
     }
 
     @Transactional
     public ProblemResponse updateStatus(AppUser user, UUID orgId, UUID id, Problem.Status newStatus) {
+        if (!isProblemContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can update problem status");
+        }
+
         Problem problem = problemRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Problem not found"));
+        Problem.Status oldStatus = problem.getStatus();
 
         ProblemStatusMachine.validate(problem.getStatus(), newStatus);
+        validateProblemTransition(user, problem.getStatus(), newStatus);
         setStatusTimestamps(problem, newStatus);
         problem.setStatus(newStatus);
         problem.setUpdatedBy(user.getId());
         problem.setUpdatedAt(OffsetDateTime.now());
 
-        return toResponse(problemRepository.save(problem));
+        Problem saved = problemRepository.save(problem);
+        writeProblemAudit(saved, user.getId(), "STATUS",
+                Map.of("status", oldStatus.name()),
+                Map.of("status", saved.getStatus().name()));
+
+        return toResponse(saved);
     }
 
     @Transactional
     public ProblemResponse linkIncident(AppUser user, UUID orgId, UUID problemId, LinkIncidentRequest request) {
+        if (!isProblemContributor(user)) {
+            throw new IllegalStateException("Only AGENT, TEAM_LEAD, ADMIN, or SUPER_ADMIN can link incidents to problems");
+        }
+
         Problem problem = problemRepository.findByOrgIdAndId(orgId, problemId)
                 .orElseThrow(() -> new NotFoundException("Problem not found"));
         Incident incident = incidentRepository.findByOrgIdAndId(orgId, request.incidentId())
@@ -145,7 +195,11 @@ public class ProblemService {
         problem.setUpdatedBy(user.getId());
         problem.setUpdatedAt(OffsetDateTime.now());
 
-        return toResponse(problemRepository.save(problem));
+        Problem saved = problemRepository.save(problem);
+        writeProblemAudit(saved, user.getId(), "LINK_INCIDENT", null,
+                Map.of("incidentId", incident.getId(), "incidentNumber", String.valueOf(incident.getNumber())));
+
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +211,93 @@ public class ProblemService {
                 .map(Optional::get)
                 .map(this::toIncidentSummary)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.alignedcardio.itsm.api.auth.AuditLogResponse> listActivity(UUID orgId, UUID problemId) {
+        problemRepository.findByOrgIdAndId(orgId, problemId)
+                .orElseThrow(() -> new NotFoundException("Problem not found"));
+        return auditLogRepository
+                .findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(orgId, "PROBLEM", problemId)
+                .stream()
+                .map(l -> new com.alignedcardio.itsm.api.auth.AuditLogResponse(
+                        l.getId(), l.getActorUserId(), l.getAction(), l.getEntityType(),
+                        l.getEntityId(), l.getBeforeState(), l.getAfterState(),
+                        l.getIpAddress(), l.getCreatedAt()))
+                .toList();
+    }
+
+    private Map<String, Object> problemAuditState(Problem problem) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("title", problem.getTitle());
+        state.put("description", problem.getDescription());
+        state.put("rootCause", problem.getRootCause());
+        state.put("workaround", problem.getWorkaround());
+        state.put("status", problem.getStatus() == null ? null : problem.getStatus().name());
+        state.put("assigneeId", problem.getAssignee() == null ? null : problem.getAssignee().getId());
+        state.put("assigneeName", problem.getAssignee() == null ? null : problem.getAssignee().getDisplayName());
+        return state;
+    }
+
+    private void writeProblemFieldUpdateAudit(Problem problem, UUID actorId, Map<String, Object> beforeState, boolean excludeStatus) {
+        Map<String, Object> afterState = problemAuditState(problem);
+        Map<String, Object> before = new LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
+        for (String key : afterState.keySet()) {
+            if (excludeStatus && "status".equals(key)) {
+                continue;
+            }
+            if (!java.util.Objects.equals(beforeState.get(key), afterState.get(key))) {
+                before.put(key, beforeState.get(key));
+                after.put(key, afterState.get(key));
+            }
+        }
+        if (!after.isEmpty()) {
+            writeProblemAudit(problem, actorId, "UPDATE", before, after);
+        }
+    }
+
+    private void writeProblemAudit(Problem problem, UUID actorId, String action,
+                                   Map<String, Object> beforeState, Map<String, Object> afterState) {
+        try {
+            AuditLog log = new AuditLog();
+            log.setOrgId(problem.getOrgId());
+            log.setActorUserId(actorId);
+            log.setAction(action);
+            log.setEntityType("PROBLEM");
+            log.setEntityId(problem.getId());
+            log.setBeforeState(beforeState == null ? null : objectMapper.writeValueAsString(beforeState));
+            log.setAfterState(afterState == null ? null : objectMapper.writeValueAsString(afterState));
+            auditLogRepository.save(log);
+        } catch (Exception e) {
+            logger.warn("Failed to write problem audit log for {}", problem.getId(), e);
+        }
+    }
+
+    private void validateProblemTransition(AppUser user, Problem.Status from, Problem.Status to) {
+        if (to == Problem.Status.CLOSED && !isProblemAdmin(user)) {
+            throw new IllegalStateException("Only ADMIN or SUPER_ADMIN can close a problem");
+        }
+    }
+
+    private boolean isProblemAdmin(AppUser user) {
+        return hasAnyRole(user, "ADMIN", "SUPER_ADMIN", "ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+    }
+
+    private boolean isProblemContributor(AppUser user) {
+        return hasAnyRole(user, "AGENT", "TEAM_LEAD", "ADMIN", "SUPER_ADMIN",
+                "ROLE_AGENT", "ROLE_TEAM_LEAD", "ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+    }
+
+    private boolean hasAnyRole(AppUser user, String... names) {
+        if (user == null || user.getUserRoles() == null) {
+            return false;
+        }
+        List<String> targets = List.of(names);
+        return user.getUserRoles().stream()
+                .filter(ur -> ur.getRole() != null)
+                .map(ur -> ur.getRole().getName())
+                .anyMatch(targets::contains);
     }
 
     private void setStatusTimestamps(Problem problem, Problem.Status newStatus) {

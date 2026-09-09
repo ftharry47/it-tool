@@ -22,6 +22,9 @@ public record ServiceRequestResponse(
         String approvalComment,
         OffsetDateTime decidedAt,
         OffsetDateTime neededBy,
+        UUID locationId,
+        String locationName,
+        String phone,
         List<FulfillmentTaskResponse> tasks,
         OffsetDateTime createdAt
 ) {

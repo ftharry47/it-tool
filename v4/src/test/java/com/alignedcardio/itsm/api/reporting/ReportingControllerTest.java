@@ -42,6 +42,9 @@ class ReportingControllerTest {
     private SavedReportService savedReportService;
 
     @MockBean
+    private AgentPerformanceService agentPerformanceService;
+
+    @MockBean
     private UserService userService;
 
     private AppUser testUser() {

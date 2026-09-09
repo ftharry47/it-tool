@@ -13,6 +13,8 @@ public record ChangeCalendarResponse(
             UUID id,
             String number,
             String title,
+            UUID locationId,
+            String locationName,
             OffsetDateTime plannedStart,
             OffsetDateTime plannedEnd
     ) {

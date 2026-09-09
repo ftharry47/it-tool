@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { EntityForm, type Field } from './EntityForm'
 
+export const OTHER_OPTION_MAX_LENGTH = 255
+
 export interface SchemaField {
   name: string
   label?: string
-  type?: 'string' | 'textarea' | 'number' | 'boolean' | 'select'
+  type?: 'string' | 'textarea' | 'number' | 'boolean' | 'select' | 'select_with_other'
   required?: boolean
   options?: Array<{ value: string; label: string } | string>
 }
@@ -23,7 +25,7 @@ function isValidSchemaField(f: unknown): f is SchemaField {
   if (typeof f !== 'object' || f === null) return false
   const field = f as Record<string, unknown>
   if (typeof field.name !== 'string' || !field.name) return false
-  const allowedTypes = ['string', 'textarea', 'number', 'boolean', 'select']
+  const allowedTypes = ['string', 'textarea', 'number', 'boolean', 'select', 'select_with_other']
   if (field.type !== undefined && !allowedTypes.includes(field.type as string)) return false
   return true
 }
@@ -50,18 +52,29 @@ export function validateSchema(values: Record<string, string>, schema: SchemaFie
         return `${field.label || field.name} has an invalid option`
       }
     }
+    if (field.type === 'select_with_other' && value) {
+      const allowed = (field.options ?? []).map((opt) => (typeof opt === 'string' ? opt : opt.value))
+      if (!allowed.includes(value) && value.length > OTHER_OPTION_MAX_LENGTH) {
+        return `${field.label || field.name} must be ${OTHER_OPTION_MAX_LENGTH} characters or fewer`
+      }
+    }
   }
   return null
 }
 
 export function toEntityFields(schema: SchemaField[]): Field[] {
   return schema.map((field) => {
-    const type = (field.type ?? 'string') as 'string' | 'textarea' | 'number' | 'boolean' | 'select'
+    const type = (field.type ?? 'string') as 'string' | 'textarea' | 'number' | 'boolean' | 'select' | 'select_with_other'
     const options = field.options?.map((opt) =>
       typeof opt === 'string' ? { value: opt, label: opt } : opt
     )
     const entityType: Field['type'] =
-      type === 'select' ? 'select' : type === 'number' ? 'number' : type === 'boolean' ? 'boolean' : type === 'textarea' ? 'textarea' : 'text'
+      type === 'select' ? 'select'
+        : type === 'select_with_other' ? 'select_with_other'
+        : type === 'number' ? 'number'
+        : type === 'boolean' ? 'boolean'
+        : type === 'textarea' ? 'textarea'
+        : 'text'
     return {
       name: field.name,
       label: field.label || field.name,

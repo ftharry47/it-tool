@@ -1,6 +1,7 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.team.TeamCreateRequest;
+import com.alignedcardio.itsm.api.team.TeamMemberInfo;
 import com.alignedcardio.itsm.api.team.TeamResponse;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.Team;
@@ -83,11 +84,19 @@ public class TeamService {
     }
 
     private TeamResponse toResponse(Team team) {
+        // Resolve members through repositories rather than lazy associations.
+        List<TeamMemberInfo> members = teamMemberRepository.findByTeamId(team.getId()).stream()
+                .map(m -> appUserRepository.findById(m.getUserId())
+                        .map(u -> new TeamMemberInfo(u.getId(), u.getDisplayName(), u.getEmail()))
+                        .orElse(null))
+                .filter(m -> m != null)
+                .toList();
         return new TeamResponse(
                 team.getId(),
                 team.getName(),
                 team.getDescription(),
                 team.getCreatedBy(),
-                team.getUpdatedBy());
+                team.getUpdatedBy(),
+                members);
     }
 }

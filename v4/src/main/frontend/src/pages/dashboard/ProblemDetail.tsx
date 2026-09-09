@@ -1,17 +1,32 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Link2 } from 'lucide-react'
+import { ArrowLeft, History, Link2, MessageCircle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { DataTable } from '../../components/ui/DataTable'
 import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
-import type { Problem } from './ProblemList'
+
+interface Problem {
+  id: string
+  number: number
+  title: string
+  description: string
+  status: string
+  rootCause: string | null
+  workaround: string | null
+  assigneeName: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 interface LinkedIncident {
   id: string
@@ -48,6 +63,7 @@ export function ProblemDetail() {
   const [linkError, setLinkError] = useState<string | null>(null)
   const [linkDrawerOpen, setLinkDrawerOpen] = useState(false)
   const [linkForm, setLinkForm] = useState({ incidentId: '' })
+  const [confirmBack, setConfirmBack] = useState(false)
   const [editForm, setEditForm] = useState({ title: '', description: '', rootCause: '', workaround: '' })
 
   const problemQuery = useQuery<Problem>({
@@ -66,6 +82,10 @@ export function ProblemDetail() {
     },
     enabled: !!id && !!account,
   })
+
+  useDocumentTitle(
+    problemQuery.data ? `Problem #${problemQuery.data.number}` : 'Problem Detail'
+  )
 
   const linkedQuery = useQuery<LinkedIncident[]>({
     queryKey: ['problem-incidents', id],
@@ -87,6 +107,16 @@ export function ProblemDetail() {
     enabled: !!account,
   })
 
+  const activityQuery = useQuery<AuditEntry[]>({
+    queryKey: ['problem-activity', id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/problems/${id}/activity`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!id && !!account,
+  })
+
   const editMutation = useMutation<Problem, Error, Record<string, string>>({
     mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/problems/${id}`, {
@@ -98,6 +128,7 @@ export function ProblemDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['problem', id] })
+      queryClient.invalidateQueries({ queryKey: ['problem-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['problems'] })
     },
   })
@@ -118,6 +149,7 @@ export function ProblemDetail() {
       setStatusError(null)
       setSelectedStatus('')
       queryClient.invalidateQueries({ queryKey: ['problem', id] })
+      queryClient.invalidateQueries({ queryKey: ['problem-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['problems'] })
     },
     onError: (error) => {
@@ -146,11 +178,68 @@ export function ProblemDetail() {
       setLinkForm({ incidentId: '' })
       setLinkDrawerOpen(false)
       queryClient.invalidateQueries({ queryKey: ['problem-incidents', id] })
+      queryClient.invalidateQueries({ queryKey: ['problem-activity', id] })
     },
     onError: (error) => {
       setLinkError('Could not link incident. ' + error.message)
     },
   })
+
+  const activities = useMemo<Activity[]>(() => {
+    if (!problemQuery.data) return []
+    const problem = problemQuery.data
+    const list: Activity[] = []
+    list.push({
+      id: `${problem.id}-created`,
+      title: 'Problem created',
+      description: `Problem #${problem.number} opened`,
+      createdAt: problem.createdAt,
+      icon: <History className="h-4 w-4" />,
+    })
+    list.push({
+      id: `${problem.id}-status`,
+      title: `Status updated to ${problem.status}`,
+      createdAt: problem.updatedAt,
+      icon: <MessageCircle className="h-4 w-4" />,
+    })
+    if (problem.assigneeName) {
+      list.push({
+        id: `${problem.id}-assigned`,
+        title: `Assigned to ${problem.assigneeName}`,
+        createdAt: problem.updatedAt,
+        icon: <Link2 className="h-4 w-4" />,
+      })
+    }
+    ;(activityQuery.data ?? []).forEach((entry) => {
+      list.push({
+        id: `audit-${entry.id}`,
+        title: auditTitle(entry),
+        description: auditDescription(entry),
+        createdAt: entry.createdAt,
+        icon: <History className="h-4 w-4" />,
+      })
+    })
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [problemQuery.data, activityQuery.data])
+
+  const editFormDirty = useMemo(() => {
+    if (!problemQuery.data) return false
+    const p = problemQuery.data
+    return (
+      editForm.title !== (p.title ?? '') ||
+      editForm.description !== (p.description ?? '') ||
+      editForm.rootCause !== (p.rootCause ?? '') ||
+      editForm.workaround !== (p.workaround ?? '')
+    )
+  }, [editForm, problemQuery.data])
+
+  const handleBack = () => {
+    if (editFormDirty) {
+      setConfirmBack(true)
+    } else {
+      navigate('/dashboard/problems')
+    }
+  }
 
   if (problemQuery.isLoading) return <Loading />
   if (problemQuery.error) return <ErrorFallback error={problemQuery.error} message="Could not load problem." onRetry={() => problemQuery.refetch()} />
@@ -171,11 +260,11 @@ export function ProblemDetail() {
     .map((inc) => ({ value: inc.id, label: `#${inc.number} — ${inc.title}` }))
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/dashboard/problems')}
+            onClick={handleBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -287,6 +376,8 @@ export function ProblemDetail() {
                 />
               )}
             </div>
+
+            <ActivityTimeline activities={activities} />
           </aside>
         </div>
       </div>
@@ -294,6 +385,7 @@ export function ProblemDetail() {
       <FormDrawer
         open={linkDrawerOpen}
         title="Link an Incident"
+        dirty={!!linkForm.incidentId}
         onClose={() => {
           setLinkDrawerOpen(false)
           setLinkError(null)
@@ -324,6 +416,20 @@ export function ProblemDetail() {
         )}
         {linkError && <p className="mt-4 text-sm text-destructive">{linkError}</p>}
       </FormDrawer>
+
+      <ConfirmDialog
+        open={confirmBack}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes that will be lost if you leave this page."
+        confirmLabel="Discard"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmBack(false)
+          navigate('/dashboard/problems')
+        }}
+        onCancel={() => setConfirmBack(false)}
+      />
     </div>
   )
 }

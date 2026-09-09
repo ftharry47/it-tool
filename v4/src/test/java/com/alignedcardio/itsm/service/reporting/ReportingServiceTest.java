@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -143,5 +144,23 @@ class ReportingServiceTest {
         verify(criteriaBuilder).equal(path, Incident.Status.NEW);
         verify(criteriaQuery).groupBy(any(Expression[].class));
         verify(typedQuery).setMaxResults(1000);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void ticketsByLocationWithNullDateRangeDoesNotThrowAndDoesNotBindNullParameters() {
+        doReturn(typedQuery).when(entityManager).createQuery(anyString(), any(Class.class));
+        lenient().when(typedQuery.setParameter(anyString(), any())).thenReturn(typedQuery);
+        lenient().when(typedQuery.getResultStream()).thenReturn(Stream.empty());
+        lenient().when(typedQuery.getResultList()).thenReturn(List.of());
+
+        ReportingService service = new ReportingService(entityManager);
+        UUID orgId = UUID.randomUUID();
+
+        List<?> result = assertDoesNotThrow(
+                () -> service.ticketsByLocation(orgId, "OPEN", null, null));
+
+        assertNotNull(result);
+        verify(typedQuery, never()).setParameter(anyString(), isNull());
     }
 }

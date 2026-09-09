@@ -8,6 +8,7 @@ import com.alignedcardio.itsm.entity.Role;
 import com.alignedcardio.itsm.entity.UserRole;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.AuditLogRepository;
+import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.RoleRepository;
 import com.alignedcardio.itsm.repository.UserRoleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,6 +46,12 @@ class UserServiceTest {
     @Mock
     private AuditLogRepository auditLogRepository;
 
+    @Mock
+    private LocationRepository locationRepository;
+
+    @Mock
+    private com.alignedcardio.itsm.repository.TeamMemberRepository teamMemberRepository;
+
     private ObjectMapper objectMapper;
     private UserService userService;
 
@@ -52,7 +59,7 @@ class UserServiceTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         userService = new UserService(appUserRepository, roleRepository, userRoleRepository,
-                auditLogRepository, objectMapper);
+                auditLogRepository, locationRepository, teamMemberRepository, objectMapper);
     }
 
     @Test

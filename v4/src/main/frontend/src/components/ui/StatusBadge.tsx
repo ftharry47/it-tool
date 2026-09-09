@@ -35,6 +35,11 @@ const statusStyles: Record<string, string> = {
   IN_FULFILLMENT: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
   FULFILLED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 
+  // Fulfillment Task
+  ORDERED: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+  DELIVERY_DATE_SET: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+  DELIVERED: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
+
   // Knowledge Base
   PENDING_REVIEW: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   PUBLISHED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -54,7 +59,7 @@ const statusLabels: Record<string, string> = {
   INVESTIGATING: 'Investigating',
   KNOWN_ERROR: 'Known Error',
   ON_HOLD: 'On Hold',
-  WAITING_ON_CUSTOMER: 'Waiting on Customer',
+  WAITING_ON_CUSTOMER: 'Waiting on User',
   RESOLVED: 'Resolved',
   CLOSED: 'Closed',
   REOPENED: 'Reopened',
@@ -75,6 +80,11 @@ const statusLabels: Record<string, string> = {
   SUBMITTED: 'Submitted',
   IN_FULFILLMENT: 'In Fulfillment',
   FULFILLED: 'Fulfilled',
+
+  // Fulfillment Task (DELIVERED is displayed as "Installed")
+  ORDERED: 'Ordered',
+  DELIVERY_DATE_SET: 'Delivery Date Set',
+  DELIVERED: 'Installed',
 
   // Knowledge Base
   PENDING_REVIEW: 'Pending Review',

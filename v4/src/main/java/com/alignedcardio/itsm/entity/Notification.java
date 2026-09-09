@@ -47,6 +47,10 @@ public class Notification extends BaseEntity {
     @Column(name = "email_status", length = 16)
     private DeliveryStatus emailStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "push_status", length = 16)
+    private DeliveryStatus pushStatus;
+
     @Column(name = "read_at", columnDefinition = "timestamptz")
     private OffsetDateTime readAt;
 
@@ -120,6 +124,14 @@ public class Notification extends BaseEntity {
 
     public void setEmailStatus(DeliveryStatus emailStatus) {
         this.emailStatus = emailStatus;
+    }
+
+    public DeliveryStatus getPushStatus() {
+        return pushStatus;
+    }
+
+    public void setPushStatus(DeliveryStatus pushStatus) {
+        this.pushStatus = pushStatus;
     }
 
     public OffsetDateTime getReadAt() {

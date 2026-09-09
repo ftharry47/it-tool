@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
 import { Plus } from 'lucide-react'
@@ -25,6 +25,7 @@ const createFields: Field[] = [
 ]
 
 export function ProblemList() {
+  const navigate = useNavigate()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -67,7 +68,7 @@ export function ProblemList() {
   if (query.error) return <ErrorFallback error={query.error} message="Could not load problems." onRetry={() => query.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Problems</h1>
@@ -84,17 +85,18 @@ export function ProblemList() {
           caption="List of problems"
           columns={[
             { key: 'number', header: 'Number' },
-            { key: 'title', header: 'Title', render: (row) => <Link to={`/dashboard/problems/${row.id}`} className="font-medium hover:underline">{row.title}</Link> },
+            { key: 'title', header: 'Title' },
             { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
             { key: 'rootCause', header: 'Root Cause', render: (row) => row.rootCause ?? '—' },
           ]}
           data={query.data ?? []}
           getRowKey={(row) => row.id}
+          onRowClick={(row) => navigate(`/dashboard/problems/${row.id}`)}
           emptyText="No problems found."
         />
       </div>
 
-      <FormDrawer open={drawerOpen} title="New Problem" onClose={() => { setDrawerOpen(false); setCreateError(null) }}>
+      <FormDrawer open={drawerOpen} title="New Problem" dirty={form.title !== '' || form.description !== ''} onClose={() => { setDrawerOpen(false); setCreateError(null) }}>
         <EntityForm
           fields={createFields}
           values={form}

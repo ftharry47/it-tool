@@ -85,6 +85,41 @@ Role authorization is enforced by `@PreAuthorize`. Rule creation and editing req
 - `package.ps1` produced a clean `target/app.zip`.
 - **Phase 8 status: APPROVED**.
 
+## DEPLOY NOTE — REQUIRED MANUAL STEP (Stages C/D)
+
+**The seeded "IT Fulfillment" team (`00000000-0000-0000-0000-000000000010`) starts EMPTY.**
+After deploying V31/V32, an admin MUST add the fulfillment agents to this team via
+**Administration → Support Tiers** (`/admin/support-tiers`, "Other teams" section) —
+the first UI for team membership; previously only the team admin APIs existed.
+Until members exist, these automation rules silently notify nobody:
+
+- `Service request ready for fulfillment - notify IT team` (`IN_FULFILLMENT`)
+- `Delivery date set - notify IT Fulfillment team` (`DELIVERY_DATE_SET`)
+- `Delivery reminder - notify IT Fulfillment team` (`FULFILLMENT_REMINDER`)
+
+This is the single way the whole feature silently fails in production — do not skip it.
+
+## DEPLOY NOTE — REQUIRED MANUAL STEP (V38 support tiers)
+
+**The seeded "L1 Support" / "L2 Support" / "L3 Support" teams
+(`...0020` / `...0021` / `...0022`) start EMPTY.** After deploying V38, an admin
+MUST add members via **Administration → Support Tiers** (`/admin/support-tiers`).
+Until populated, any SLA escalation tier that reassigns to or notifies these
+teams will silently reach nobody.
+
+## FOLLOW-UP — SLA escalation tier admin UI (Stage C)
+
+**`sla_escalation_tier` (V35) has no admin UI.** Escalation tiers can only be
+created via direct DB insert. Until a tier-management section is added to the
+SLA policy admin page (`SlaDetails.tsx` / `CreateSlaPolicyForm.tsx`), the
+escalation sweep in `SlaBreachMonitorJob` is inert — every policy has zero
+tiers, so `evaluateEscalation` finds no next tier and does nothing.
+
+Minimal follow-up: a per-policy tier editor (level, trigger_type,
+stuck_status/stuck_minutes, notify_role, reassign_to_team_id) plus a
+`SlaEscalationTierController` CRUD endpoint. Do not deploy Stage C expecting
+escalations to fire without seeding tiers first.
+
 ## Assumptions / known limitations
 
 - **CALL_WEBHOOK SSRF protection**: uses a pre-call `InetAddress` check for `localhost`, private, and link-local ranges. This is a simple defense and is **not** DNS-rebinding-resistant; acceptable for an internal tool but not a hardened SSRF barrier.

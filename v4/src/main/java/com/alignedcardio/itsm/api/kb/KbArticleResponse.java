@@ -20,6 +20,8 @@ public record KbArticleResponse(
         int version,
         OffsetDateTime publishedAt,
         OffsetDateTime archivedAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt,
+        Boolean myVote
 ) {
 }

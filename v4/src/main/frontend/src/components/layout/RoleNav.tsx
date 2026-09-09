@@ -8,32 +8,34 @@ const routeIcons: Record<string, string> = {}
 export function RoleNav() {
   const { currentUser } = useAuth()
   const role = highestRole(currentUser?.roles ?? [])
-  const routes = getRouteDefinitions(role)
+  const routes = getRouteDefinitions(role, currentUser)
 
   const navRoutes = routes.filter((route) => !route.path.includes(':') && !route.hidden)
 
-  let adminReached = false
+  let lastGroup: string | undefined
 
   return (
     <nav aria-label="Main" className="space-y-1 p-3">
-      {navRoutes.map((route, index) => {
-        const isAdmin = route.path.startsWith('admin')
-        const separator = !adminReached && isAdmin ? (
-          <div key={`admin-sep-${index}`} className="my-2 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Administration
+      {navRoutes.map((route) => {
+        const header = route.group && route.group !== lastGroup ? (
+          <div
+            key={`group-${route.group}`}
+            aria-hidden="true"
+            className={`${lastGroup !== undefined ? 'mt-5 border-t border-border pt-5' : 'pt-1'} cursor-default select-none px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground/60`}
+          >
+            {route.group}
           </div>
         ) : null
-        adminReached = adminReached || isAdmin
+        lastGroup = route.group ?? lastGroup
         return (
-          <>
-            {separator}
+          <div key={route.path}>
+            {header}
             <NavLink
-              key={route.path}
               to={`/${route.path}`}
               label={route.label}
               icon={routeIcons[route.path] ? <span className="w-4 text-center">{routeIcons[route.path]}</span> : undefined}
             />
-          </>
+          </div>
         )
       })}
     </nav>

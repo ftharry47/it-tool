@@ -9,6 +9,8 @@ import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { SchemaForm, isValidSchema, type SchemaField } from '../../components/ui/SchemaForm'
+import { SchemaFieldsEditor } from '../../components/ui/SchemaFieldsEditor'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 interface CatalogItem {
   id: string
@@ -69,6 +71,15 @@ export function CatalogAdmin() {
   const [values, setValues] = useState<CatalogFormValues>(initialValues)
   const [parseError, setParseError] = useState<string | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [rawJsonMode, setRawJsonMode] = useState(false)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const catalogQuery = useQuery<CatalogItem[]>({
     queryKey: ['catalog-items'],
@@ -140,8 +151,13 @@ export function CatalogAdmin() {
       setValues(initialValues)
       setServerError(null)
       queryClient.invalidateQueries({ queryKey: ['catalog-items'] })
+      pushToast('success', selectedItem ? 'Catalog item updated' : 'Catalog item created')
     },
-    onError: (error) => setServerError(error.message),
+    onError: (error) => {
+      console.error('Catalog item save failed:', error)
+      setServerError('Could not save the catalog item. Please try again or contact IT support.')
+      pushToast('error', 'Could not save the catalog item.')
+    },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -171,7 +187,8 @@ export function CatalogAdmin() {
   if (catalogQuery.error) return <ErrorFallback error={catalogQuery.error} message="Could not load catalog items." onRetry={() => catalogQuery.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Catalog Administration</h1>
@@ -213,6 +230,7 @@ export function CatalogAdmin() {
       <FormDrawer
         open={drawerOpen}
         title={selectedItem ? 'Edit Catalog Item' : 'New Catalog Item'}
+        dirty={JSON.stringify(values) !== JSON.stringify(valuesFromItem(selectedItem))}
         onClose={() => { setDrawerOpen(false); setSelectedItem(null); setValues(initialValues); setParseError(null); setServerError(null) }}
       >
         <EntityForm
@@ -220,7 +238,6 @@ export function CatalogAdmin() {
             { name: 'name', label: 'Name', type: 'text', required: true },
             { name: 'description', label: 'Description', type: 'textarea' },
             { name: 'category', label: 'Category', type: 'text', placeholder: 'e.g., Clinical Software, Workstation, Network' },
-            { name: 'formSchema', label: 'Form Schema JSON', type: 'textarea' },
             { name: 'fulfillmentTasks', label: 'Fulfillment Tasks JSON', type: 'textarea' },
             { name: 'approverId', label: 'Approver ID (UUID)', type: 'text' },
             { name: 'approvalRequired', label: 'Approval Required', type: 'boolean' },
@@ -235,6 +252,39 @@ export function CatalogAdmin() {
           submitLabel={selectedItem ? 'Save' : 'Create'}
           pending={saveMutation.isPending}
         />
+
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Form Fields</label>
+            <button
+              type="button"
+              onClick={() => setRawJsonMode((m) => !m)}
+              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+            >
+              {rawJsonMode ? 'Use visual editor' : 'Edit raw JSON'}
+            </button>
+          </div>
+          {rawJsonMode || parseError ? (
+            <>
+              <textarea
+                aria-label="Form Schema JSON"
+                value={values.formSchema}
+                onChange={(e) => {
+                  setValues({ ...values, formSchema: e.target.value })
+                  setParseError(null)
+                }}
+                rows={8}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              {parseError && <p className="text-sm text-destructive">{parseError}</p>}
+            </>
+          ) : (
+            <SchemaFieldsEditor
+              schema={parsedSchema}
+              onChange={(schema) => setValues({ ...values, formSchema: JSON.stringify(schema) })}
+            />
+          )}
+        </div>
 
         <div className="mt-6 rounded-xl border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-semibold">Form Preview</h3>

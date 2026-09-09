@@ -5,6 +5,9 @@ import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { formatDateTime } from '../../lib/date'
 
 interface AutomationRuleResponse {
   id: string
@@ -86,11 +89,14 @@ const ACTION_CONFIG_FIELDS: Record<string, { key: string; label: string; optiona
     { key: 'body', label: 'Body JSON', optional: true },
   ],
   // NotificationHandler.java (service/notification): expects userId, subject, body, channel (optional, default BOTH).
+  // pushTitle/pushBody are optional overrides — when blank, push text is auto-derived from subject/body.
   SEND_NOTIFICATION: [
     { key: 'userId', label: 'User ID' },
     { key: 'subject', label: 'Subject' },
     { key: 'body', label: 'Body' },
     { key: 'channel', label: 'Channel (IN_APP/EMAIL/BOTH)', optional: true },
+    { key: 'pushTitle', label: 'Push title (optional — auto-derived if blank)', optional: true },
+    { key: 'pushBody', label: 'Push body (optional — auto-derived if blank)', optional: true },
   ],
 }
 
@@ -131,6 +137,16 @@ export function AutomationAdmin() {
   const [testEntityId, setTestEntityId] = useState('')
   const [testResult, setTestResult] = useState<{ matched: boolean; actions: unknown[] } | null>(null)
   const [runLogId, setRunLogId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<AutomationRuleResponse | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState<(() => void) | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const rulesQuery = useQuery<AutomationRuleResponse[]>({
     queryKey: ['automation-rules'],
@@ -171,6 +187,45 @@ export function AutomationAdmin() {
         : []
     )
     setActive(rule.active)
+  }
+
+  const isFormDirty = (): boolean => {
+    if (editing) {
+      const parsedConditions = (safeJsonParse(editing.conditions) as Condition[] | Condition | null) ?? []
+      const origConditions = Array.isArray(parsedConditions) ? parsedConditions : [parsedConditions]
+      const parsedActions = (safeJsonParse(editing.actions) as Record<string, string>[] | null) ?? []
+      const origActions = Array.isArray(parsedActions)
+        ? parsedActions.map((a) => {
+            const { type, ...config } = a
+            return { type: (type as any) ?? 'SET_FIELD', config }
+          })
+        : []
+      return (
+        name !== editing.name ||
+        description !== (editing.description ?? '') ||
+        triggerType !== editing.triggerType ||
+        triggerEntity !== editing.triggerEntity ||
+        triggerConfig !== (prettyJson(safeJsonParse(editing.triggerConfig)) ?? '{}') ||
+        JSON.stringify(conditions) !== JSON.stringify(origConditions) ||
+        JSON.stringify(actions) !== JSON.stringify(origActions) ||
+        active !== editing.active
+      )
+    }
+    return (
+      name !== '' ||
+      description !== '' ||
+      triggerType !== 'CREATED' ||
+      triggerEntity !== 'INCIDENT' ||
+      triggerConfig !== '{}' ||
+      conditions.length > 0 ||
+      actions.length > 0 ||
+      !active
+    )
+  }
+
+  const guardDiscard = (action: () => void) => {
+    if (isFormDirty()) setConfirmDiscard(() => action)
+    else action()
   }
 
   const resetForm = () => {
@@ -222,10 +277,12 @@ export function AutomationAdmin() {
     onSuccess: () => {
       resetForm()
       queryClient.refetchQueries({ queryKey: ['automation-rules'], type: 'active' })
+      pushToast('success', 'Automation rule created')
     },
     onError: (error) => {
       // eslint-disable-next-line no-console
       console.error('Create rule failed:', error)
+      pushToast('error', 'Could not create the rule. Please try again.')
     },
   })
 
@@ -242,6 +299,12 @@ export function AutomationAdmin() {
     onSuccess: () => {
       resetForm()
       queryClient.refetchQueries({ queryKey: ['automation-rules'], type: 'active' })
+      pushToast('success', 'Automation rule updated')
+    },
+    onError: (error) => {
+      // eslint-disable-next-line no-console
+      console.error('Update rule failed:', error)
+      pushToast('error', 'Could not update the rule. Please try again.')
     },
   })
 
@@ -253,7 +316,17 @@ export function AutomationAdmin() {
         throw new Error(text || `HTTP ${res.status}`)
       }
     },
-    onSuccess: () => queryClient.refetchQueries({ queryKey: ['automation-rules'], type: 'active' }),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ['automation-rules'], type: 'active' })
+      setDeleting(null)
+      pushToast('success', 'Automation rule deleted')
+    },
+    onError: (error) => {
+      // eslint-disable-next-line no-console
+      console.error('Delete rule failed:', error)
+      setDeleting(null)
+      pushToast('error', 'Could not delete the rule. Please try again.')
+    },
   })
 
   const testMutation = useMutation<{ matched: boolean; actions: unknown[] }, Error>({
@@ -307,11 +380,34 @@ export function AutomationAdmin() {
   const rules = rulesQuery.data ?? []
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete rule "${deleting?.name}"?`}
+        description="This cannot be undone. The rule will stop firing immediately."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        open={confirmDiscard !== null}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this rule that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const action = confirmDiscard
+          setConfirmDiscard(null)
+          action?.()
+        }}
+        onCancel={() => setConfirmDiscard(null)}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Automation Rules</h1>
-          <button onClick={resetForm} className="rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-muted">New Rule</button>
+          <button onClick={() => guardDiscard(resetForm)} className="rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-muted">New Rule</button>
         </div>
 
         <DataTable<AutomationRuleResponse>
@@ -330,9 +426,9 @@ export function AutomationAdmin() {
               header: 'Actions',
               render: (row) => (
                 <div className="flex gap-2">
-                  <button onClick={() => loadRule(row)} className="text-sm text-primary hover:underline">Edit</button>
+                  <button onClick={() => guardDiscard(() => loadRule(row))} className="text-sm text-primary hover:underline">Edit</button>
                   <button onClick={() => setRunLogId(row.id)} className="text-sm text-primary hover:underline">Runs</button>
-                  <button onClick={() => deleteMutation.mutate(row.id)} className="text-sm text-destructive hover:underline">Delete</button>
+                  <button onClick={() => setDeleting(row)} className="text-sm text-destructive hover:underline">Delete</button>
                 </div>
               ),
             },
@@ -448,7 +544,7 @@ export function AutomationAdmin() {
                   <div className="rounded-md border border-border bg-muted p-3 text-sm">
                     <p className="font-medium">Matched: {testResult.matched ? 'Yes' : 'No'}</p>
                     {testResult.matched && (
-                      <pre className="mt-1 overflow-auto text-xs">{prettyJson(testResult.actions)}</pre>
+                      <pre className="mt-1 overflow-auto text-xs scrollbar-themed">{prettyJson(testResult.actions)}</pre>
                     )}
                   </div>
                 )}
@@ -472,7 +568,7 @@ export function AutomationAdmin() {
                   <div key={run.id} className="rounded-md border border-border p-3 text-sm">
                     <div className="flex items-center gap-2">
                       <span className={`font-semibold ${run.status === 'EXECUTED' ? 'text-green-600' : run.status === 'NO_MATCH' ? 'text-muted-foreground' : 'text-destructive'}`}>{run.status}</span>
-                      <span className="text-muted-foreground">· {run.triggeredEvent} · {new Date(run.executedAt).toLocaleString()}</span>
+                      <span className="text-muted-foreground">· {run.triggeredEvent} · {formatDateTime(run.executedAt)}</span>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">Entity: {run.entityType} {run.entityId}</p>
                     {run.output && <p className="mt-1 text-xs">Output: {run.output}</p>}

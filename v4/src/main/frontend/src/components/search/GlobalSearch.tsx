@@ -279,7 +279,7 @@ export function GlobalSearch() {
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto py-2">
+            <div className="max-h-[70vh] overflow-y-auto py-2 scrollbar-themed">
               {debouncedQuery.length <= 1 && (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">
                   Type at least 2 characters to search.

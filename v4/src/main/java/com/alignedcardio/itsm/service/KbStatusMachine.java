@@ -11,7 +11,7 @@ public final class KbStatusMachine {
             Map.entry(KbArticle.Status.DRAFT, Set.of(KbArticle.Status.PENDING_REVIEW)),
             Map.entry(KbArticle.Status.PENDING_REVIEW, Set.of(KbArticle.Status.PUBLISHED, KbArticle.Status.DRAFT)),
             Map.entry(KbArticle.Status.PUBLISHED, Set.of(KbArticle.Status.ARCHIVED)),
-            Map.entry(KbArticle.Status.ARCHIVED, Set.of())
+            Map.entry(KbArticle.Status.ARCHIVED, Set.of(KbArticle.Status.DRAFT))
     );
 
     private KbStatusMachine() {

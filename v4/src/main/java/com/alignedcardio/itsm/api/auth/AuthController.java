@@ -1,6 +1,7 @@
 package com.alignedcardio.itsm.api.auth;
 
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +20,11 @@ public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private final UserService userService;
+    private final LocationRepository locationRepository;
 
-    public AuthController(UserService userService) {
+    public AuthController(UserService userService, LocationRepository locationRepository) {
         this.userService = userService;
+        this.locationRepository = locationRepository;
     }
 
     @GetMapping("/me")
@@ -36,24 +39,7 @@ public class AuthController {
             AppUser user = userService.syncFromJwt(jwt);
             logger.info("[AuthController] /api/auth/me: User synced: {}", user.getEmail());
 
-            List<String> roles = user.getUserRoles().stream()
-                    .map(ur -> ur.getRole().getName())
-                    .toList();
-
-            CurrentUser currentUser = new CurrentUser(
-                    user.getId(),
-                    user.getObjectId(),
-                    user.getEmail(),
-                    user.getDisplayName(),
-                    user.getJobTitle(),
-                    user.getDepartment(),
-                    roles,
-                    user.isActive(),
-                    user.isMfaEnabled(),
-                    user.getManagerId()
-            );
-
-            return ResponseEntity.ok(currentUser);
+            return ResponseEntity.ok(userService.toCurrentUser(user));
         } catch (Exception e) {
             logger.error("[AuthController] /api/auth/me: Error", e);
             return ResponseEntity.status(500).build();

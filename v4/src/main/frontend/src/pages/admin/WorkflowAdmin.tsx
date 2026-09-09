@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 interface WorkflowResponse {
   id: string
@@ -60,6 +62,32 @@ export function WorkflowAdmin() {
   const [toStatus, setToStatus] = useState('')
   const [transitionScreen, setTransitionScreen] = useState('')
 
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [confirmSwitch, setConfirmSwitch] = useState<string | null>(null)
+  const [pendingStatusRemoval, setPendingStatusRemoval] = useState<string | null>(null)
+  const [pendingTransitionRemoval, setPendingTransitionRemoval] = useState<string | null>(null)
+
+  const hasPendingInputs =
+    statusName !== '' ||
+    statusCategory !== '' ||
+    statusOrder !== '0' ||
+    statusTerminal ||
+    fromStatus !== '' ||
+    toStatus !== '' ||
+    transitionScreen !== ''
+
+  const selectWorkflow = (id: string) => {
+    if (id !== selectedWorkflow && hasPendingInputs) setConfirmSwitch(id)
+    else setSelectedWorkflow(id)
+  }
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
   const projectsQuery = useQuery<ProjectResponse[]>({
     queryKey: ['projects'],
     queryFn: async () => {
@@ -94,6 +122,11 @@ export function WorkflowAdmin() {
       setWorkflowDesc('')
       setWorkflowProject('')
       queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      pushToast('success', 'Workflow created')
+    },
+    onError: (error) => {
+      console.error('Workflow create failed:', error)
+      pushToast('error', 'Could not create the workflow. Please try again.')
     },
   })
 
@@ -118,6 +151,11 @@ export function WorkflowAdmin() {
       setStatusOrder('0')
       setStatusTerminal(false)
       queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      pushToast('success', 'Status added')
+    },
+    onError: (error) => {
+      console.error('Status add failed:', error)
+      pushToast('error', 'Could not add the status. Please try again.')
     },
   })
 
@@ -129,7 +167,14 @@ export function WorkflowAdmin() {
         throw new Error(text || `HTTP ${res.status}`)
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workflows'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      pushToast('success', 'Status removed')
+    },
+    onError: (error) => {
+      console.error('Status remove failed:', error)
+      pushToast('error', 'Could not remove the status. It may be in use by existing transitions.')
+    },
   })
 
   const addTransitionMutation = useMutation<WorkflowTransitionResponse, Error>({
@@ -148,6 +193,11 @@ export function WorkflowAdmin() {
       setToStatus('')
       setTransitionScreen('')
       queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      pushToast('success', 'Transition added')
+    },
+    onError: (error) => {
+      console.error('Transition add failed:', error)
+      pushToast('error', 'Could not add the transition. Please try again.')
     },
   })
 
@@ -159,7 +209,14 @@ export function WorkflowAdmin() {
         throw new Error(text || `HTTP ${res.status}`)
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workflows'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      pushToast('success', 'Transition removed')
+    },
+    onError: (error) => {
+      console.error('Transition remove failed:', error)
+      pushToast('error', 'Could not remove the transition. Please try again.')
+    },
   })
 
   if (workflowsQuery.isLoading || projectsQuery.isLoading) return <Loading />
@@ -168,7 +225,45 @@ export function WorkflowAdmin() {
   const selected = workflowsQuery.data?.find((w) => w.id === selectedWorkflow)
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={confirmSwitch !== null}
+        title="Discard unsaved changes?"
+        description="You have unsaved status or transition inputs that will be lost if you switch workflows."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const id = confirmSwitch
+          setConfirmSwitch(null)
+          if (id) setSelectedWorkflow(id)
+        }}
+        onCancel={() => setConfirmSwitch(null)}
+      />
+      <ConfirmDialog
+        open={pendingStatusRemoval !== null}
+        title="Remove status?"
+        description="This status will be removed from the workflow. It may fail if still used by transitions."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (pendingStatusRemoval) removeStatusMutation.mutate(pendingStatusRemoval)
+          setPendingStatusRemoval(null)
+        }}
+        onCancel={() => setPendingStatusRemoval(null)}
+      />
+      <ConfirmDialog
+        open={pendingTransitionRemoval !== null}
+        title="Remove transition?"
+        description="This transition will be removed from the workflow."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (pendingTransitionRemoval) removeTransitionMutation.mutate(pendingTransitionRemoval)
+          setPendingTransitionRemoval(null)
+        }}
+        onCancel={() => setPendingTransitionRemoval(null)}
+      />
       <div className="mx-auto max-w-5xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Workflow Builder</h1>
 
@@ -202,7 +297,7 @@ export function WorkflowAdmin() {
               header: 'Actions',
               render: (row) => (
                 <button
-                  onClick={() => setSelectedWorkflow(row.id)}
+                  onClick={() => selectWorkflow(row.id)}
                   className={`text-sm font-medium underline-offset-4 hover:underline ${selectedWorkflow === row.id ? 'text-primary' : 'text-muted-foreground'}`}
                 >
                   {selectedWorkflow === row.id ? 'Editing' : 'Edit'}
@@ -250,7 +345,7 @@ export function WorkflowAdmin() {
                     key: 'actions',
                     header: 'Actions',
                     render: (row) => (
-                      <button onClick={() => removeStatusMutation.mutate(row.id)} className="text-sm text-destructive hover:underline">Remove</button>
+                      <button onClick={() => setPendingStatusRemoval(row.id)} className="text-sm text-destructive hover:underline">Remove</button>
                     ),
                   },
                 ]}
@@ -291,7 +386,7 @@ export function WorkflowAdmin() {
                     key: 'actions',
                     header: 'Actions',
                     render: (row) => (
-                      <button onClick={() => removeTransitionMutation.mutate(row.id)} className="text-sm text-destructive hover:underline">Remove</button>
+                      <button onClick={() => setPendingTransitionRemoval(row.id)} className="text-sm text-destructive hover:underline">Remove</button>
                     ),
                   },
                 ]}

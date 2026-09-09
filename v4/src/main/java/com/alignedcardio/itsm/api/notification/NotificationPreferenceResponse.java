@@ -8,6 +8,7 @@ public record NotificationPreferenceResponse(
         boolean notifyStatusChange,
         boolean notifyAssignment,
         boolean notifyComment,
-        boolean notifyMention
+        boolean notifyMention,
+        boolean pushEnabled
 ) {
 }

@@ -61,12 +61,131 @@
   * {
     @apply border-border;
   }
+  html {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  html::-webkit-scrollbar {
+    display: none;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  body::-webkit-scrollbar {
+    display: none;
   }
   .dark body {
     background-image: radial-gradient(ellipse 80% 55% at 50% -10%, hsl(0 70% 12% / 0.12), transparent 55%);
     background-attachment: fixed;
+  }
+
+  /* Theme-aware native date / datetime-local pickers. */
+  input[type='date'],
+  input[type='datetime-local'] {
+    color-scheme: light;
+  }
+
+  .dark input[type='date'],
+  .dark input[type='datetime-local'] {
+    color-scheme: dark;
+  }
+
+  /* WebKit calendar icon: use current text color so it stays visible in both themes. */
+  input[type='date']::-webkit-calendar-picker-indicator,
+  input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    color: currentColor;
+    opacity: 0.8;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbars while keeping scroll functionality (Firefox, legacy Edge/IE, WebKit) */
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Thin, theme-aware scrollbar for content that genuinely needs a visible
+     scroll affordance (wide tables, boards). Uses muted track + foreground
+     thumb so it respects light/dark mode via the CSS variables. */
+  .scrollbar-themed {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) hsl(var(--muted) / 0.4);
+  }
+  .scrollbar-themed::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-themed::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.4);
+    border-radius: 4px;
+  }
+  .scrollbar-themed::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 4px;
+  }
+  .scrollbar-themed::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.55);
+  }
+}
+
+/* Route + UI entrance animations */
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zoom-in-95 {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@layer utilities {
+  .animate-fade-slide-up {
+    /* 'backwards' (not 'both'): a persisted 'to' transform would make this
+       element a containing block for position:fixed descendants, breaking
+       overlay/toast positioning inside routed content. */
+    animation: fade-slide-up 0.25s ease-out backwards;
+  }
+  .animate-zoom-in-95 {
+    animation: zoom-in-95 0.15s ease-out both;
+  }
+  .animate-float-slow {
+    animation: float-slow 6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-slide-up,
+    .animate-zoom-in-95,
+    .animate-float-slow {
+      animation: none;
+    }
   }
 }

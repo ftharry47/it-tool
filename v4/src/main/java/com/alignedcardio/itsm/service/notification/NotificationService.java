@@ -26,25 +26,38 @@ public class NotificationService {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
 
+    /**
+     * Action-required notification types that always send email immediately,
+     * even when the user has digestMode HOURLY/DAILY. Informational types
+     * (INCIDENT_UPDATE, INCIDENT_COMMENT, CREATED, FULFILLMENT_REMINDER)
+     * remain digestible.
+     */
+    private static final java.util.Set<String> DIGEST_BYPASS_TYPES = java.util.Set.of(
+            "INCIDENT_ASSIGNED", "SLA_BREACH", "SLA_ESCALATION", "MENTION",
+            "REJECTED", "PENDING_APPROVAL");
+
     private final NotificationRepository notificationRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final Optional<JavaMailSender> mailSender;
     private final AppUserRepository appUserRepository;
     private final Optional<GraphMailClient> graphMailClient;
+    private final PushService pushService;
 
     public NotificationService(NotificationRepository notificationRepository,
                                NotificationPreferenceRepository preferenceRepository,
                                SimpMessagingTemplate messagingTemplate,
                                Optional<JavaMailSender> mailSender,
                                AppUserRepository appUserRepository,
-                               Optional<GraphMailClient> graphMailClient) {
+                               Optional<GraphMailClient> graphMailClient,
+                               PushService pushService) {
         this.notificationRepository = notificationRepository;
         this.preferenceRepository = preferenceRepository;
         this.messagingTemplate = messagingTemplate;
         this.mailSender = mailSender;
         this.appUserRepository = appUserRepository;
         this.graphMailClient = graphMailClient;
+        this.pushService = pushService;
     }
 
     @Transactional
@@ -53,8 +66,11 @@ public class NotificationService {
         notification.setOrgId(request.orgId());
         notification.setUserId(request.userId());
         notification.setType(request.type());
-        notification.setSubject(request.subject());
-        notification.setBody(request.body());
+        // In-app text is what the bell stores/shows; email and push get their
+        // own fields from NotificationContent when present.
+        NotificationContent content = request.content();
+        notification.setSubject(content != null ? content.inAppSubject() : request.subject());
+        notification.setBody(content != null ? content.inAppBody() : request.body());
         notification.setEntityType(request.entityType());
         notification.setEntityId(request.entityId());
         notification.setChannel(request.channel() == null ? Notification.Channel.BOTH : request.channel());
@@ -65,8 +81,10 @@ public class NotificationService {
             notification.setEmailStatus(Notification.DeliveryStatus.PENDING);
         } else if (notification.getChannel() == Notification.Channel.IN_APP) {
             notification.setEmailStatus(null);
+            notification.setPushStatus(Notification.DeliveryStatus.PENDING);
         } else {
             notification.setEmailStatus(Notification.DeliveryStatus.PENDING);
+            notification.setPushStatus(Notification.DeliveryStatus.PENDING);
         }
 
         notification = notificationRepository.save(notification);
@@ -87,7 +105,12 @@ public class NotificationService {
 
         if (notification.getChannel() == Notification.Channel.EMAIL
                 || notification.getChannel() == Notification.Channel.BOTH) {
-            queueOrSendEmail(notification, preference);
+            queueOrSendEmail(notification, preference, content);
+        }
+
+        if (notification.getChannel() == Notification.Channel.IN_APP
+                || notification.getChannel() == Notification.Channel.BOTH) {
+            deliverPush(notification, preference, content);
         }
 
         return notificationRepository.save(notification);
@@ -159,14 +182,16 @@ public class NotificationService {
         notification.setInAppStatus(Notification.DeliveryStatus.SENT);
     }
 
-    private void queueOrSendEmail(Notification notification, NotificationPreference preference) {
+    private void queueOrSendEmail(Notification notification, NotificationPreference preference,
+                                  NotificationContent content) {
         if (!preference.isEmailEnabled()) {
             logger.warn("Email disabled for user {}, marking FAILED", notification.getUserId());
             notification.setEmailStatus(Notification.DeliveryStatus.FAILED);
             return;
         }
 
-        if (preference.getDigestMode() != NotificationPreference.DigestMode.NONE) {
+        if (preference.getDigestMode() != NotificationPreference.DigestMode.NONE
+                && !DIGEST_BYPASS_TYPES.contains(notification.getType())) {
             // leave PENDING for the digest job
             logger.info("Digest mode {} for user {}, email left PENDING", preference.getDigestMode(), notification.getUserId());
             return;
@@ -184,8 +209,8 @@ public class NotificationService {
             return;
         }
 
-        String subject = notification.getSubject();
-        String body = notification.getBody();
+        String subject = content != null ? content.emailSubject() : notification.getSubject();
+        String body = content != null ? content.emailBody() : notification.getBody();
 
         if (graphMailClient.isPresent()) {
             logger.info("Sending Graph email to {} for notification {}", address, notification.getId());
@@ -222,12 +247,54 @@ public class NotificationService {
         }
     }
 
+    private void deliverPush(Notification notification, NotificationPreference preference,
+                             NotificationContent content) {
+        if (!preference.isPushEnabled()) {
+            notification.setPushStatus(null);
+            return;
+        }
+        try {
+            String url = pushUrl(notification);
+            String title = content != null ? content.pushTitle() : notification.getSubject();
+            String body = content != null ? content.pushBody() : notification.getBody();
+            boolean sent = pushService.sendToUser(notification.getUserId(), title, body, url);
+            notification.setPushStatus(sent
+                    ? Notification.DeliveryStatus.SENT
+                    : Notification.DeliveryStatus.FAILED);
+        } catch (Exception e) {
+            logger.error("Push delivery failed for notification {}", notification.getId(), e);
+            notification.setPushStatus(Notification.DeliveryStatus.FAILED);
+        }
+    }
+
+    /**
+     * Builds a click-through URL that matches a real frontend route.
+     * Staff roles land on /dashboard/*, end users on /home/*.
+     */
+    private String pushUrl(Notification notification) {
+        if (notification.getEntityId() == null || notification.getEntityType() == null) {
+            return "/";
+        }
+        boolean staff = appUserRepository.findById(notification.getUserId())
+                .map(u -> u.getUserRoles().stream()
+                        .map(ur -> ur.getRole().getName())
+                        .anyMatch(r -> List.of("AGENT", "TEAM_LEAD", "ADMIN", "SUPER_ADMIN").contains(r)))
+                .orElse(false);
+        String prefix = staff ? "/dashboard" : "/home";
+        return switch (notification.getEntityType().toUpperCase()) {
+            case "INCIDENT" -> prefix + "/incidents/" + notification.getEntityId();
+            case "SERVICE_REQUEST" -> prefix + "/service-requests/" + notification.getEntityId();
+            case "LOCATION" -> "/admin/locations";
+            default -> "/";
+        };
+    }
+
     private boolean isNotificationTypeEnabled(NotificationPreference preference, String type) {
         if (type == null) {
             return true;
         }
         return switch (type.toUpperCase()) {
-            case "INCIDENT_UPDATE" -> preference.isNotifyStatusChange();
+            case "INCIDENT_UPDATE", "INCIDENT_PRIORITY_CHANGED" -> preference.isNotifyStatusChange();
             case "INCIDENT_ASSIGNED" -> preference.isNotifyAssignment();
             case "INCIDENT_COMMENT" -> preference.isNotifyComment();
             case "MENTION" -> preference.isNotifyMention();

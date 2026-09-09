@@ -1,14 +1,18 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Link2, Paperclip, MessageCircle, Loader2, History, Clock } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { IncidentEditForm } from './IncidentEditForm'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { formatDateTime } from '../../lib/date'
 
 interface IncidentDetail {
   id: string
@@ -19,9 +23,14 @@ interface IncidentDetail {
   priority: string | null
   category: string | null
   location: string | null
+  locationId: string | null
   phone: string | null
   requester: string | null
   assignee: string | null
+  assigneeId: string | null
+  assignmentTeamId: string | null
+  assignmentTeamName: string | null
+  closingNotes: string | null
   estimatedMinutes: number | null
   totalLoggedMinutes: number | null
   createdAt: string
@@ -47,6 +56,7 @@ interface User {
   id: string
   displayName: string
   email: string
+  roles: string[]
 }
 
 interface Attachment {
@@ -56,15 +66,6 @@ interface Attachment {
   contentType?: string
   blobUrl: string
   createdAt: string
-}
-
-interface Activity {
-  id: string
-  type: 'created' | 'status' | 'assigned' | 'comment' | 'attachment' | 'link'
-  title: string
-  description?: string
-  createdAt: string
-  icon: ReactNode
 }
 
 interface TimeEntry {
@@ -99,7 +100,20 @@ export function IncidentDetail() {
   const [statusError, setStatusError] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState('')
   const [selectedAssignee, setSelectedAssignee] = useState('')
+  const [selectedAssigneePriority, setSelectedAssigneePriority] = useState('')
+  const [assignError, setAssignError] = useState<string | null>(null)
+  const [escalateOpen, setEscalateOpen] = useState(false)
+  const [selectedEscalationPriority, setSelectedEscalationPriority] = useState('')
+  const [escalationReason, setEscalationReason] = useState('')
+  const [escalateError, setEscalateError] = useState<string | null>(null)
+  const [tierEscalateOpen, setTierEscalateOpen] = useState(false)
+  const [tierEscalationReason, setTierEscalationReason] = useState('')
+  const [tierEscalateError, setTierEscalateError] = useState<string | null>(null)
+  const [closingNotes, setClosingNotes] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+const [editFormDirty, setEditFormDirty] = useState(false)
+const [confirmDiscardEdit, setConfirmDiscardEdit] = useState(false)
+const [confirmBack, setConfirmBack] = useState(false)
   const [commentContent, setCommentContent] = useState('')
   const [commentIsInternal, setCommentIsInternal] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -119,6 +133,10 @@ export function IncidentDetail() {
     },
     enabled: !!id,
   })
+
+  useDocumentTitle(
+    incidentQuery.data ? `Incident #${incidentQuery.data.number}` : 'Incident Detail'
+  )
 
   const commentsQuery = useQuery<Comment[]>({
     queryKey: ['incident-comments', id],
@@ -159,6 +177,29 @@ export function IncidentDetail() {
     },
   })
 
+  // Assignee picker is restricted to L1/L2/L3 support-tier team members.
+  const teamsQuery = useQuery<{ id: string; name: string; members: { userId: string; displayName: string }[] }[]>({
+    queryKey: ['teams'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/teams')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+  const TIER_TEAM_NAMES = ['L1 Support', 'L2 Support', 'L3 Support']
+  // Once the incident sits with a tier, the picker is scoped to that tier's
+  // members only. Before the first tier assignment, all tier groups are shown.
+  const scopedTierNames = incidentQuery.data?.assignmentTeamName
+    ? [incidentQuery.data.assignmentTeamName]
+    : TIER_TEAM_NAMES
+  const assigneeGroups = scopedTierNames
+    .map((tierName) => {
+      const team = (teamsQuery.data ?? []).find((t) => t.name === tierName)
+      return { tierName, members: (team?.members ?? []).slice().sort((a, b) => a.displayName.localeCompare(b.displayName)) }
+    })
+    .filter((g) => g.members.length > 0)
+
   const prioritiesQuery = useQuery<{ id: string; name: string }[]>({
     queryKey: ['priorities'],
     queryFn: async () => {
@@ -177,6 +218,15 @@ export function IncidentDetail() {
     },
   })
 
+  const locationsQuery = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/locations')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+  })
+
   const allIncidentsQuery = useQuery<IncidentDetail[]>({
     queryKey: ['incidents-for-linking'],
     queryFn: async () => {
@@ -184,6 +234,16 @@ export function IncidentDetail() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
+  })
+
+  const activityQuery = useQuery<AuditEntry[]>({
+    queryKey: ['incident-activity', id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/activity`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!id && !isEndUser,
   })
 
   const timeEntriesQuery = useQuery<TimeEntry[]>({
@@ -196,11 +256,11 @@ export function IncidentDetail() {
     enabled: !!id,
   })
 
-  const statusMutation = useMutation<IncidentDetail, Error, string>({
-    mutationFn: async (nextStatus) => {
+  const statusMutation = useMutation<IncidentDetail, Error, { status: string; closingNotes?: string }>({
+    mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: payload.status, closingNotes: payload.closingNotes ?? null }),
       })
       if (!res.ok) {
         if (res.status === 409) throw new Error('CONFLICT')
@@ -211,6 +271,7 @@ export function IncidentDetail() {
     onSuccess: () => {
       setStatusError(null)
       setSelectedStatus('')
+      setClosingNotes('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
@@ -225,22 +286,72 @@ export function IncidentDetail() {
     },
   })
 
-  const assignMutation = useMutation<IncidentDetail, Error, string>({
-    mutationFn: async (assigneeId) => {
+  const assignMutation = useMutation<IncidentDetail, Error, { assigneeId: string; priorityId?: string }>({
+    mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/assign`, {
         method: 'PATCH',
-        body: JSON.stringify({ assigneeId }),
+        body: JSON.stringify({
+          assigneeId: payload.assigneeId,
+          priorityId: payload.priorityId || null,
+        }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
     onSuccess: () => {
+      setAssignError(null)
       setSelectedAssignee('')
+      setSelectedAssigneePriority('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => {
-      setStatusError(`Failed to assign: ${error.message}`)
+      setAssignError(`Failed to assign: ${error.message}`)
+    },
+  })
+
+  const escalateMutation = useMutation<IncidentDetail, Error, { priorityId: string; reason: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/escalate`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      setEscalateError(null)
+      setEscalateOpen(false)
+      setSelectedEscalationPriority('')
+      setEscalationReason('')
+      queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-comments', id] })
+      queryClient.invalidateQueries({ queryKey: ['incidents'] })
+    },
+    onError: (error) => {
+      setEscalateError(`Failed to escalate: ${error.message}`)
+    },
+  })
+
+  const tierEscalateMutation = useMutation<IncidentDetail, Error, { reason: string }>({
+    mutationFn: async (payload) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/escalate-tier`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      setTierEscalateError(null)
+      setTierEscalateOpen(false)
+      setTierEscalationReason('')
+      queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-comments', id] })
+      queryClient.invalidateQueries({ queryKey: ['incidents'] })
+    },
+    onError: (error) => {
+      setTierEscalateError(`Failed to escalate: ${error.message}`)
     },
   })
 
@@ -364,7 +475,6 @@ export function IncidentDetail() {
     const list: Activity[] = []
     list.push({
       id: `${incident.id}-created`,
-      type: 'created',
       title: 'Incident created',
       description: `Incident #${incident.number} opened by ${incident.requester || 'Unknown'}`,
       createdAt: incident.createdAt,
@@ -373,8 +483,7 @@ export function IncidentDetail() {
 
     list.push({
       id: `${incident.id}-status`,
-      type: 'status',
-      title: `Status updated to ${formatStatusLabel(incident.status)}`,
+      title: `Status updated to ${incident.status}`,
       createdAt: incident.updatedAt,
       icon: <MessageCircle className="h-4 w-4" />,
     })
@@ -382,7 +491,6 @@ export function IncidentDetail() {
     if (incident.assignee) {
       list.push({
         id: `${incident.id}-assigned`,
-        type: 'assigned',
         title: `Assigned to ${incident.assignee}`,
         createdAt: incident.updatedAt,
         icon: <Link2 className="h-4 w-4" />,
@@ -392,7 +500,6 @@ export function IncidentDetail() {
     ;(commentsQuery.data ?? []).forEach((comment) => {
       list.push({
         id: `comment-${comment.id}`,
-        type: 'comment',
         title: `${comment.isInternal ? 'Internal' : 'Public'} comment by ${comment.author}`,
         description: comment.body,
         createdAt: comment.createdAt,
@@ -400,10 +507,19 @@ export function IncidentDetail() {
       })
     })
 
+    ;(activityQuery.data ?? []).forEach((entry) => {
+      list.push({
+        id: `audit-${entry.id}`,
+        title: auditTitle(entry),
+        description: auditDescription(entry),
+        createdAt: entry.createdAt,
+        icon: <History className="h-4 w-4" />,
+      })
+    })
+
     ;(attachmentsQuery.data ?? []).forEach((attachment) => {
       list.push({
         id: `attachment-${attachment.id}`,
-        type: 'attachment',
         title: `Attachment uploaded`,
         description: attachment.fileName,
         createdAt: attachment.createdAt,
@@ -412,14 +528,41 @@ export function IncidentDetail() {
     })
 
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [incidentQuery.data, commentsQuery.data, attachmentsQuery.data, isEndUser])
+  }, [incidentQuery.data, commentsQuery.data, attachmentsQuery.data, activityQuery.data, isEndUser])
+
+  const backPath = isEndUser ? '/home/incidents' : '/dashboard/incidents'
+  const handleBack = () => {
+    if (isEditing && editFormDirty) {
+      setConfirmBack(true)
+    } else {
+      navigate(backPath)
+    }
+  }
 
   if (incidentQuery.isLoading) return <Loading />
   if (incidentQuery.error) return <ErrorFallback error={incidentQuery.error} message="Could not load incident." onRetry={() => incidentQuery.refetch()} />
   if (!incidentQuery.data) return <Loading />
 
   const incident = incidentQuery.data
-  const legalNextStatuses = statusTransitions[incident.status] ?? []
+  const isAssignedToMe = !!currentUser?.id && incident.assigneeId === currentUser.id
+  const canEscalate = isAdminOrSuperAdmin || isAssignedToMe
+  // Once tier-escalated, Status Transition is ADMIN/SUPER_ADMIN-only — the
+  // assignee is cleared on escalation, so this also freezes the old agent out.
+  const hasBeenTierEscalated = (activityQuery.data ?? []).some((e) => e.action === 'ESCALATE_TIER')
+  const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !hasBeenTierEscalated)
+  const legalNextStatuses = (statusTransitions[incident.status] ?? [])
+    .filter((s) => s !== 'REOPENED' || isAdminOrSuperAdmin)
+  const isFirstAssignment = !incident.assignee
+  const priorityOptions = prioritiesQuery.data ?? []
+  const currentPriorityIndex = priorityOptions.findIndex((p) => p.name === incident.priority)
+  const escalationOptions = currentPriorityIndex > 0 ? priorityOptions.slice(0, currentPriorityIndex) : []
+  // Next-tier-only manual escalation: L1 -> L2 -> L3, blocked when unassigned to a tier.
+  const TIER_ORDER = ['L1 Support', 'L2 Support', 'L3 Support']
+  const currentTierIndex = incident.assignmentTeamName ? TIER_ORDER.indexOf(incident.assignmentTeamName) : -1
+  const nextTierName =
+    incident.assignmentTeamId && currentTierIndex >= 0 && currentTierIndex < TIER_ORDER.length - 1
+      ? TIER_ORDER[currentTierIndex + 1]
+      : null
   const visibleComments = isEndUser
     ? (commentsQuery.data ?? []).filter(c => !c.isInternal)
     : (commentsQuery.data ?? [])
@@ -429,11 +572,11 @@ export function IncidentDetail() {
     .map((inc) => ({ value: inc.id, label: `#${inc.number} — ${inc.title}` }))
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(isEndUser ? '/home/incidents' : '/dashboard/incidents')}
+            onClick={handleBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -461,7 +604,9 @@ export function IncidentDetail() {
                 {isAdminOrSuperAdmin && isEditing && (
                   <button
                     onClick={() => {
-                      if (window.confirm('Discard your changes?')) {
+                      if (editFormDirty) {
+                        setConfirmDiscardEdit(true)
+                      } else {
                         setIsEditing(false)
                       }
                     }}
@@ -482,14 +627,24 @@ export function IncidentDetail() {
                     priorityName: incident.priority,
                     categoryName: incident.category,
                     assigneeName: incident.assignee,
+                    assigneeId: incident.assigneeId,
+                    locationId: incident.locationId,
                   }}
-                  users={(usersQuery.data ?? []).map((u) => ({ id: u.id, name: u.displayName }))}
+                  users={(usersQuery.data ?? [])
+                    .filter((u) =>
+                      u.roles?.some((r) => ['AGENT', 'TEAM_LEAD', 'ADMIN', 'SUPER_ADMIN'].includes(r))
+                      || u.id === incident.assigneeId
+                    )
+                    .map((u) => ({ id: u.id, name: u.displayName }))}
                   priorities={prioritiesQuery.data ?? []}
                   categories={categoriesQuery.data ?? []}
+                  locations={locationsQuery.data ?? []}
                   onSaved={() => {
                     setIsEditing(false)
+                    setEditFormDirty(false)
                     queryClient.invalidateQueries({ queryKey: ['incident', id] })
                   }}
+                  onDirtyChange={setEditFormDirty}
                 />
               ) : (
                 <dl className="space-y-3 text-sm">
@@ -525,9 +680,23 @@ export function IncidentDetail() {
                   <dt className="font-medium text-muted-foreground">Time Logged</dt>
                   <dd>{incident.totalLoggedMinutes != null ? `${incident.totalLoggedMinutes} min` : '—'}</dd>
                 </div>
+                {incident.assignmentTeamName && (
+                  <div className="flex justify-between">
+                    <dt className="font-medium text-muted-foreground">Support Tier</dt>
+                    <dd>{incident.assignmentTeamName}</dd>
+                  </div>
+                )}
               </dl>
               )}
             </section>
+
+            {/* Closing Notes (staff-only, shown once closed) */}
+            {!isEndUser && incident.status === 'CLOSED' && incident.closingNotes && (
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="mb-2 text-lg font-semibold">Closing Notes</h2>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{incident.closingNotes}</p>
+              </section>
+            )}
 
             {/* Time Tracking (AGENT+ only) */}
             {!isEndUser && (
@@ -572,25 +741,33 @@ export function IncidentDetail() {
                     {logTimeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Log Work
                   </button>
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="Set original estimate"
-                    value={estimateMinutes}
-                    onChange={(e) => setEstimateMinutes(e.target.value)}
-                    className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <button
-                    onClick={() => {
-                      const minutes = estimateMinutes ? parseInt(estimateMinutes, 10) : null
-                      estimateMutation.mutate({ minutes })
-                    }}
-                    disabled={estimateMutation.isPending}
-                    className="inline-flex items-center rounded-md bg-secondary px-4 py-2 text-sm font-medium transition hover:bg-secondary/80 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {estimateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Set Estimate
-                  </button>
+                  {incident.estimatedMinutes == null ? (
+                    <>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Set original estimate"
+                        value={estimateMinutes}
+                        onChange={(e) => setEstimateMinutes(e.target.value)}
+                        className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                      <button
+                        onClick={() => {
+                          const minutes = estimateMinutes ? parseInt(estimateMinutes, 10) : null
+                          estimateMutation.mutate({ minutes })
+                        }}
+                        disabled={estimateMutation.isPending || !estimateMinutes}
+                        className="inline-flex items-center rounded-md bg-secondary px-4 py-2 text-sm font-medium transition hover:bg-secondary/80 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {estimateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Set Estimate
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Estimate locked ({incident.estimatedMinutes} min) — resets on reassignment, escalation, or reopen.
+                    </span>
+                  )}
                 </div>
 
                 {timeEntriesQuery.isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading work log…</p>}
@@ -607,7 +784,7 @@ export function IncidentDetail() {
                       <div key={entry.id} className="rounded-lg border border-border/50 bg-background p-3 text-sm">
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{entry.timeSpentMinutes} min</span>
-                          <span className="text-xs text-muted-foreground">{new Date(entry.loggedAt).toLocaleString()}</span>
+                          <span className="text-xs text-muted-foreground">{formatDateTime(entry.loggedAt)}</span>
                         </div>
                         {entry.description && (
                           <p className="mt-1 text-muted-foreground">{entry.description}</p>
@@ -620,8 +797,8 @@ export function IncidentDetail() {
               </section>
             )}
 
-            {/* Status Transition Section (AGENT+ only) */}
-            {!isEndUser && legalNextStatuses.length > 0 && (
+            {/* Status Transition Section (ADMIN/SUPER_ADMIN, or the assigned agent pre-escalation) */}
+            {!isEndUser && legalNextStatuses.length > 0 && canTransition && (
               <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Status Transition</h2>
                 <div className="flex flex-wrap items-end gap-4">
@@ -638,14 +815,54 @@ export function IncidentDetail() {
                     ))}
                   </select>
                   <button
-                    onClick={() => selectedStatus && statusMutation.mutate(selectedStatus)}
-                    disabled={!selectedStatus || statusMutation.isPending}
+                    onClick={() =>
+                      selectedStatus &&
+                      statusMutation.mutate({
+                        status: selectedStatus,
+                        closingNotes: (selectedStatus === 'CLOSED' || selectedStatus === 'REOPENED') ? closingNotes.trim() : undefined,
+                      })
+                    }
+                    disabled={
+                      !selectedStatus ||
+                      statusMutation.isPending ||
+                      ((selectedStatus === 'CLOSED' || selectedStatus === 'REOPENED') && !closingNotes.trim())
+                    }
                     className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {statusMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Transition
                   </button>
                 </div>
+                {selectedStatus === 'REOPENED' && (
+                  <div className="mt-4 space-y-2">
+                    <label htmlFor="reopen-reason" className="text-sm font-medium">
+                      Reopen Reason <span className="text-destructive">*</span>
+                    </label>
+                    <textarea
+                      id="reopen-reason"
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      placeholder="Required — explain why this incident is being reopened"
+                      rows={3}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                )}
+                {selectedStatus === 'CLOSED' && (
+                  <div className="mt-4 space-y-2">
+                    <label htmlFor="closing-notes" className="text-sm font-medium">
+                      Closing Notes <span className="text-destructive">*</span>
+                    </label>
+                    <textarea
+                      id="closing-notes"
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      placeholder="Required — summarize the resolution for internal records (staff-only)"
+                      rows={3}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                )}
                 {statusError && (
                   <div className="mt-4">
                     <ErrorFallback error={new Error(statusError)} message={statusError} onRetry={() => incidentQuery.refetch()} />
@@ -654,8 +871,8 @@ export function IncidentDetail() {
               </section>
             )}
 
-            {/* Assign Section (AGENT+ only) */}
-            {!isEndUser && (
+            {/* Assign Section (ADMIN/SUPER_ADMIN only) */}
+            {isAdminOrSuperAdmin && (
               <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Assign</h2>
                 <div className="flex flex-wrap items-end gap-4">
@@ -667,19 +884,166 @@ export function IncidentDetail() {
                     className="w-48 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Select…</option>
-                    {(usersQuery.data ?? []).map((u) => (
-                      <option key={u.id} value={u.id}>{u.displayName}</option>
+                    {assigneeGroups.map((g) => (
+                      <optgroup key={g.tierName} label={g.tierName}>
+                        {g.members.map((m) => (
+                          <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
+                  {teamsQuery.data && assigneeGroups.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No L1/L2/L3 members yet — add agents under Admin → Support Tiers.
+                    </p>
+                  )}
+                  {isFirstAssignment && (
+                    <>
+                      <label htmlFor="assign-priority" className="text-sm font-medium">Priority</label>
+                      <select
+                        id="assign-priority"
+                        value={selectedAssigneePriority}
+                        onChange={(e) => setSelectedAssigneePriority(e.target.value)}
+                        className="w-48 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Keep calculated priority</option>
+                        {priorityOptions.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   <button
-                    onClick={() => selectedAssignee && assignMutation.mutate(selectedAssignee)}
+                    onClick={() => selectedAssignee && assignMutation.mutate({
+                      assigneeId: selectedAssignee,
+                      priorityId: isFirstAssignment ? selectedAssigneePriority || undefined : undefined,
+                    })}
                     disabled={!selectedAssignee || assignMutation.isPending}
                     className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {assignMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Assign
+                    {isFirstAssignment ? 'Assign' : 'Reassign'}
                   </button>
                 </div>
+                {assignError && <p className="mt-4 text-sm text-destructive">{assignError}</p>}
+              </section>
+            )}
+
+            {/* Escalate Tier Section (ADMIN/SUPER_ADMIN, or the assigned agent) */}
+            {canEscalate && (
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Escalate to Next Tier</h2>
+                  {nextTierName && (
+                    <button
+                      onClick={() => setTierEscalateOpen(!tierEscalateOpen)}
+                      className="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {tierEscalateOpen ? 'Cancel' : `Escalate to ${nextTierName}`}
+                    </button>
+                  )}
+                </div>
+                {!incident.assignmentTeamId && (
+                  <p className="text-sm text-muted-foreground">
+                    Assign this incident to a support tier before it can be escalated.
+                  </p>
+                )}
+                {incident.assignmentTeamId && !nextTierName && (
+                  <p className="text-sm text-muted-foreground">
+                    Already at the highest support tier{incident.assignmentTeamName ? ` (${incident.assignmentTeamName})` : ''}.
+                  </p>
+                )}
+                {incident.assignmentTeamId && nextTierName && !tierEscalateOpen && (
+                  <p className="text-sm text-muted-foreground">
+                    Currently with {incident.assignmentTeamName ?? 'a support tier'}.
+                  </p>
+                )}
+                {tierEscalateOpen && nextTierName && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      {incident.assignmentTeamName} → {nextTierName}
+                    </p>
+                    <div className="space-y-2">
+                      <label htmlFor="tier-escalate-reason" className="text-sm font-medium">Reason</label>
+                      <textarea
+                        id="tier-escalate-reason"
+                        value={tierEscalationReason}
+                        onChange={(e) => setTierEscalationReason(e.target.value)}
+                        placeholder="Required — explain why this incident is being escalated"
+                        rows={3}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <button
+                      onClick={() => tierEscalationReason.trim() && tierEscalateMutation.mutate({ reason: tierEscalationReason.trim() })}
+                      disabled={!tierEscalationReason.trim() || tierEscalateMutation.isPending}
+                      className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {tierEscalateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Confirm Escalation to {nextTierName}
+                    </button>
+                    {tierEscalateError && <p className="text-sm text-destructive">{tierEscalateError}</p>}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Escalate Priority Section (ADMIN/SUPER_ADMIN, or the assigned agent) */}
+            {canEscalate && incident.assignee && (
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Escalate Priority</h2>
+                  <button
+                    onClick={() => setEscalateOpen(!escalateOpen)}
+                    className="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {escalateOpen ? 'Cancel' : 'Escalate'}
+                  </button>
+                </div>
+                {escalateOpen && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-end gap-4">
+                      <label htmlFor="escalate-priority" className="text-sm font-medium">New Priority</label>
+                      <select
+                        id="escalate-priority"
+                        value={selectedEscalationPriority}
+                        onChange={(e) => setSelectedEscalationPriority(e.target.value)}
+                        className="w-48 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Select…</option>
+                        {escalationOptions.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {escalationOptions.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No higher priority is available.</p>
+                    )}
+                    <div className="space-y-2">
+                      <label htmlFor="escalate-reason" className="text-sm font-medium">Reason</label>
+                      <textarea
+                        id="escalate-reason"
+                        value={escalationReason}
+                        onChange={(e) => setEscalationReason(e.target.value)}
+                        placeholder="Required — explain why this incident is being escalated"
+                        rows={3}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <button
+                      onClick={() => selectedEscalationPriority && escalationReason.trim() && escalateMutation.mutate({
+                        priorityId: selectedEscalationPriority,
+                        reason: escalationReason.trim(),
+                      })}
+                      disabled={!selectedEscalationPriority || !escalationReason.trim() || escalateMutation.isPending}
+                      className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {escalateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Confirm Escalation
+                    </button>
+                    {escalateError && <p className="text-sm text-destructive">{escalateError}</p>}
+                  </div>
+                )}
               </section>
             )}
 
@@ -704,7 +1068,7 @@ export function IncidentDetail() {
                         )}
                       </div>
                       <p className="text-sm text-foreground">{comment.body}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">{new Date(comment.createdAt).toLocaleString()}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(comment.createdAt)}</p>
                     </div>
                   ))
                 )}
@@ -777,7 +1141,7 @@ export function IncidentDetail() {
                         >
                           Download
                         </button>
-                        <p className="text-xs text-muted-foreground">{new Date(att.createdAt).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTime(att.createdAt)}</p>
                       </div>
                     </div>
                   ))}
@@ -914,46 +1278,48 @@ export function IncidentDetail() {
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Created</dt>
-                  <dd className="text-xs">{new Date(incident.createdAt).toLocaleString()}</dd>
+                  <dd className="text-xs">{formatDateTime(incident.createdAt)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Updated</dt>
-                  <dd className="text-xs">{new Date(incident.updatedAt).toLocaleString()}</dd>
+                  <dd className="text-xs">{formatDateTime(incident.updatedAt)}</dd>
                 </div>
               </dl>
             </div>
 
-            {!isEndUser && (
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-                <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-                  <History className="h-5 w-5" />
-                  Activity Timeline
-                </h2>
-                {activities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No activity yet.</p>
-                ) : (
-                  <ol className="relative space-y-8 border-l border-border pl-6">
-                    {activities.map((activity) => (
-                      <li key={activity.id} className="relative">
-                        <span className="absolute -left-[2.25rem] flex h-5 w-5 items-center justify-center rounded-full bg-muted ring-4 ring-card">
-                          {activity.icon}
-                        </span>
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-foreground">{activity.title}</p>
-                          {activity.description && (
-                            <p className="line-clamp-2 text-xs text-muted-foreground">{activity.description}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground">{new Date(activity.createdAt).toLocaleString() === 'Invalid Date' ? '—' : new Date(activity.createdAt).toLocaleString()}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            )}
+            {!isEndUser && <ActivityTimeline activities={activities} />}
           </aside>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscardEdit}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes that will be lost if you stop editing."
+        confirmLabel="Discard"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmDiscardEdit(false)
+          setIsEditing(false)
+          setEditFormDirty(false)
+        }}
+        onCancel={() => setConfirmDiscardEdit(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmBack}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes that will be lost if you leave this page."
+        confirmLabel="Discard"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmBack(false)
+          navigate(backPath)
+        }}
+        onCancel={() => setConfirmBack(false)}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 package com.alignedcardio.itsm.api.team;
 
+import java.util.List;
 import java.util.UUID;
 
 public record TeamResponse(
@@ -7,6 +8,7 @@ public record TeamResponse(
         String name,
         String description,
         UUID createdBy,
-        UUID updatedBy
+        UUID updatedBy,
+        List<TeamMemberInfo> members
 ) {
 }

@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.api.kb;
 
 import com.alignedcardio.itsm.entity.KbArticle;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record KbArticleSummary(
@@ -12,6 +13,9 @@ public record KbArticleSummary(
         KbArticle.Status status,
         int viewCount,
         int helpfulCount,
-        int version
+        int notHelpfulCount,
+        int version,
+        String excerpt,
+        OffsetDateTime updatedAt
 ) {
 }

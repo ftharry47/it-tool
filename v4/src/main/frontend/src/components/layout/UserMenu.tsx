@@ -3,15 +3,15 @@ import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { LogOut, Settings, User } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { loginRequest } from '../../auth/authConfig'
 import { ThemeToggle } from '../theme/ThemeToggle'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 
 export function UserMenu() {
-  const { instance, accounts } = useMsal()
+  const { accounts } = useMsal()
   const { currentUser, logout } = useAuth()
   const account = accounts[0]
   const [open, setOpen] = useState(false)
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const displayName = currentUser?.displayName ?? account?.name ?? currentUser?.email ?? 'User'
@@ -33,41 +33,10 @@ export function UserMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  useEffect(() => {
-    let objectUrl: string | null = null
-
-    async function loadPhoto() {
-      if (!account) return
-      try {
-        const response = await instance.acquireTokenSilent({
-          ...loginRequest,
-          scopes: ['User.Read'],
-          account,
-        })
-        const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
-          headers: { Authorization: `Bearer ${response.accessToken}` },
-        })
-        if (graphResponse.ok) {
-          const blob = await graphResponse.blob()
-          objectUrl = URL.createObjectURL(blob)
-          setPhotoUrl(objectUrl)
-        }
-      } catch {
-        // Graph photo is optional; fall back to initials
-      }
-    }
-
-    loadPhoto()
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [instance, account])
 
   const handleSignOut = () => {
-    if (window.confirm('Are you sure you want to sign out?')) {
-      logout()
-    }
     setOpen(false)
+    setConfirmSignOut(true)
   }
 
   return (
@@ -79,26 +48,18 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        {photoUrl ? (
-          <img src={photoUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
-        ) : (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            {initials || <User className="h-3 w-3" />}
-          </span>
-        )}
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+          {initials || <User className="h-3 w-3" />}
+        </span>
         <span className="hidden max-w-[120px] truncate md:inline">{displayName}</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-xl border border-border bg-card p-2 shadow-lg">
+        <div className="animate-zoom-in-95 absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-xl border border-border bg-card p-2 shadow-lg">
           <div className="mb-2 flex items-center gap-3 border-b border-border p-2">
-            {photoUrl ? (
-              <img src={photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-            ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                {initials || <User className="h-4 w-4" />}
-              </span>
-            )}
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+              {initials || <User className="h-4 w-4" />}
+            </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{displayName}</p>
               <p className="truncate text-xs text-muted-foreground">{email}</p>
@@ -123,6 +84,20 @@ export function UserMenu() {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Sign out?"
+        description="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          setConfirmSignOut(false)
+          logout()
+        }}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </div>
   )
 }

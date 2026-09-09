@@ -2,54 +2,117 @@ package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.servicerequest.*;
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.FulfillmentTask;
+import com.alignedcardio.itsm.entity.Location;
 import com.alignedcardio.itsm.entity.ServiceRequest;
+import com.alignedcardio.itsm.event.ServiceRequestEvent;
 import com.alignedcardio.itsm.repository.AppUserRepository;
+import com.alignedcardio.itsm.repository.AuditLogRepository;
 import com.alignedcardio.itsm.repository.CatalogItemRepository;
 import com.alignedcardio.itsm.repository.FulfillmentTaskRepository;
+import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.ServiceRequestRepository;
+import com.alignedcardio.itsm.repository.TeamMemberRepository;
+import com.alignedcardio.itsm.util.DateFormats;
+import com.alignedcardio.itsm.util.PhoneNumbers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class ServiceRequestService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ServiceRequestService.class);
+
     private final ServiceRequestRepository serviceRequestRepository;
     private final CatalogItemRepository catalogItemRepository;
     private final FulfillmentTaskRepository fulfillmentTaskRepository;
     private final AppUserRepository appUserRepository;
+    private final LocationRepository locationRepository;
     private final FormSchemaValidator formSchemaValidator;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
+    private final AuditLogRepository auditLogRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final TeamMemberRepository teamMemberRepository;
+
+    /** IT Fulfillment team — fulfiller assignees must be members (seeded in V31). */
+    private static final UUID IT_FULFILLMENT_TEAM_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
 
     public ServiceRequestService(ServiceRequestRepository serviceRequestRepository,
                                  CatalogItemRepository catalogItemRepository,
                                  FulfillmentTaskRepository fulfillmentTaskRepository,
                                  AppUserRepository appUserRepository,
+                                 LocationRepository locationRepository,
                                  FormSchemaValidator formSchemaValidator,
                                  ObjectMapper objectMapper,
-                                 EntityManager entityManager) {
+                                 EntityManager entityManager,
+                                 AuditLogRepository auditLogRepository,
+                                 ApplicationEventPublisher eventPublisher,
+                                 TeamMemberRepository teamMemberRepository) {
         this.serviceRequestRepository = serviceRequestRepository;
         this.catalogItemRepository = catalogItemRepository;
         this.fulfillmentTaskRepository = fulfillmentTaskRepository;
         this.appUserRepository = appUserRepository;
+        this.locationRepository = locationRepository;
         this.formSchemaValidator = formSchemaValidator;
         this.objectMapper = objectMapper;
         this.entityManager = entityManager;
+        this.auditLogRepository = auditLogRepository;
+        this.eventPublisher = eventPublisher;
+        this.teamMemberRepository = teamMemberRepository;
     }
 
     @Transactional(readOnly = true)
     public List<ServiceRequestResponse> list(UUID orgId) {
         return serviceRequestRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyTaskResponse> myTasks(AppUser user) {
+        return fulfillmentTaskRepository
+                .findByAssignee_IdAndStatusInOrderByServiceRequest_CreatedAtDesc(
+                        user.getId(),
+                        List.of(FulfillmentTask.Status.PENDING,
+                                FulfillmentTask.Status.ORDERED,
+                                FulfillmentTask.Status.DELIVERY_DATE_SET))
+                .stream()
+                .map(t -> new MyTaskResponse(
+                        t.getId(),
+                        t.getDescription(),
+                        t.getSequenceOrder(),
+                        t.getStatus(),
+                        t.getExpectedDeliveryDate(),
+                        t.getServiceRequest().getId(),
+                        t.getServiceRequest().getNumber(),
+                        t.getServiceRequest().getCatalogItem() != null
+                                ? t.getServiceRequest().getCatalogItem().getName() : null,
+                        t.getServiceRequest().getRequester() != null
+                                ? t.getServiceRequest().getRequester().getDisplayName() : null,
+                        t.getAssignedAt()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> listMine(AppUser user) {
+        return serviceRequestRepository
+                .findByOrgIdAndRequester_IdOrderByCreatedAtDesc(user.getOrgId(), user.getId())
+                .stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -72,6 +135,13 @@ public class ServiceRequestService {
             throw new IllegalStateException("Invalid form data JSON", e);
         }
         sr.setNeededBy(request.neededBy());
+        PhoneNumbers.requireValid(request.phone());
+        sr.setPhone(request.phone());
+        if (request.locationId() != null) {
+            Location location = locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(orgId, request.locationId())
+                    .orElseThrow(() -> new NotFoundException("Location not found"));
+            sr.setLocation(location);
+        }
         sr.setApprovalRequired(item.isApprovalRequired());
         sr.setCreatedBy(user.getId());
         sr.setUpdatedBy(user.getId());
@@ -84,10 +154,35 @@ public class ServiceRequestService {
     }
 
     @Transactional(readOnly = true)
-    public ServiceRequestResponse get(UUID orgId, UUID id) {
+    public ServiceRequestResponse get(AppUser user, UUID orgId, UUID id) {
         ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Service request not found"));
+        requireVisibleTo(user, sr);
         return toResponse(sr);
+    }
+
+    // Non-staff callers may only see requests they submitted or are assigned to
+    // approve. 404 (not 403) so existence isn't leaked to other users.
+    private void requireVisibleTo(AppUser user, ServiceRequest sr) {
+        if (isStaff(user)) {
+            return;
+        }
+        boolean isRequester = sr.getRequester() != null && sr.getRequester().getId().equals(user.getId());
+        boolean isApprover = sr.getApprover() != null && sr.getApprover().getId().equals(user.getId());
+        if (!isRequester && !isApprover) {
+            throw new NotFoundException("Service request not found");
+        }
+    }
+
+    private boolean isStaff(AppUser user) {
+        if (user == null || user.getUserRoles() == null) {
+            return false;
+        }
+        return user.getUserRoles().stream()
+                .filter(ur -> ur.getRole() != null)
+                .map(ur -> ur.getRole().getName())
+                .anyMatch(name -> "AGENT".equals(name) || "TEAM_LEAD".equals(name)
+                        || "ADMIN".equals(name) || "SUPER_ADMIN".equals(name));
     }
 
     @Transactional
@@ -101,6 +196,17 @@ public class ServiceRequestService {
 
         ServiceRequest.Status target = sr.isApprovalRequired() ? ServiceRequest.Status.PENDING_APPROVAL : ServiceRequest.Status.IN_FULFILLMENT;
         ServiceRequestStatusMachine.validate(sr, target != ServiceRequest.Status.FULFILLED, target);
+
+        recordActivity(sr, user.getId(), "SUBMITTED", null,
+                Map.of("status", target.name(), "number", sr.getNumber()));
+
+        if (target == ServiceRequest.Status.PENDING_APPROVAL) {
+            AppUser approver = resolveApprover(sr);
+            sr.setApprover(approver);
+            recordActivity(sr, user.getId(), "ROUTED_TO_APPROVER", null,
+                    Map.of("approverId", approver.getId(), "approverName", approver.getDisplayName()));
+        }
+
         sr.setStatus(target);
 
         if (target == ServiceRequest.Status.IN_FULFILLMENT) {
@@ -110,7 +216,24 @@ public class ServiceRequestService {
         sr.setUpdatedBy(user.getId());
         sr.setUpdatedAt(OffsetDateTime.now());
 
-        return toResponse(serviceRequestRepository.save(sr));
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+        publishEvent(saved, target.name());
+        return toResponse(saved);
+    }
+
+    private AppUser resolveApprover(ServiceRequest sr) {
+        Location location = sr.getLocation();
+        if (location != null && location.getApprovalManager() != null) {
+            return location.getApprovalManager();
+        }
+        CatalogItem item = sr.getCatalogItem();
+        if (item.getApprover() != null) {
+            return item.getApprover();
+        }
+        throw new IllegalStateException(
+                "Catalog item '" + item.getName() + "' requires approval but no approver could be resolved: "
+                        + "the request's location has no approval manager and the catalog item has no approver. "
+                        + "Set an approval manager on the location or an approver on the catalog item.");
     }
 
     @Transactional
@@ -122,9 +245,12 @@ public class ServiceRequestService {
             throw new IllegalStateException("Request is not pending approval");
         }
 
-        CatalogItem item = sr.getCatalogItem();
-        if (item.isApprovalRequired() && item.getApprover() != null && !item.getApprover().getId().equals(user.getId())) {
-            throw new IllegalStateException("You are not the designated approver for this catalog item");
+        if (sr.getApprover() != null && !sr.getApprover().getId().equals(user.getId())) {
+            throw new IllegalStateException("You are not the designated approver for this request");
+        }
+
+        if (request.comment() == null || request.comment().isBlank()) {
+            throw new IllegalStateException("A comment is required when approving or rejecting a request");
         }
 
         sr.setApprover(user);
@@ -141,11 +267,87 @@ public class ServiceRequestService {
             sr.setStatus(ServiceRequest.Status.REJECTED);
         }
 
+        recordActivity(sr, user.getId(), sr.getApprovalDecision().name(),
+                Map.of("status", "PENDING_APPROVAL"),
+                Map.of("status", sr.getStatus().name(),
+                        "decidedBy", user.getDisplayName(),
+                        "comment", request.comment() != null ? request.comment() : ""));
+
         if (sr.getStatus() == ServiceRequest.Status.APPROVED) {
             seedFulfillmentTasks(user, sr);
         }
 
-        return toResponse(serviceRequestRepository.save(sr));
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+        publishEvent(saved, sr.getApprovalDecision().name());
+        if (sr.getStatus() == ServiceRequest.Status.APPROVED) {
+            publishEvent(saved, "IN_FULFILLMENT");
+        }
+        return toResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> listPendingApprovals(AppUser user) {
+        return serviceRequestRepository
+                .findByOrgIdAndStatusAndApprover_IdOrderByCreatedAtDesc(
+                        user.getOrgId(), ServiceRequest.Status.PENDING_APPROVAL, user.getId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ServiceRequestActivityResponse> getActivity(AppUser user, UUID orgId, UUID id) {
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        requireVisibleTo(user, sr);
+        return auditLogRepository
+                .findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(orgId, "SERVICE_REQUEST", id)
+                .stream()
+                .map(log -> new ServiceRequestActivityResponse(
+                        log.getId(),
+                        log.getAction(),
+                        log.getActorUserId(),
+                        log.getActorUserId() != null
+                                ? appUserRepository.findById(log.getActorUserId()).map(AppUser::getDisplayName).orElse(null)
+                                : null,
+                        log.getBeforeState(),
+                        log.getAfterState(),
+                        log.getCreatedAt()))
+                .toList();
+    }
+
+    private void recordActivity(ServiceRequest sr, UUID actorId, String action,
+                                Map<String, ?> before, Map<String, ?> after) {
+        try {
+            AuditLog log = new AuditLog();
+            log.setOrgId(sr.getOrgId());
+            log.setActorUserId(actorId);
+            log.setAction(action);
+            log.setEntityType("SERVICE_REQUEST");
+            log.setEntityId(sr.getId());
+            log.setBeforeState(before != null ? objectMapper.writeValueAsString(before) : null);
+            log.setAfterState(after != null ? objectMapper.writeValueAsString(after) : null);
+            auditLogRepository.save(log);
+        } catch (Exception e) {
+            logger.warn("Failed to write service request audit log for {}", sr.getId(), e);
+        }
+    }
+
+    private void publishEvent(ServiceRequest sr, String triggerType) {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("status", sr.getStatus().name());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        if (sr.getApprover() != null) {
+            payload.put("approverId", sr.getApprover().getId());
+            payload.put("approverName", sr.getApprover().getDisplayName());
+        }
+        if (sr.getApprovalComment() != null) {
+            payload.put("reason", sr.getApprovalComment());
+        }
+        eventPublisher.publishEvent(new ServiceRequestEvent(sr.getOrgId(), sr.getId(), triggerType, payload));
     }
 
     @Transactional
@@ -162,8 +364,121 @@ public class ServiceRequestService {
         return toResponse(serviceRequestRepository.save(sr));
     }
 
+    private boolean isSuperAdmin(AppUser user) {
+        if (user == null || user.getUserRoles() == null) {
+            return false;
+        }
+        return user.getUserRoles().stream()
+                .filter(ur -> ur.getRole() != null)
+                .map(ur -> ur.getRole().getName())
+                .anyMatch("SUPER_ADMIN"::equals);
+    }
+
+    private boolean isTaskActor(AppUser user, FulfillmentTask task) {
+        return isStaff(user)
+                || (task.getAssignee() != null && task.getAssignee().getId().equals(user.getId()));
+    }
+
+    /**
+     * SUPER_ADMIN picks a specific fulfiller from the IT Fulfillment team.
+     * Assignability is team membership, not a role.
+     */
     @Transactional
-    public ServiceRequestResponse completeTask(AppUser user, UUID orgId, UUID requestId, UUID taskId) {
+    public ServiceRequestResponse assignTask(AppUser user, UUID orgId, UUID requestId, UUID taskId, UUID assigneeId) {
+        if (!isSuperAdmin(user)) {
+            throw new IllegalStateException("Only SUPER_ADMIN can assign fulfillment tasks");
+        }
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, requestId)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        FulfillmentTask task = fulfillmentTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+        if (!task.getServiceRequest().getId().equals(sr.getId())) {
+            throw new NotFoundException("Task does not belong to this request");
+        }
+
+        boolean isMember = teamMemberRepository.findByTeamId(IT_FULFILLMENT_TEAM_ID).stream()
+                .anyMatch(tm -> tm.getUser() != null && tm.getUser().getId().equals(assigneeId));
+        if (!isMember) {
+            throw new IllegalStateException("Assignee must be a member of the IT Fulfillment team");
+        }
+        AppUser assignee = appUserRepository.findById(assigneeId)
+                .orElseThrow(() -> new NotFoundException("Assignee not found"));
+
+        task.setAssignee(assignee);
+        task.setAssignedBy(user);
+        task.setAssignedAt(OffsetDateTime.now());
+        // Status stays PENDING: the fulfiller explicitly marks the task ORDERED
+        // as the first progressive step after assignment.
+        task.setUpdatedBy(user.getId());
+        task.setUpdatedAt(OffsetDateTime.now());
+        fulfillmentTaskRepository.save(task);
+
+        recordActivity(sr, user.getId(), "TASK_ASSIGNED", null,
+                Map.of("taskId", task.getId(), "taskDescription", task.getDescription(),
+                        "assigneeId", assignee.getId(), "assigneeName", assignee.getDisplayName()));
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        payload.put("taskId", task.getId());
+        payload.put("taskDescription", task.getDescription());
+        payload.put("assigneeId", assignee.getId());
+        payload.put("assigneeName", assignee.getDisplayName());
+        eventPublisher.publishEvent(
+                new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "TASK_ASSIGNED", payload));
+
+        return toResponse(sr);
+    }
+
+    /**
+     * Progressive step 1: the assigned fulfiller (or staff) marks the task as
+     * ordered. Only allowed while the task is PENDING and has an assignee.
+     */
+    @Transactional
+    public ServiceRequestResponse markOrdered(AppUser user, UUID orgId, UUID requestId, UUID taskId) {
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, requestId)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        FulfillmentTask task = fulfillmentTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+        if (!task.getServiceRequest().getId().equals(sr.getId())) {
+            throw new NotFoundException("Task does not belong to this request");
+        }
+        if (!isTaskActor(user, task)) {
+            throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task ordered");
+        }
+        if (task.getStatus() != FulfillmentTask.Status.PENDING) {
+            throw new IllegalStateException("Only PENDING tasks can be marked ordered");
+        }
+        if (task.getAssignee() == null) {
+            throw new IllegalStateException("Assign a fulfiller before marking the task ordered");
+        }
+
+        task.setStatus(FulfillmentTask.Status.ORDERED);
+        task.setUpdatedBy(user.getId());
+        task.setUpdatedAt(OffsetDateTime.now());
+        fulfillmentTaskRepository.save(task);
+
+        recordActivity(sr, user.getId(), "TASK_ORDERED", null,
+                Map.of("taskId", task.getId(), "taskDescription", task.getDescription()));
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        payload.put("taskId", task.getId());
+        payload.put("taskDescription", task.getDescription());
+        eventPublisher.publishEvent(
+                new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "TASK_ORDERED", payload));
+
+        return toResponse(sr);
+    }
+
+    @Transactional
+    public ServiceRequestResponse completeTask(AppUser user, UUID orgId, UUID requestId, UUID taskId,
+                                               String closingNotes) {
         ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, requestId)
                 .orElseThrow(() -> new NotFoundException("Service request not found"));
 
@@ -174,19 +489,131 @@ public class ServiceRequestService {
             throw new NotFoundException("Task does not belong to this request");
         }
 
+        if (!isTaskActor(user, task)) {
+            throw new IllegalStateException("Only the assigned fulfiller or staff can complete this task");
+        }
+        if (task.getStatus() != FulfillmentTask.Status.DELIVERED) {
+            throw new IllegalStateException("Only installed tasks can be completed");
+        }
+        if (closingNotes == null || closingNotes.isBlank()) {
+            throw new IllegalStateException("Closing notes are required when completing a fulfillment task");
+        }
+
         task.setStatus(FulfillmentTask.Status.COMPLETED);
+        task.setClosingNotes(closingNotes.trim());
         task.setCompletedAt(OffsetDateTime.now());
         task.setUpdatedBy(user.getId());
         task.setUpdatedAt(OffsetDateTime.now());
         fulfillmentTaskRepository.save(task);
 
+        recordActivity(sr, user.getId(), "TASK_COMPLETED", null,
+                Map.of("taskId", task.getId(), "taskDescription", task.getDescription()));
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        payload.put("taskId", task.getId());
+        payload.put("taskDescription", task.getDescription());
+        eventPublisher.publishEvent(
+                new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "TASK_COMPLETED", payload));
+
         if (areAllTasksCompleted(sr)) {
             sr.setStatus(ServiceRequest.Status.FULFILLED);
             sr.setUpdatedBy(user.getId());
             sr.setUpdatedAt(OffsetDateTime.now());
+            publishEvent(sr, "FULFILLED");
         }
 
         return toResponse(serviceRequestRepository.save(sr));
+    }
+
+    @Transactional
+    public ServiceRequestResponse setDeliveryDate(AppUser user, UUID orgId, UUID requestId,
+                                                  UUID taskId, java.time.LocalDate expectedDeliveryDate) {
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, requestId)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        FulfillmentTask task = fulfillmentTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+        if (!task.getServiceRequest().getId().equals(sr.getId())) {
+            throw new NotFoundException("Task does not belong to this request");
+        }
+        if (expectedDeliveryDate == null) {
+            throw new IllegalStateException("expectedDeliveryDate is required");
+        }
+        if (!isTaskActor(user, task)) {
+            throw new IllegalStateException("Only the assigned fulfiller or staff can set the delivery date");
+        }
+        if (task.getStatus() != FulfillmentTask.Status.ORDERED) {
+            throw new IllegalStateException("Only ORDERED tasks can have a delivery date set");
+        }
+
+        task.setExpectedDeliveryDate(expectedDeliveryDate);
+        task.setStatus(FulfillmentTask.Status.DELIVERY_DATE_SET);
+        task.setUpdatedBy(user.getId());
+        task.setUpdatedAt(OffsetDateTime.now());
+        fulfillmentTaskRepository.save(task);
+
+        recordActivity(sr, user.getId(), "DELIVERY_DATE_SET", null,
+                Map.of("taskId", task.getId(), "expectedDeliveryDate", expectedDeliveryDate.toString()));
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        payload.put("taskId", task.getId());
+        payload.put("taskDescription", task.getDescription());
+        payload.put("expectedDeliveryDate", DateFormats.formatDate(expectedDeliveryDate));
+        if (task.getAssignee() != null) {
+            payload.put("assigneeId", task.getAssignee().getId());
+            payload.put("assigneeName", task.getAssignee().getDisplayName());
+        }
+        payload.put("locationName", sr.getLocation() != null ? sr.getLocation().getName() : "the delivery location");
+        eventPublisher.publishEvent(
+                new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "DELIVERY_DATE_SET", payload));
+
+        return toResponse(sr);
+    }
+
+    @Transactional
+    public ServiceRequestResponse markDelivered(AppUser user, UUID orgId, UUID requestId, UUID taskId) {
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, requestId)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        FulfillmentTask task = fulfillmentTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+        if (!task.getServiceRequest().getId().equals(sr.getId())) {
+            throw new NotFoundException("Task does not belong to this request");
+        }
+
+        if (!isTaskActor(user, task)) {
+            throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task installed");
+        }
+        if (task.getStatus() != FulfillmentTask.Status.DELIVERY_DATE_SET) {
+            throw new IllegalStateException("A delivery date must be set before marking the task installed");
+        }
+
+        task.setDeliveredAt(OffsetDateTime.now());
+        task.setStatus(FulfillmentTask.Status.DELIVERED);
+        task.setUpdatedBy(user.getId());
+        task.setUpdatedAt(OffsetDateTime.now());
+        fulfillmentTaskRepository.save(task);
+
+        recordActivity(sr, user.getId(), "DELIVERED", null,
+                Map.of("taskId", task.getId(), "taskDescription", task.getDescription()));
+
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("id", sr.getId());
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterId", sr.getRequester().getId());
+        payload.put("taskId", task.getId());
+        payload.put("taskDescription", task.getDescription());
+        eventPublisher.publishEvent(
+                new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "DELIVERED", payload));
+
+        return toResponse(sr);
     }
 
     private void seedFulfillmentTasks(AppUser user, ServiceRequest sr) {
@@ -245,6 +672,9 @@ public class ServiceRequestService {
                 sr.getApprovalComment(),
                 sr.getDecidedAt(),
                 sr.getNeededBy(),
+                sr.getLocation() != null ? sr.getLocation().getId() : null,
+                sr.getLocation() != null ? sr.getLocation().getName() : null,
+                sr.getPhone(),
                 tasks.stream()
                         .sorted(Comparator.comparingInt(FulfillmentTask::getSequenceOrder))
                         .map(t -> new FulfillmentTaskResponse(
@@ -254,7 +684,9 @@ public class ServiceRequestService {
                                 t.getStatus(),
                                 t.getAssignee() != null ? t.getAssignee().getId() : null,
                                 t.getAssignee() != null ? t.getAssignee().getDisplayName() : null,
-                                t.getCompletedAt()))
+                                t.getCompletedAt(),
+                                t.getExpectedDeliveryDate(),
+                                t.getDeliveredAt()))
                         .toList(),
                 sr.getCreatedAt()
         );

@@ -16,6 +16,7 @@ public record ChangeCreateRequest(
         OffsetDateTime plannedStart,
         OffsetDateTime plannedEnd,
         String rollbackPlan,
-        UUID linkedProblemId
+        UUID linkedProblemId,
+        UUID locationId
 ) {
 }

@@ -11,7 +11,9 @@ import com.alignedcardio.itsm.entity.Role;
 import com.alignedcardio.itsm.entity.UserRole;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.AuditLogRepository;
+import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.RoleRepository;
+import com.alignedcardio.itsm.repository.TeamMemberRepository;
 import com.alignedcardio.itsm.repository.UserRoleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -38,17 +40,23 @@ public class UserService {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final AuditLogRepository auditLogRepository;
+    private final LocationRepository locationRepository;
+    private final TeamMemberRepository teamMemberRepository;
     private final ObjectMapper objectMapper;
 
     public UserService(AppUserRepository appUserRepository,
                        RoleRepository roleRepository,
                        UserRoleRepository userRoleRepository,
                        AuditLogRepository auditLogRepository,
+                       LocationRepository locationRepository,
+                       TeamMemberRepository teamMemberRepository,
                        ObjectMapper objectMapper) {
         this.appUserRepository = appUserRepository;
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
         this.auditLogRepository = auditLogRepository;
+        this.locationRepository = locationRepository;
+        this.teamMemberRepository = teamMemberRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -193,6 +201,10 @@ public class UserService {
 
     @Transactional
     public UserResponse createLocalUser(UUID orgId, UserCreateRequest request) {
+        if (appUserRepository.findByOrgIdAndEmailIgnoreCase(orgId, request.email()).isPresent()) {
+            throw new IllegalStateException("A user with email " + request.email() + " already exists");
+        }
+
         Role role = roleRepository.findByOrgIdAndName(orgId, request.roleName())
                 .orElseThrow(() -> new NotFoundException("Role not found"));
 
@@ -214,6 +226,7 @@ public class UserService {
         userRole.setRole(role);
         userRole.setOrgId(orgId);
         userRoleRepository.save(userRole);
+        user.getUserRoles().add(userRole);
 
         return toUserResponse(user);
     }
@@ -251,7 +264,7 @@ public class UserService {
         );
     }
 
-    private CurrentUser toCurrentUser(AppUser user) {
+    public CurrentUser toCurrentUser(AppUser user) {
         List<String> roles = user.getUserRoles().stream()
                 .map(ur -> ur.getRole().getName())
                 .toList();
@@ -266,7 +279,16 @@ public class UserService {
                 roles,
                 user.isActive(),
                 user.isMfaEnabled(),
-                user.getManagerId()
+                user.getManagerId(),
+                locationRepository.existsByApprovalManager_IdAndDeletedAtIsNull(user.getId()),
+                teamMemberRepository.findByUserId(user.getId()).stream()
+                        .map(tm -> tm.getTeam() != null ? tm.getTeam().getId() : tm.getTeamId())
+                        .filter(java.util.Objects::nonNull)
+                        .toList(),
+                teamMemberRepository.findByUserId(user.getId()).stream()
+                        .map(tm -> tm.getTeam() != null ? tm.getTeam().getName() : null)
+                        .filter(java.util.Objects::nonNull)
+                        .toList()
         );
     }
 }

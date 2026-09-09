@@ -39,10 +39,18 @@ class NotificationServiceTest {
     @Mock
     private AppUserRepository appUserRepository;
 
+    @Mock
+    private PushService pushService;
+
+    private NotificationService service() {
+        return new NotificationService(
+                notificationRepository, preferenceRepository, messagingTemplate,
+                Optional.of(mailSender), appUserRepository, Optional.empty(), pushService);
+    }
+
     @Test
     void inAppSendPushesToCorrectUserSession() {
-        NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
+        NotificationService service = service();
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -73,8 +81,7 @@ class NotificationServiceTest {
 
     @Test
     void emailSendRespectsDigestMode() {
-        NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
+        NotificationService service = service();
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -101,8 +108,7 @@ class NotificationServiceTest {
 
     @Test
     void immediateEmailIsSentWhenNoDigest() {
-        NotificationService service = new NotificationService(
-                notificationRepository, preferenceRepository, messagingTemplate, Optional.of(mailSender), appUserRepository, Optional.empty());
+        NotificationService service = service();
 
         UUID orgId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -127,5 +133,216 @@ class NotificationServiceTest {
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(captor.capture());
         assertEquals("user@example.com", captor.getValue().getTo()[0]);
+    }
+
+    @Test
+    void digestBypassTypeSendsImmediatelyEvenWithDailyDigest() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(false);
+        preference.setEmailEnabled(true);
+        preference.setEmailAddress("user@example.com");
+        preference.setDigestMode(NotificationPreference.DigestMode.DAILY);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // INCIDENT_ASSIGNED is action-required — must not wait for the daily digest.
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "INCIDENT_ASSIGNED", "Subject", "Body", null, null, Notification.Channel.EMAIL);
+
+        Notification result = service.send(request);
+
+        assertEquals(Notification.DeliveryStatus.SENT, result.getEmailStatus());
+        verify(mailSender).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void digestibleTypeStillQueuesWithDailyDigest() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(false);
+        preference.setEmailEnabled(true);
+        preference.setEmailAddress("user@example.com");
+        preference.setDigestMode(NotificationPreference.DigestMode.DAILY);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // INCIDENT_UPDATE is informational — stays queued for the digest.
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "INCIDENT_UPDATE", "Subject", "Body", null, null, Notification.Channel.EMAIL);
+
+        Notification result = service.send(request);
+
+        assertEquals(Notification.DeliveryStatus.PENDING, result.getEmailStatus());
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void perChannelContentUsedWhenPresent() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(true);
+        preference.setEmailEnabled(true);
+        preference.setEmailAddress("user@example.com");
+        preference.setPushEnabled(true);
+        preference.setDigestMode(NotificationPreference.DigestMode.NONE);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pushService.sendToUser(any(), anyString(), anyString(), anyString())).thenReturn(true);
+
+        NotificationContent content = new NotificationContent(
+                "EMAIL SUBJECT", "EMAIL BODY",
+                "INAPP SUBJECT", "INAPP BODY",
+                "PUSH TITLE", "PUSH BODY");
+
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "TEST", "fallback", "fallback", "INCIDENT", entityId,
+                Notification.Channel.BOTH, content);
+
+        Notification result = service.send(request);
+
+        // In-app stores the in-app variant.
+        assertEquals("INAPP SUBJECT", result.getSubject());
+        assertEquals("INAPP BODY", result.getBody());
+        // Email got the email variant.
+        ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(mail.capture());
+        assertEquals("EMAIL SUBJECT", mail.getValue().getSubject());
+        // Push got the push variant.
+        verify(pushService).sendToUser(eq(userId), eq("PUSH TITLE"), eq("PUSH BODY"), anyString());
+    }
+
+    @Test
+    void pushSkippedWhenPreferenceDisabled() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(true);
+        preference.setEmailEnabled(false);
+        preference.setPushEnabled(false);
+        preference.setDigestMode(NotificationPreference.DigestMode.NONE);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "TEST", "Subject", "Body", null, null, Notification.Channel.IN_APP);
+
+        Notification result = service.send(request);
+
+        assertNull(result.getPushStatus());
+        verifyNoInteractions(pushService);
+    }
+
+    @Test
+    void pushAttemptedWhenPreferenceEnabled() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(true);
+        preference.setEmailEnabled(false);
+        preference.setPushEnabled(true);
+        preference.setDigestMode(NotificationPreference.DigestMode.NONE);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pushService.sendToUser(eq(userId), anyString(), anyString(), anyString())).thenReturn(true);
+
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "TEST", "Subject", "Body", null, null, Notification.Channel.IN_APP);
+
+        Notification result = service.send(request);
+
+        assertEquals(Notification.DeliveryStatus.SENT, result.getPushStatus());
+        verify(pushService).sendToUser(eq(userId), eq("Subject"), eq("Body"), anyString());
+    }
+
+    @Test
+    void pushNotAttemptedForEmailOnlyChannel() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(false);
+        preference.setEmailEnabled(true);
+        preference.setEmailAddress("user@example.com");
+        preference.setPushEnabled(true);
+        preference.setDigestMode(NotificationPreference.DigestMode.NONE);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "TEST", "Subject", "Body", null, null, Notification.Channel.EMAIL);
+
+        Notification result = service.send(request);
+
+        assertNull(result.getPushStatus());
+        verifyNoInteractions(pushService);
+    }
+
+    @Test
+    void pushFailureDoesNotAffectOtherChannels() {
+        NotificationService service = service();
+
+        UUID orgId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        NotificationPreference preference = new NotificationPreference();
+        preference.setOrgId(orgId);
+        preference.setUserId(userId);
+        preference.setInAppEnabled(true);
+        preference.setEmailEnabled(false);
+        preference.setPushEnabled(true);
+        preference.setDigestMode(NotificationPreference.DigestMode.NONE);
+
+        when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(pushService.sendToUser(any(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("push exploded"));
+
+        NotificationRequest request = new NotificationRequest(
+                orgId, userId, "TEST", "Subject", "Body", null, null, Notification.Channel.IN_APP);
+
+        Notification result = service.send(request);
+
+        assertEquals(Notification.DeliveryStatus.SENT, result.getInAppStatus());
+        assertEquals(Notification.DeliveryStatus.FAILED, result.getPushStatus());
     }
 }

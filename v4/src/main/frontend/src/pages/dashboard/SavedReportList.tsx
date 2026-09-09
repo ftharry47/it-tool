@@ -5,8 +5,11 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { Play, Plus, Save, Trash2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { DateTimeInput } from '../../components/ui/DateTimeInput'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
+import { toEasternInputValue } from '../../lib/date'
 
 interface SavedReport {
   id: string
@@ -41,10 +44,7 @@ function toIso(input: string) {
 }
 
 function toLocalInput(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return toEasternInputValue(iso)
 }
 
 export function SavedReportList() {
@@ -60,6 +60,8 @@ export function SavedReportList() {
   const [to, setTo] = useState('')
   const [filters, setFilters] = useState<QueryFilter[]>([{ field: '', op: '', value: '' }])
   const [result, setResult] = useState<QueryResult | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState<(() => void) | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<SavedReport | null>(null)
 
   const listQuery = useQuery<SavedReport[]>({
     queryKey: ['saved-reports'],
@@ -138,6 +140,35 @@ export function SavedReportList() {
     }
   }
 
+  function isFormDirty(): boolean {
+    if (editing) {
+      const dr = parseJson<{ from: string; to: string } | null>(editing.dateRange, null)
+      const f = parseJson<QueryFilter[]>(editing.filters, [])
+      const origFilters = f.length ? f : [{ field: '', op: '', value: '' }]
+      return (
+        name !== editing.name ||
+        entity !== editing.entity ||
+        groupBy !== (editing.groupBy ?? '') ||
+        from !== (dr?.from ? toLocalInput(dr.from) : '') ||
+        to !== (dr?.to ? toLocalInput(dr.to) : '') ||
+        JSON.stringify(filters) !== JSON.stringify(origFilters)
+      )
+    }
+    return (
+      name !== '' ||
+      entity !== '' ||
+      groupBy !== '' ||
+      from !== '' ||
+      to !== '' ||
+      JSON.stringify(filters) !== JSON.stringify([{ field: '', op: '', value: '' }])
+    )
+  }
+
+  function guardDiscard(action: () => void) {
+    if (isFormDirty()) setConfirmDiscard(() => action)
+    else action()
+  }
+
   function resetForm() {
     setEditing(null)
     setName('')
@@ -184,7 +215,32 @@ export function SavedReportList() {
   const chartData = (result?.rows ?? []).map((r) => ({ name: String(r.group), count: Number(r.count) }))
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ConfirmDialog
+        open={confirmDiscard !== null}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this report that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const action = confirmDiscard
+          setConfirmDiscard(null)
+          action?.()
+        }}
+        onCancel={() => setConfirmDiscard(null)}
+      />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete saved report?"
+        description={`The report "${pendingDelete?.name}" will be permanently deleted.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDelete) deleteMutation.mutate(pendingDelete.id)
+          setPendingDelete(null)
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
       <div className="mx-auto max-w-5xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Saved Reports</h1>
 
@@ -202,10 +258,10 @@ export function SavedReportList() {
                   <button onClick={() => runMutation.mutate(row)} className="rounded-md border border-border p-1.5 transition hover:bg-muted" title="Run">
                     <Play className="h-4 w-4" />
                   </button>
-                  <button onClick={() => loadEdit(row)} className="rounded-md border border-border p-1.5 transition hover:bg-muted" title="Edit">
+                  <button onClick={() => guardDiscard(() => loadEdit(row))} className="rounded-md border border-border p-1.5 transition hover:bg-muted" title="Edit">
                     <Plus className="h-4 w-4" />
                   </button>
-                  <button onClick={() => deleteMutation.mutate(row.id)} className="rounded-md border border-border p-1.5 transition hover:bg-muted" title="Delete">
+                  <button onClick={() => setPendingDelete(row)} className="rounded-md border border-border p-1.5 transition hover:bg-muted" title="Delete">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -254,8 +310,8 @@ export function SavedReportList() {
             <div className="space-y-2 md:col-span-3">
               <label className="text-sm font-medium">Date Range</label>
               <div className="flex gap-2">
-                <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                <DateTimeInput value={from} onChange={(e) => setFrom(e.target.value)} />
+                <DateTimeInput value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
             </div>
           </div>
@@ -288,7 +344,7 @@ export function SavedReportList() {
               <Save className="h-4 w-4" />
               {editing ? 'Update' : 'Create'}
             </button>
-            <button onClick={resetForm} className="rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">Reset</button>
+            <button onClick={() => guardDiscard(resetForm)} className="rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">Reset</button>
           </div>
           {saveMutation.error && <p className="mt-2 text-sm text-destructive">{saveMutation.error.message}</p>}
         </div>

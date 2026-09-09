@@ -1,6 +1,7 @@
 package com.alignedcardio.itsm.service.reporting;
 
 import com.alignedcardio.itsm.api.reporting.ReportMetadataResponse;
+import com.alignedcardio.itsm.api.reporting.TicketsByLocationResponse;
 import com.alignedcardio.itsm.entity.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -31,11 +32,11 @@ public class ReportingService {
             "service_request", ServiceRequest.class);
 
     private static final Map<String, Set<String>> FIELDS_BY_ENTITY = Map.of(
-            "incident", Set.of("orgId", "status", "priority", "category", "assignee", "requester", "createdAt", "resolvedAt", "closedAt", "impact", "urgency"),
+            "incident", Set.of("orgId", "status", "priority", "category", "assignee", "requester", "createdAt", "resolvedAt", "closedAt", "impact", "urgency", "location"),
             "issue", Set.of("orgId", "status", "priority", "createdAt", "assignee", "reporter", "type"),
             "problem", Set.of("orgId", "status", "createdAt"),
             "change", Set.of("orgId", "status", "createdAt", "requester"),
-            "service_request", Set.of("orgId", "status", "createdAt", "requester", "catalogItem"));
+            "service_request", Set.of("orgId", "status", "createdAt", "requester", "catalogItem", "location"));
 
     private static final Map<String, String> DATE_FIELD_BY_ENTITY = Map.of(
             "incident", "createdAt",
@@ -351,7 +352,7 @@ public class ReportingService {
         Join<Incident, AppUser> assignee = root.join("assignee");
         Expression<String> agentName = cb.coalesce(assignee.get("displayName"), assignee.get("email"));
 
-        cq.multiselect(agentName, cb.count(root));
+        cq.multiselect(root.get("id"), agentName);
         cq.where(
                 cb.equal(root.get("orgId"), orgId),
                 root.get("status").in(
@@ -360,18 +361,47 @@ public class ReportingService {
                         Incident.Status.ON_HOLD,
                         Incident.Status.WAITING_ON_CUSTOMER,
                         Incident.Status.REOPENED));
-        cq.groupBy(agentName);
 
-        return entityManager.createQuery(cq)
-                .getResultList()
-                .stream()
-                .map(t -> {
-                    Map<String, Object> row = new HashMap<>();
-                    row.put("agentName", t.get(0, String.class));
-                    row.put("openCount", t.get(1, Long.class));
-                    return row;
-                })
-                .collect(Collectors.toList());
+        List<Tuple> rows = entityManager.createQuery(cq).getResultList();
+        List<UUID> incidentIds = rows.stream()
+                .map(t -> t.get(0, UUID.class))
+                .toList();
+
+        // Batch-load SLA instances for all listed incidents — one query, no N+1.
+        Map<UUID, SlaInstance.BreachStatus> slaByIncident = incidentIds.isEmpty()
+                ? Map.of()
+                : entityManager.createQuery(
+                        "SELECT si FROM SlaInstance si WHERE si.incident.id IN :ids", SlaInstance.class)
+                        .setParameter("ids", incidentIds)
+                        .getResultList()
+                        .stream()
+                        .collect(Collectors.toMap(si -> si.getIncident().getId(), SlaInstance::getBreachStatus, (a, b) -> a));
+
+        Map<String, Map<String, Object>> byAgent = new LinkedHashMap<>();
+        for (Tuple t : rows) {
+            UUID incidentId = t.get(0, UUID.class);
+            String name = t.get(1, String.class);
+            SlaInstance.BreachStatus status = slaByIncident.get(incidentId);
+            Map<String, Object> row = byAgent.computeIfAbsent(name, k -> {
+                Map<String, Object> r = new HashMap<>();
+                r.put("agentName", k);
+                r.put("openCount", 0L);
+                r.put("onTrack", 0L);
+                r.put("atRisk", 0L);
+                r.put("breached", 0L);
+                r.put("noSla", 0L);
+                return r;
+            });
+            row.put("openCount", ((Long) row.get("openCount")) + 1);
+            String key = status == null ? "noSla"
+                    : switch (status) {
+                        case ON_TRACK -> "onTrack";
+                        case AT_RISK -> "atRisk";
+                        case BREACHED -> "breached";
+                    };
+            row.put(key, ((Long) row.get(key)) + 1);
+        }
+        return new ArrayList<>(byAgent.values());
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -444,6 +474,216 @@ public class ReportingService {
                 "total", totalCount,
                 "breached", breachedCount,
                 "compliancePercent", Math.round(compliance * 100.0) / 100.0);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<TicketsByLocationResponse> ticketsByLocation(UUID orgId, String status, OffsetDateTime from, OffsetDateTime to) {
+        Set<Incident.Status> incidentStatuses = resolveIncidentStatuses(status);
+        Set<ServiceRequest.Status> srStatuses = resolveServiceRequestStatuses(status);
+
+        Map<UUID, LocationStats> byLocation = new LinkedHashMap<>();
+
+        // Seed all active locations so locations with zero activity still appear.
+        entityManager.createQuery(
+                        "SELECT l FROM Location l WHERE l.orgId = :orgId AND l.deletedAt IS NULL ORDER BY l.name",
+                        Location.class)
+                .setParameter("orgId", orgId)
+                .getResultStream()
+                .forEach(l -> byLocation.computeIfAbsent(l.getId(), k -> new LocationStats(l.getId(), l.getName())));
+
+        collectIncidentStats(byLocation, orgId, incidentStatuses, from, to);
+        collectServiceRequestStats(byLocation, orgId, srStatuses, from, to);
+        collectBreachedStats(byLocation, orgId, incidentStatuses, srStatuses, from, to);
+
+        return byLocation.values().stream()
+                .filter(s -> s.totalOpen() > 0 || s.resolved > 0 || s.breached > 0)
+                .map(LocationStats::toResponse)
+                .sorted(Comparator.comparingLong(TicketsByLocationResponse::totalOpen).reversed()
+                        .thenComparing(TicketsByLocationResponse::locationName))
+                .collect(Collectors.toList());
+    }
+
+    private Set<Incident.Status> resolveIncidentStatuses(String status) {
+        if (status == null || status.isBlank() || "OPEN".equalsIgnoreCase(status)) {
+            return Set.of(Incident.Status.NEW, Incident.Status.IN_PROGRESS,
+                    Incident.Status.ON_HOLD, Incident.Status.REOPENED, Incident.Status.WAITING_ON_CUSTOMER);
+        }
+        if ("ALL".equalsIgnoreCase(status)) {
+            return Set.of(Incident.Status.values());
+        }
+        return parseEnumSet(Incident.Status.class, status);
+    }
+
+    private Set<ServiceRequest.Status> resolveServiceRequestStatuses(String status) {
+        if (status == null || status.isBlank() || "OPEN".equalsIgnoreCase(status)) {
+            return Set.of(ServiceRequest.Status.SUBMITTED, ServiceRequest.Status.PENDING_APPROVAL,
+                    ServiceRequest.Status.APPROVED, ServiceRequest.Status.IN_FULFILLMENT);
+        }
+        if ("ALL".equalsIgnoreCase(status)) {
+            return Set.of(ServiceRequest.Status.values());
+        }
+        return parseEnumSet(ServiceRequest.Status.class, status);
+    }
+
+    private <E extends Enum<E>> Set<E> parseEnumSet(Class<E> clazz, String csv) {
+        Set<E> result = EnumSet.noneOf(clazz);
+        for (String part : csv.split(",")) {
+            String s = part.trim();
+            if (s.isEmpty()) continue;
+            try {
+                result.add(Enum.valueOf(clazz, s.toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return result.isEmpty() ? EnumSet.allOf(clazz) : result;
+    }
+
+    private void collectIncidentStats(Map<UUID, LocationStats> byLocation, UUID orgId,
+                                      Set<Incident.Status> statuses, OffsetDateTime from, OffsetDateTime to) {
+        List<String> resolvedConditions = new ArrayList<>();
+        if (from != null) resolvedConditions.add("i.resolvedAt >= :from");
+        if (to != null) resolvedConditions.add("i.resolvedAt <= :to");
+
+        StringBuilder jpql = new StringBuilder(
+                "SELECT l.id, COALESCE(l.name, 'Unassigned'), COUNT(i), MIN(i.createdAt), " +
+                        "SUM(CASE WHEN i.resolvedAt IS NOT NULL");
+        if (!resolvedConditions.isEmpty()) {
+            jpql.append(" AND (").append(String.join(" AND ", resolvedConditions)).append(")");
+        }
+        jpql.append(" THEN 1 ELSE 0 END) " +
+                "FROM Incident i LEFT JOIN i.location l " +
+                "WHERE i.orgId = :orgId AND i.deletedAt IS NULL AND i.status IN :statuses");
+        if (from != null) jpql.append(" AND i.createdAt >= :from");
+        if (to != null) jpql.append(" AND i.createdAt <= :to");
+        jpql.append(" GROUP BY l.id, l.name");
+
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql.toString(), Tuple.class)
+                .setParameter("orgId", orgId)
+                .setParameter("statuses", statuses);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+
+        for (Tuple t : q.getResultList()) {
+            UUID id = t.get(0, UUID.class);
+            String name = t.get(1, String.class);
+            long count = t.get(2, Long.class);
+            OffsetDateTime oldest = t.get(3, OffsetDateTime.class);
+            long resolved = t.get(4, Long.class);
+            LocationStats s = byLocation.computeIfAbsent(id, k -> new LocationStats(id, name));
+            s.openIncidents += count;
+            s.resolved += resolved;
+            s.updateOldest(oldest);
+        }
+    }
+
+    private void collectServiceRequestStats(Map<UUID, LocationStats> byLocation, UUID orgId,
+                                            Set<ServiceRequest.Status> statuses, OffsetDateTime from, OffsetDateTime to) {
+        List<String> fulfilledConditions = new ArrayList<>();
+        if (from != null) fulfilledConditions.add("sr.createdAt >= :from");
+        if (to != null) fulfilledConditions.add("sr.createdAt <= :to");
+
+        StringBuilder jpql = new StringBuilder(
+                "SELECT l.id, COALESCE(l.name, 'Unassigned'), COUNT(sr), MIN(sr.createdAt), " +
+                        "SUM(CASE WHEN sr.status = :fulfilled");
+        if (!fulfilledConditions.isEmpty()) {
+            jpql.append(" AND (").append(String.join(" AND ", fulfilledConditions)).append(")");
+        }
+        jpql.append(" THEN 1 ELSE 0 END) " +
+                "FROM ServiceRequest sr LEFT JOIN sr.location l " +
+                "WHERE sr.orgId = :orgId AND sr.deletedAt IS NULL AND sr.status IN :statuses");
+        if (from != null) jpql.append(" AND sr.createdAt >= :from");
+        if (to != null) jpql.append(" AND sr.createdAt <= :to");
+        jpql.append(" GROUP BY l.id, l.name");
+
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql.toString(), Tuple.class)
+                .setParameter("orgId", orgId)
+                .setParameter("statuses", statuses)
+                .setParameter("fulfilled", ServiceRequest.Status.FULFILLED);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+
+        for (Tuple t : q.getResultList()) {
+            UUID id = t.get(0, UUID.class);
+            String name = t.get(1, String.class);
+            long count = t.get(2, Long.class);
+            OffsetDateTime oldest = t.get(3, OffsetDateTime.class);
+            long resolved = t.get(4, Long.class);
+            LocationStats s = byLocation.computeIfAbsent(id, k -> new LocationStats(id, name));
+            s.openServiceRequests += count;
+            s.resolved += resolved;
+            s.updateOldest(oldest);
+        }
+    }
+
+    private void collectBreachedStats(Map<UUID, LocationStats> byLocation, UUID orgId,
+                                      Set<Incident.Status> incidentStatuses,
+                                      Set<ServiceRequest.Status> srStatuses,
+                                      OffsetDateTime from, OffsetDateTime to) {
+        // Incident breaches
+        StringBuilder jpql = new StringBuilder(
+                "SELECT i.location.id, COUNT(si) " +
+                        "FROM SlaInstance si JOIN si.incident i " +
+                        "WHERE si.breachStatus = :breached AND i.orgId = :orgId AND i.deletedAt IS NULL AND i.status IN :statuses");
+        if (from != null) jpql.append(" AND i.createdAt >= :from");
+        if (to != null) jpql.append(" AND i.createdAt <= :to");
+        jpql.append(" GROUP BY i.location.id");
+
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql.toString(), Tuple.class)
+                .setParameter("breached", SlaInstance.BreachStatus.BREACHED)
+                .setParameter("orgId", orgId)
+                .setParameter("statuses", incidentStatuses);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+
+        for (Tuple t : q.getResultList()) {
+            UUID id = t.get(0, UUID.class);
+            long count = t.get(1, Long.class);
+            byLocation.computeIfAbsent(id, k -> new LocationStats(id, "Unassigned")).breached += count;
+        }
+    }
+
+    private static final class LocationStats {
+        final UUID locationId;
+        String locationName;
+        long openIncidents;
+        long openServiceRequests;
+        long resolved;
+        long breached;
+        OffsetDateTime oldestOpen;
+
+        LocationStats(UUID locationId, String locationName) {
+            this.locationId = locationId;
+            this.locationName = locationName;
+        }
+
+        long totalOpen() {
+            return openIncidents + openServiceRequests;
+        }
+
+        void updateOldest(OffsetDateTime createdAt) {
+            if (createdAt == null) return;
+            if (oldestOpen == null || createdAt.isBefore(oldestOpen)) {
+                oldestOpen = createdAt;
+            }
+        }
+
+        Integer oldestOpenDays() {
+            if (oldestOpen == null) return null;
+            long days = ChronoUnit.DAYS.between(oldestOpen, OffsetDateTime.now());
+            return days < 0 ? 0 : (int) days;
+        }
+
+        TicketsByLocationResponse toResponse() {
+            return new TicketsByLocationResponse(
+                    locationId,
+                    locationName,
+                    totalOpen(),
+                    openIncidents,
+                    openServiceRequests,
+                    oldestOpenDays(),
+                    resolved,
+                    breached);
+        }
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

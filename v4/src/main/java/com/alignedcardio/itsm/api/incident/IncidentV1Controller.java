@@ -45,6 +45,7 @@ public class IncidentV1Controller {
                                         @RequestParam(name = "search", required = false) String query,
                                         @RequestParam(required = false) String status,
                                         @RequestParam(required = false) UUID assigneeId,
+                                        @RequestParam(required = false) UUID teamId,
                                         @RequestParam(required = false) Boolean unassigned,
                                         @RequestParam(required = false, defaultValue = "20") int limit) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -59,7 +60,7 @@ public class IncidentV1Controller {
             if (unassigned != null && unassigned) {
                 return incidentService.listUnassigned(user.getOrgId(), statuses, limit);
             }
-            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, limit);
+            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, teamId, limit);
         }
         if (unassigned != null && unassigned) {
             return incidentService.listUnassigned(user.getOrgId(), null, limit);
@@ -82,6 +83,14 @@ public class IncidentV1Controller {
                                    @Valid @RequestBody IncidentCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.create(user, request);
+    }
+
+    @GetMapping("/escalations")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','TEAM_LEAD')")
+    public List<EscalationEntry> escalations(@AuthenticationPrincipal Jwt jwt,
+                                             @RequestParam(required = false, defaultValue = "10") int limit) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.recentEscalations(user.getOrgId(), limit);
     }
 
     @GetMapping("/my")
@@ -109,7 +118,7 @@ public class IncidentV1Controller {
     public IncidentResponse get(@AuthenticationPrincipal Jwt jwt,
                                 @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
-        return incidentService.get(user.getOrgId(), id);
+        return incidentService.get(user, user.getOrgId(), id);
     }
 
     @PatchMapping("/{id}")
@@ -126,7 +135,8 @@ public class IncidentV1Controller {
                                          @PathVariable UUID id,
                                          @Valid @RequestBody StatusUpdateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
-        return incidentService.updateStatus(user, user.getOrgId(), id, Incident.Status.valueOf(request.status()));
+        return incidentService.updateStatus(user, user.getOrgId(), id,
+                Incident.Status.valueOf(request.status()), request.closingNotes());
     }
 
     @PostMapping("/{id}/time")
@@ -156,12 +166,30 @@ public class IncidentV1Controller {
     }
 
     @PatchMapping("/{id}/assign")
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public IncidentResponse assign(@AuthenticationPrincipal Jwt jwt,
                                    @PathVariable UUID id,
                                    @Valid @RequestBody AssignRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
-        return incidentService.assign(user, user.getOrgId(), id, request.assigneeId());
+        return incidentService.assign(user, user.getOrgId(), id, request.assigneeId(), request.priorityId());
+    }
+
+    @PatchMapping("/{id}/escalate")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public IncidentResponse escalate(@AuthenticationPrincipal Jwt jwt,
+                                     @PathVariable UUID id,
+                                     @Valid @RequestBody EscalateRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.escalate(user, user.getOrgId(), id, request.priorityId(), request.reason());
+    }
+
+    @PatchMapping("/{id}/escalate-tier")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public IncidentResponse escalateTier(@AuthenticationPrincipal Jwt jwt,
+                                         @PathVariable UUID id,
+                                         @Valid @RequestBody EscalateTierRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.escalateTier(user, user.getOrgId(), id, request.reason());
     }
 
     @GetMapping("/{id}/comments")
@@ -242,6 +270,14 @@ public class IncidentV1Controller {
                                         @Valid @RequestBody LinkCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
         return incidentService.addLink(user.getOrgId(), id, request);
+    }
+
+    @GetMapping("/{id}/activity")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public List<com.alignedcardio.itsm.api.auth.AuditLogResponse> listActivity(@AuthenticationPrincipal Jwt jwt,
+                                                                             @PathVariable UUID id) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.listActivity(user.getOrgId(), id);
     }
 
     @GetMapping("/{id}/sla")

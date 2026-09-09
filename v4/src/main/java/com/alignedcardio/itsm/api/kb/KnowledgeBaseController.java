@@ -46,7 +46,7 @@ public class KnowledgeBaseController {
     public KbArticleResponse get(@AuthenticationPrincipal Jwt jwt,
                                  @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
-        return knowledgeBaseService.get(user.getOrgId(), id);
+        return knowledgeBaseService.get(user.getOrgId(), id, user.getId());
     }
 
     @PatchMapping("/{id}")

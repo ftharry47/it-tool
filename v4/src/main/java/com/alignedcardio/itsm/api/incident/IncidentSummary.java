@@ -14,6 +14,11 @@ public record IncidentSummary(
         String phone,
         String requester,
         String assignee,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String slaBreachStatus,
+        OffsetDateTime responseDueAt,
+        OffsetDateTime resolutionDueAt,
+        OffsetDateTime responseMetAt,
+        OffsetDateTime resolutionMetAt
 ) {
 }

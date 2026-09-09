@@ -12,6 +12,12 @@ public record NotificationRequest(
         String body,
         String entityType,
         UUID entityId,
-        Notification.Channel channel
+        Notification.Channel channel,
+        NotificationContent content
 ) {
+    /** Backward-compatible constructor — single text for all channels. */
+    public NotificationRequest(UUID orgId, UUID userId, String type, String subject, String body,
+                               String entityType, UUID entityId, Notification.Channel channel) {
+        this(orgId, userId, type, subject, body, entityType, entityId, channel, null);
+    }
 }

@@ -13,6 +13,9 @@ public record CurrentUser(
         List<String> roles,
         boolean isActive,
         boolean mfaEnabled,
-        UUID managerId
+        UUID managerId,
+        boolean isApprovalManager,
+        List<UUID> teamIds,
+        List<String> teamNames
 ) {
 }

@@ -21,6 +21,8 @@ public record ChangeResponse(
         String rollbackPlan,
         String postImplementationReview,
         UUID linkedProblemId,
+        UUID locationId,
+        String locationName,
         List<ChangeApprovalResponse> approvals,
         OffsetDateTime createdAt
 ) {

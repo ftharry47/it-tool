@@ -44,6 +44,7 @@ public class IncidentCommentService {
     private final AppUserRepository appUserRepository;
     private final SlaEngine slaEngine;
     private final NotificationService notificationService;
+    private final com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder notificationTemplateBuilder;
     private final ApplicationEventPublisher eventPublisher;
 
     public IncidentCommentService(IncidentRepository incidentRepository,
@@ -52,6 +53,7 @@ public class IncidentCommentService {
                                   AppUserRepository appUserRepository,
                                   SlaEngine slaEngine,
                                   NotificationService notificationService,
+                                  com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder notificationTemplateBuilder,
                                   ApplicationEventPublisher eventPublisher) {
         this.incidentRepository = incidentRepository;
         this.commentRepository = commentRepository;
@@ -59,6 +61,7 @@ public class IncidentCommentService {
         this.appUserRepository = appUserRepository;
         this.slaEngine = slaEngine;
         this.notificationService = notificationService;
+        this.notificationTemplateBuilder = notificationTemplateBuilder;
         this.eventPublisher = eventPublisher;
     }
 
@@ -112,9 +115,14 @@ public class IncidentCommentService {
                             "isPublic", true,
                             "requesterId", incident.getRequester().getId())));
 
-            String subject = "New comment on Incident " + incident.getNumber() + " by " + author.getDisplayName();
-            String body = "Comment: " + bodyPreview(request.body());
-            notifyWatchers(incident, author, subject, body);
+            Map<String, Object> commentPayload = new java.util.HashMap<>();
+            commentPayload.put("number", incident.getNumber());
+            commentPayload.put("title", incident.getTitle());
+            commentPayload.put("authorName", author.getDisplayName());
+            commentPayload.put("commentPreview", bodyPreview(request.body()));
+            commentPayload.put("entityType", "INCIDENT");
+            commentPayload.put("entityId", incident.getId());
+            notifyWatchers(incident, author, "INCIDENT_COMMENT", commentPayload);
             notifyMentions(incident, author, orgId, request.body());
         }
 
@@ -152,19 +160,21 @@ public class IncidentCommentService {
         return body.length() > 200 ? body.substring(0, 200) + "..." : body;
     }
 
-    private void notifyWatchers(Incident incident, AppUser author, String subject, String body) {
+    private void notifyWatchers(Incident incident, AppUser author, String type, Map<String, ?> payload) {
+        var content = notificationTemplateBuilder.forEvent(type, payload);
         watcherRepository.findByIncidentIdAndDeletedAtIsNull(incident.getId()).forEach(w -> {
             if (w.getUser().getId().equals(author.getId())) return;
             try {
                 notificationService.send(new NotificationRequest(
                         incident.getOrgId(),
                         w.getUser().getId(),
-                        "INCIDENT_COMMENT",
-                        subject,
-                        body,
+                        type,
+                        content.inAppSubject(),
+                        content.inAppBody(),
                         "INCIDENT",
                         incident.getId(),
-                        null));
+                        null,
+                        content));
             } catch (Exception e) {
                 logger.warn("Failed to notify watcher {}", w.getUser().getId(), e);
             }
@@ -180,22 +190,31 @@ public class IncidentCommentService {
             if (!seen.add(mention)) continue;
 
             appUserRepository.findByOrgIdAndEmailIgnoreCase(orgId, mention)
-                    .ifPresent(mentioned -> sendMention(incident, author, mentioned));
+                    .ifPresent(mentioned -> sendMention(incident, author, mentioned, body));
         }
     }
 
-    private void sendMention(Incident incident, AppUser author, AppUser mentioned) {
+    private void sendMention(Incident incident, AppUser author, AppUser mentioned, String commentBody) {
         if (mentioned.getId().equals(author.getId())) return;
         try {
+            Map<String, Object> mentionPayload = new java.util.HashMap<>();
+            mentionPayload.put("number", incident.getNumber());
+            mentionPayload.put("title", incident.getTitle());
+            mentionPayload.put("authorName", author.getDisplayName());
+            mentionPayload.put("commentPreview", bodyPreview(commentBody));
+            mentionPayload.put("entityType", "INCIDENT");
+            mentionPayload.put("entityId", incident.getId());
+            var content = notificationTemplateBuilder.forEvent("MENTION", mentionPayload);
             notificationService.send(new NotificationRequest(
                     incident.getOrgId(),
                     mentioned.getId(),
                     "MENTION",
-                    "You were mentioned in Incident " + incident.getNumber(),
-                    author.getDisplayName() + " mentioned you in a comment.",
+                    content.inAppSubject(),
+                    content.inAppBody(),
                     "INCIDENT",
                     incident.getId(),
-                    null));
+                    null,
+                    content));
         } catch (Exception e) {
             logger.warn("Failed to notify mentioned user {}", mentioned.getId(), e);
         }

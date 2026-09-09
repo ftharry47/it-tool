@@ -48,10 +48,10 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Overpass', 'system-ui', 'sans-serif'],
         mono: ['SF Mono', 'ui-monospace', 'monospace'],
       },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 }

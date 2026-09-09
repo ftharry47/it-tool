@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "incident")
@@ -62,14 +63,28 @@ public class Incident extends BaseEntity {
     @Column(name = "closed_at", columnDefinition = "timestamptz")
     private OffsetDateTime closedAt;
 
-    @Column(name = "location", length = 255)
-    private String location;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    private Location location;
 
     @Column(name = "phone", length = 20)
     private String phone;
 
     @Column(name = "estimated_minutes")
     private Integer estimatedMinutes;
+
+    // One-time estimate lock: set when the current assignee records an
+    // estimate; cleared on reassignment, tier escalation, or reopen so the
+    // new owner gets exactly one fresh estimate opportunity.
+    @Column(name = "estimate_set_at", columnDefinition = "timestamptz")
+    private OffsetDateTime estimateSetAt;
+
+    @Column(name = "estimate_set_by_id")
+    private UUID estimateSetById;
+
+    // Staff-only notes recorded when the incident is closed (AGENT+ visibility).
+    @Column(name = "closing_notes", columnDefinition = "text")
+    private String closingNotes;
 
     @OneToMany(mappedBy = "incident", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<IncidentComment> comments = new ArrayList<>();
@@ -186,11 +201,11 @@ public class Incident extends BaseEntity {
         this.comments = comments;
     }
 
-    public String getLocation() {
+    public Location getLocation() {
         return location;
     }
 
-    public void setLocation(String location) {
+    public void setLocation(Location location) {
         this.location = location;
     }
 
@@ -208,5 +223,29 @@ public class Incident extends BaseEntity {
 
     public void setEstimatedMinutes(Integer estimatedMinutes) {
         this.estimatedMinutes = estimatedMinutes;
+    }
+
+    public OffsetDateTime getEstimateSetAt() {
+        return estimateSetAt;
+    }
+
+    public void setEstimateSetAt(OffsetDateTime estimateSetAt) {
+        this.estimateSetAt = estimateSetAt;
+    }
+
+    public UUID getEstimateSetById() {
+        return estimateSetById;
+    }
+
+    public void setEstimateSetById(UUID estimateSetById) {
+        this.estimateSetById = estimateSetById;
+    }
+
+    public String getClosingNotes() {
+        return closingNotes;
+    }
+
+    public void setClosingNotes(String closingNotes) {
+        this.closingNotes = closingNotes;
     }
 }

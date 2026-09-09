@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.admin.BusinessCalendarRequest;
 import com.alignedcardio.itsm.api.admin.SlaPolicyRequest;
+import com.alignedcardio.itsm.api.admin.SlaPolicyResponse;
 import com.alignedcardio.itsm.entity.BusinessCalendar;
 import com.alignedcardio.itsm.entity.SlaPolicy;
 import com.alignedcardio.itsm.repository.BusinessCalendarRepository;
@@ -25,12 +26,29 @@ public class SlaAdminService {
     }
 
     @Transactional(readOnly = true)
-    public List<SlaPolicy> listPolicies(UUID orgId) {
-        return slaPolicyRepository.findByOrgIdAndAppliesTo(orgId, SlaPolicy.AppliesTo.INCIDENT);
+    public List<SlaPolicyResponse> listPolicies(UUID orgId) {
+        return slaPolicyRepository.findByOrgIdAndAppliesTo(orgId, SlaPolicy.AppliesTo.INCIDENT)
+                .stream().map(this::toResponse).toList();
+    }
+
+    private SlaPolicyResponse toResponse(SlaPolicy p) {
+        SlaPolicyResponse.CalendarRef calendar = p.getBusinessHoursCalendar() == null
+                ? null
+                : new SlaPolicyResponse.CalendarRef(
+                        p.getBusinessHoursCalendar().getId(),
+                        p.getBusinessHoursCalendar().getName());
+        return new SlaPolicyResponse(
+                p.getId(),
+                p.getName(),
+                p.getAppliesTo() == null ? null : p.getAppliesTo().name(),
+                p.getPriorityFilter(),
+                p.getResponseTargetMinutes(),
+                p.getResolutionTargetMinutes(),
+                calendar);
     }
 
     @Transactional
-    public SlaPolicy createPolicy(UUID orgId, UUID userId, SlaPolicyRequest request) {
+    public SlaPolicyResponse createPolicy(UUID orgId, UUID userId, SlaPolicyRequest request) {
         SlaPolicy policy = new SlaPolicy();
         policy.setOrgId(orgId);
         policy.setName(request.name());
@@ -45,11 +63,11 @@ public class SlaAdminService {
         }
         policy.setCreatedBy(userId);
         policy.setUpdatedBy(userId);
-        return slaPolicyRepository.save(policy);
+        return toResponse(slaPolicyRepository.save(policy));
     }
 
     @Transactional
-    public SlaPolicy updatePolicy(UUID orgId, UUID policyId, UUID userId, SlaPolicyRequest request) {
+    public SlaPolicyResponse updatePolicy(UUID orgId, UUID policyId, UUID userId, SlaPolicyRequest request) {
         SlaPolicy policy = slaPolicyRepository.findByIdAndOrgId(policyId, orgId)
                 .orElseThrow(() -> new NotFoundException("SLA policy not found"));
         policy.setName(request.name());
@@ -65,7 +83,7 @@ public class SlaAdminService {
             policy.setBusinessHoursCalendar(null);
         }
         policy.setUpdatedBy(userId);
-        return slaPolicyRepository.save(policy);
+        return toResponse(slaPolicyRepository.save(policy));
     }
 
     @Transactional

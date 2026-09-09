@@ -1,27 +1,59 @@
-import { Outlet } from 'react-router-dom'
+import { useEffect, useMemo, useRef } from 'react'
+import { matchPath, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { getDefaultRoute } from '../../routes/utils'
+import { getDefaultRoute, highestRole } from '../../routes/utils'
+import { getRouteDefinitions } from '../../routes'
 import { RoleNav } from './RoleNav'
 import { Header } from './Header'
+import { BrandMark } from '../theme/BrandMark'
+import { useDocumentTitle } from './useDocumentTitle'
 
 export function AppLayout() {
+  const location = useLocation()
   const { currentUser } = useAuth()
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Reset the content scroll position on navigation — `main` is the scroll
+  // container and isn't remounted between routes, so scrollTop would
+  // otherwise persist and land the user mid-page.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 })
+  }, [location.pathname])
+
+  // Dynamic tab title: "Azentro | <route label>". Most specific match wins
+  // (e.g. 'changes/calendar' beats 'changes/:id'). Detail pages may override
+  // with a more specific title once entity data loads.
+  const pageLabel = useMemo(() => {
+    const defs = getRouteDefinitions(highestRole(currentUser?.roles ?? []), currentUser)
+    const path = location.pathname.replace(/^\/+/, '')
+    let best: { label: string; statics: number } | null = null
+    for (const def of defs) {
+      if (!matchPath({ path: def.path, end: true }, path)) continue
+      const statics = def.path.split('/').filter((s) => s && !s.startsWith(':')).length
+      if (!best || statics > best.statics) best = { label: def.label, statics }
+    }
+    return best?.label ?? null
+  }, [location.pathname, currentUser?.roles, currentUser?.isApprovalManager])
+  useDocumentTitle(pageLabel)
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground">
-      <aside className="w-64 border-r border-border bg-card">
+      <aside className="flex h-full w-64 flex-col border-r border-border bg-card">
         <div className="border-b border-border p-4">
-          <h2 className="text-lg font-semibold tracking-tight">ITSM Portal</h2>
-          <p className="truncate text-xs text-muted-foreground">{currentUser?.displayName ?? currentUser?.email}</p>
+          <BrandMark />
         </div>
-        <RoleNav />
-        <div className="absolute bottom-0 w-64 border-t border-border p-3">
-          <p className="text-xs text-muted-foreground text-center">© 2026 Srihari Thangavel. All rights reserved.</p>
+        <div className="flex-1 overflow-y-auto scrollbar-hidden">
+          <RoleNav />
+        </div>
+        <div className="border-t border-border p-3">
+          <p className="text-xs text-muted-foreground text-center">© 2026 Azentro by Sri Hari Thangavel</p>
         </div>
       </aside>
-      <main className="flex flex-1 flex-col overflow-auto">
+      <main ref={mainRef} className="flex flex-1 flex-col overflow-auto scrollbar-hidden">
         <Header />
-        <Outlet />
+        <div key={location.pathname} className="animate-fade-slide-up flex flex-1 flex-col">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

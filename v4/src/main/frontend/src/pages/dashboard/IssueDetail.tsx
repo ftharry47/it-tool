@@ -1,10 +1,13 @@
 import { useMsal } from '@azure/msal-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { formatDateTime } from '../../lib/date'
 
 interface IssueDetailResponse {
   id: string
@@ -62,6 +65,10 @@ export function IssueDetail() {
     },
     enabled: !!issueId,
   })
+
+  useDocumentTitle(
+    issueQuery.data ? `Issue ${issueQuery.data.key}` : 'Issue Detail'
+  )
 
   const commentsQuery = useQuery<IssueComment[]>({
     queryKey: ['issue-comments', issueId],
@@ -137,8 +144,17 @@ export function IssueDetail() {
   const subtasks = (projectIssuesQuery.data ?? []).filter((i) => i.id !== issue.id && i.parentIssueId === issue.id)
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-4xl space-y-6">
+        <div>
+          <Link
+            to={`/dashboard/projects/${projectId}`}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Link>
+        </div>
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-start justify-between">
             <div>
@@ -168,7 +184,7 @@ export function IssueDetail() {
               {commentsQuery.data?.map((c) => (
                 <div key={c.id} className="rounded-md border border-border p-3 text-sm">
                   <p>{c.body}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{c.authorType} · {new Date(c.createdAt).toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{c.authorType} · {formatDateTime(c.createdAt)}</p>
                 </div>
               ))}
             </div>

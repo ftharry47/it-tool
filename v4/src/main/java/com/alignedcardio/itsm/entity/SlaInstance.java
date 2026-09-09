@@ -46,6 +46,9 @@ public class SlaInstance extends BaseEntity {
     @Column(name = "breach_status", length = 32, nullable = false)
     private BreachStatus breachStatus = BreachStatus.ON_TRACK;
 
+    @Column(name = "escalation_level", nullable = false)
+    private int escalationLevel = 0;
+
     public SlaPolicy getPolicy() {
         return policy;
     }
@@ -124,5 +127,13 @@ public class SlaInstance extends BaseEntity {
 
     public void setBreachStatus(BreachStatus breachStatus) {
         this.breachStatus = breachStatus;
+    }
+
+    public int getEscalationLevel() {
+        return escalationLevel;
+    }
+
+    public void setEscalationLevel(int escalationLevel) {
+        this.escalationLevel = escalationLevel;
     }
 }

@@ -13,7 +13,14 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     List<ServiceRequest> findByOrgIdOrderByCreatedAtDesc(UUID orgId);
 
+    List<ServiceRequest> findByOrgIdAndRequester_IdOrderByCreatedAtDesc(UUID orgId, UUID requesterId);
+
     Optional<ServiceRequest> findByOrgIdAndId(UUID orgId, UUID id);
 
     Optional<ServiceRequest> findByNumberAndOrgId(String number, UUID orgId);
+
+    boolean existsByLocation_Id(UUID locationId);
+
+    List<ServiceRequest> findByOrgIdAndStatusAndApprover_IdOrderByCreatedAtDesc(
+            UUID orgId, ServiceRequest.Status status, UUID approverId);
 }

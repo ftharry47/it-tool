@@ -64,7 +64,7 @@ class AdminControllerSecurityTest {
         when(userService.syncFromJwt(any())).thenReturn(actor);
         when(userService.updateUser(any(UUID.class), any(UpdateUserRequest.class), any(UUID.class)))
                 .thenReturn(new CurrentUser(UUID.randomUUID(), "oid", "e", "n", "j", "d",
-                        List.of(), true, false, null));
+                        List.of(), true, false, null, false, List.of(), List.of()));
         mvc.perform(patch("/api/admin/users/00000000-0000-0000-0000-000000000000")
                         .content("{\"isActive\":false}")
                         .contentType(MediaType.APPLICATION_JSON))

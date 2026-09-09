@@ -63,6 +63,21 @@ public class ServiceRequest extends BaseEntity {
     @Column(name = "needed_by")
     private OffsetDateTime neededBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    private Location location;
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
     public String getNumber() {
         return number;
     }
@@ -149,5 +164,13 @@ public class ServiceRequest extends BaseEntity {
 
     public void setNeededBy(OffsetDateTime neededBy) {
         this.neededBy = neededBy;
+    }
+
+    public Location getLocation() {
+        return location;
+    }
+
+    public void setLocation(Location location) {
+        this.location = location;
     }
 }

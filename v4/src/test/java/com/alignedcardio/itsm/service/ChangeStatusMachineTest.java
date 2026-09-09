@@ -45,24 +45,24 @@ class ChangeStatusMachineTest {
     }
 
     @Test
-    void emergencyCannotCompleteWithoutRetroReview() {
+    void completedCannotCloseWithoutReview() {
         ChangeRequest change = new ChangeRequest();
-        change.setStatus(ChangeRequest.Status.IN_PROGRESS);
-        change.setChangeType(ChangeRequest.ChangeType.EMERGENCY);
+        change.setStatus(ChangeRequest.Status.COMPLETED);
+        change.setChangeType(ChangeRequest.ChangeType.NORMAL);
         change.setPostImplementationReview("   ");
 
         assertThrows(IllegalStateException.class,
-                () -> ChangeStatusMachine.validate(change, ChangeRequest.Status.COMPLETED));
+                () -> ChangeStatusMachine.validate(change, ChangeRequest.Status.CLOSED));
     }
 
     @Test
-    void emergencyCanCompleteWithRetroReview() {
+    void completedCanCloseWithReview() {
         ChangeRequest change = new ChangeRequest();
-        change.setStatus(ChangeRequest.Status.IN_PROGRESS);
+        change.setStatus(ChangeRequest.Status.COMPLETED);
         change.setChangeType(ChangeRequest.ChangeType.EMERGENCY);
         change.setPostImplementationReview("Conducted rollback after-hours. No customer impact.");
 
         assertDoesNotThrow(
-                () -> ChangeStatusMachine.validate(change, ChangeRequest.Status.COMPLETED));
+                () -> ChangeStatusMachine.validate(change, ChangeRequest.Status.CLOSED));
     }
 }

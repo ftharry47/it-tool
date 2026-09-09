@@ -5,6 +5,8 @@ import { Plus, Trash2, X } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 interface BusinessCalendar {
   id: string
@@ -43,7 +45,18 @@ export function BusinessCalendars() {
   const account = accounts[0]
   const queryClient = useQueryClient()
   const [form, setForm] = useState<BusinessCalendar>(EMPTY_FORM)
+  const [original, setOriginal] = useState<BusinessCalendar | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<BusinessCalendar | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState<(() => void) | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const query = useQuery<BusinessCalendar[]>({
     queryKey: ['business-calendars'],
@@ -73,12 +86,18 @@ export function BusinessCalendars() {
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (_data, calendar) => {
       queryClient.invalidateQueries({ queryKey: ['business-calendars'] })
       setForm(EMPTY_FORM)
+      setOriginal(null)
       setError(null)
+      pushToast('success', calendar.id ? 'Calendar updated' : 'Calendar created')
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      console.error('Calendar save failed:', err)
+      setError('Could not save the calendar. Please try again or contact IT support.')
+      pushToast('error', 'Could not save the calendar.')
+    },
   })
 
   const deleteMutation = useMutation<void, Error, string>({
@@ -91,9 +110,18 @@ export function BusinessCalendars() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['business-calendars'] })
-      if (form.id) setForm(EMPTY_FORM)
+      if (form.id) {
+        setForm(EMPTY_FORM)
+        setOriginal(null)
+      }
+      setDeleting(null)
+      pushToast('success', 'Calendar deleted')
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      console.error('Calendar delete failed:', err)
+      setDeleting(null)
+      pushToast('error', 'Could not delete the calendar. It may be referenced by an SLA policy.')
+    },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -101,14 +129,31 @@ export function BusinessCalendars() {
     saveMutation.mutate(form)
   }
 
+  const isFormDirty = (): boolean => {
+    const baseline = original ?? EMPTY_FORM
+    return (
+      form.name !== baseline.name ||
+      form.timezone !== baseline.timezone ||
+      form.workingHours !== baseline.workingHours ||
+      form.holidays !== baseline.holidays
+    )
+  }
+
+  const guardDiscard = (action: () => void) => {
+    if (isFormDirty()) setConfirmDiscard(() => action)
+    else action()
+  }
+
   const handleEdit = (calendar: BusinessCalendar) => {
     setForm(calendar)
+    setOriginal(calendar)
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCancel = () => {
     setForm(EMPTY_FORM)
+    setOriginal(null)
     setError(null)
   }
 
@@ -117,6 +162,29 @@ export function BusinessCalendars() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete calendar "${deleting?.name}"?`}
+        description="This cannot be undone. Calendars referenced by SLA policies cannot be deleted."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+        onCancel={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        open={confirmDiscard !== null}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this calendar that will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => {
+          const action = confirmDiscard
+          setConfirmDiscard(null)
+          action?.()
+        }}
+        onCancel={() => setConfirmDiscard(null)}
+      />
       <div className="mx-auto max-w-4xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Business Calendars</h1>
@@ -182,7 +250,7 @@ export function BusinessCalendars() {
             {form.id && (
               <button
                 type="button"
-                onClick={handleCancel}
+                onClick={() => guardDiscard(handleCancel)}
                 className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
               >
                 <X className="h-4 w-4" />
@@ -208,13 +276,13 @@ export function BusinessCalendars() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleEdit(calendar)}
+                    onClick={() => guardDiscard(() => handleEdit(calendar))}
                     className="rounded-md border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
                   >
                     Edit
                   </button>
                   <button
-                    onClick={() => deleteMutation.mutate(calendar.id)}
+                    onClick={() => setDeleting(calendar)}
                     disabled={deleteMutation.isPending}
                     className="inline-flex items-center gap-1 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50"
                   >

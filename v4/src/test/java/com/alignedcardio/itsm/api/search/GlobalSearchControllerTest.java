@@ -169,7 +169,12 @@ class GlobalSearchControllerTest {
                 null,
                 "requester",
                 null,
-                OffsetDateTime.now()
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 

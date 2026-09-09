@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { Calendar, Plus } from 'lucide-react'
@@ -8,6 +8,7 @@ import { DataTable } from '../../components/ui/DataTable'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { formatDate } from '../../lib/date'
 
 export interface Change {
   id: string
@@ -23,6 +24,7 @@ export interface Change {
 const statusOptions = ['', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK', 'REJECTED', 'CANCELLED']
 
 export function ChangeList() {
+  const navigate = useNavigate()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [filter, setFilter] = useState('')
@@ -41,7 +43,7 @@ export function ChangeList() {
   if (query.error) return <ErrorFallback error={query.error} message="Could not load changes." onRetry={() => query.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Change Requests</h1>
@@ -80,14 +82,15 @@ export function ChangeList() {
           caption="Change requests"
           columns={[
             { key: 'number', header: '#' },
-            { key: 'title', header: 'Title', render: (row) => <Link to={`/dashboard/changes/${row.id}`} className="font-medium hover:underline">{row.title}</Link> },
+            { key: 'title', header: 'Title' },
             { key: 'changeType', header: 'Type' },
             { key: 'risk', header: 'Risk' },
             { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-            { key: 'planned', header: 'Planned', render: (row) => `${row.plannedStart ? new Date(row.plannedStart).toLocaleDateString() : '—'} - ${row.plannedEnd ? new Date(row.plannedEnd).toLocaleDateString() : '—'}` },
+            { key: 'planned', header: 'Planned', render: (row) => `${formatDate(row.plannedStart)} - ${formatDate(row.plannedEnd)}` },
           ]}
           data={query.data ?? []}
           getRowKey={(row) => row.id}
+          onRowClick={(row) => navigate(`/dashboard/changes/${row.id}`)}
           emptyText="No change requests found."
         />
       </div>

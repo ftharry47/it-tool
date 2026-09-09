@@ -106,7 +106,7 @@ export function ProjectList() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
@@ -143,7 +143,7 @@ export function ProjectList() {
           emptyText="No projects."
         />
 
-        <FormDrawer open={drawerOpen} title="New Project" onClose={() => setDrawerOpen(false)}>
+        <FormDrawer open={drawerOpen} title="New Project" dirty={form.key !== '' || form.name !== '' || form.description !== '' || form.leadId !== ''} onClose={() => setDrawerOpen(false)}>
           <EntityForm
             fields={createFields}
             values={form}

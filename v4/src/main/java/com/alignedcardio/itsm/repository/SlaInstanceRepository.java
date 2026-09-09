@@ -13,6 +13,8 @@ public interface SlaInstanceRepository extends JpaRepository<SlaInstance, UUID> 
 
     Optional<SlaInstance> findByIncidentId(UUID incidentId);
 
+    List<SlaInstance> findByIncidentIdIn(java.util.Collection<UUID> incidentIds);
+
     Optional<SlaInstance> findByIncidentIdAndOrgId(UUID incidentId, UUID orgId);
 
     List<SlaInstance> findByBreachStatusIn(List<SlaInstance.BreachStatus> statuses);

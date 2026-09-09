@@ -10,6 +10,7 @@ public record NotificationPreferenceUpdateRequest(
         @NotNull Boolean notifyStatusChange,
         @NotNull Boolean notifyAssignment,
         @NotNull Boolean notifyComment,
-        @NotNull Boolean notifyMention
+        @NotNull Boolean notifyMention,
+        Boolean pushEnabled
 ) {
 }

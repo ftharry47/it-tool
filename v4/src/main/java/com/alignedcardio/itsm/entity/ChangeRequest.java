@@ -12,7 +12,7 @@ public class ChangeRequest extends BaseEntity {
     public enum ChangeType { STANDARD, NORMAL, EMERGENCY }
     public enum Risk { LOW, MEDIUM, HIGH }
     public enum Status {
-        DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SCHEDULED, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK, CANCELLED
+        DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SCHEDULED, IN_PROGRESS, COMPLETED, FAILED, ROLLED_BACK, CANCELLED, CLOSED
     }
 
     @Column(name = "number", nullable = false)
@@ -59,6 +59,10 @@ public class ChangeRequest extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "linked_problem_id")
     private Problem linkedProblem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "location_id")
+    private Location location;
 
     public String getNumber() {
         return number;
@@ -154,5 +158,13 @@ public class ChangeRequest extends BaseEntity {
 
     public void setLinkedProblem(Problem linkedProblem) {
         this.linkedProblem = linkedProblem;
+    }
+
+    public Location getLocation() {
+        return location;
+    }
+
+    public void setLocation(Location location) {
+        this.location = location;
     }
 }

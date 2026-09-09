@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useBlocker } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -24,11 +23,16 @@ interface IncidentEditFormProps {
     priorityName: string | null
     categoryName: string | null
     assigneeName: string | null
+    assigneeId: string | null
+    locationId: string | null
   }
   users: Option[]
   priorities: Option[]
   categories: Option[]
+  locations: Option[]
   onSaved: () => void
+  /** Reports dirty state to the parent so it can confirm before discarding. */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 function optionByName(options: Option[], name?: string | null): string {
@@ -37,14 +41,15 @@ function optionByName(options: Option[], name?: string | null): string {
   return match?.id ?? ''
 }
 
-export function IncidentEditForm({ incidentId, initial, users, priorities, categories, onSaved }: IncidentEditFormProps) {
+export function IncidentEditForm({ incidentId, initial, users, priorities, categories, locations, onSaved, onDirtyChange }: IncidentEditFormProps) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
   const { currentUser } = useAuth()
 
   const isAdminOrSuperAdmin = (currentUser?.roles.includes('ADMIN') || currentUser?.roles.includes('SUPER_ADMIN')) ?? false
-  const isPriorityLocked = initial.assigneeName != null && initial.assigneeName !== ''
+  const isPriorityLocked = (initial.assigneeId != null && initial.assigneeId !== '')
+    || (initial.assigneeName != null && initial.assigneeName !== '')
 
   const initialValues = useMemo(
     () => ({
@@ -53,7 +58,8 @@ export function IncidentEditForm({ incidentId, initial, users, priorities, categ
       status: initial.status,
       priorityId: optionByName(priorities, initial.priorityName),
       categoryId: optionByName(categories, initial.categoryName),
-      assigneeId: optionByName(users, initial.assigneeName),
+      assigneeId: initial.assigneeId ?? optionByName(users, initial.assigneeName),
+      locationId: initial.locationId ?? '',
     }),
     [initial, priorities, categories, users]
   )
@@ -61,19 +67,13 @@ export function IncidentEditForm({ incidentId, initial, users, priorities, categ
   const [values, setValues] = useState(initialValues)
   const isDirty = useMemo(() => JSON.stringify(values) !== JSON.stringify(initialValues), [values, initialValues])
 
-  const blocker = useBlocker(isDirty)
-
   useEffect(() => {
-    if (blocker.state === 'blocked') {
-      const confirmed = window.confirm('You have unsaved changes. Leave without saving?')
-      if (confirmed) {
-        blocker.proceed()
-      } else {
-        blocker.reset()
-      }
-    }
-  }, [blocker])
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
+  // Note: useBlocker was removed — it requires a data router and this app
+  // uses BrowserRouter/useRoutes, which crashed the form. beforeunload +
+  // the Cancel button's confirm cover unsaved-changes protection.
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       if (isDirty) {
@@ -94,6 +94,7 @@ export function IncidentEditForm({ incidentId, initial, users, priorities, categ
         priorityId: payload.priorityId || null,
         categoryId: payload.categoryId || null,
         assigneeId: payload.assigneeId || null,
+        locationId: payload.locationId || null,
       }
       const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${incidentId}`, {
         method: 'PATCH',
@@ -143,6 +144,12 @@ export function IncidentEditForm({ incidentId, initial, users, priorities, categ
       label: 'Assignee',
       type: 'select',
       options: users.map((u) => ({ value: u.id, label: u.name })),
+    },
+    {
+      name: 'locationId',
+      label: 'Location',
+      type: 'select',
+      options: locations.map((l) => ({ value: l.id, label: l.name })),
     },
   ]
 

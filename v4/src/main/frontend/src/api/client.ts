@@ -9,6 +9,17 @@ const LOCAL_AUTH_TOKEN =
     ? String(import.meta.env.VITE_LOCAL_AUTH_TOKEN)
     : undefined
 
+// Fired on window when any API call returns 403 — AuthProvider listens and
+// refetches /api/auth/me so a role change corrects the UI without a reload.
+export const AUTH_REFRESH_EVENT = 'auth:refresh-current-user'
+
+function notifyAuthRefresh(res: Response, url: string) {
+  // Skip /api/auth/me itself to avoid a refresh loop.
+  if (res.status === 403 && !url.includes('/api/auth/me')) {
+    window.dispatchEvent(new CustomEvent(AUTH_REFRESH_EVENT))
+  }
+}
+
 export async function fetchWithToken(
   instance: IPublicClientApplication,
   account: AccountInfo | undefined,
@@ -22,7 +33,9 @@ export async function fetchWithToken(
 
   if (LOCAL_AUTH_TOKEN) {
     headers.set('Authorization', `Bearer ${LOCAL_AUTH_TOKEN}`)
-    return fetch(url, { ...options, headers })
+    const res = await fetch(url, { ...options, headers })
+    notifyAuthRefresh(res, url)
+    return res
   }
 
   const tokenResponse = await instance.acquireTokenSilent({
@@ -32,5 +45,7 @@ export async function fetchWithToken(
 
   const token = tokenResponse.idToken ?? tokenResponse.accessToken
   headers.set('Authorization', `Bearer ${token}`)
-  return fetch(url, { ...options, headers })
+  const res = await fetch(url, { ...options, headers })
+  notifyAuthRefresh(res, url)
+  return res
 }

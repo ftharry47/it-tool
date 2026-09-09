@@ -82,4 +82,12 @@ public class ProblemController {
         AppUser user = userService.syncFromJwt(jwt);
         return problemService.listLinkedIncidents(user.getOrgId(), id);
     }
+
+    @GetMapping("/{id}/activity")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    public List<com.alignedcardio.itsm.api.auth.AuditLogResponse> listActivity(@AuthenticationPrincipal Jwt jwt,
+                                                                                @PathVariable UUID id) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return problemService.listActivity(user.getOrgId(), id);
+    }
 }

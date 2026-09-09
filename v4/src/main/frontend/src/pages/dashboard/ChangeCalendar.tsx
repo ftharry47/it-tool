@@ -6,11 +6,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { formatDate, formatWeekdayDate } from '../../lib/date'
 
 interface CalendarItem {
   id: string
   number: number
   title: string
+  locationId: string | null
+  locationName: string | null
   plannedStart: string
   plannedEnd: string
 }
@@ -76,7 +79,7 @@ export function ChangeCalendar() {
   const rangeMs = weekEnd.getTime() - weekStart.getTime()
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Change Calendar</h1>
@@ -85,7 +88,7 @@ export function ChangeCalendar() {
 
         <div className="flex items-center gap-2">
           <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="rounded-md border border-border p-2 transition hover:bg-muted"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-[12rem] text-center text-sm font-medium">{weekStart.toLocaleDateString()} - {addDays(weekEnd, -1).toLocaleDateString()}</span>
+          <span className="min-w-[12rem] text-center text-sm font-medium">{formatDate(weekStart.toISOString())} - {formatDate(addDays(weekEnd, -1).toISOString())}</span>
           <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="rounded-md border border-border p-2 transition hover:bg-muted"><ChevronRight className="h-4 w-4" /></button>
         </div>
 
@@ -105,7 +108,7 @@ export function ChangeCalendar() {
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="mb-2 grid grid-cols-7 gap-2 border-b border-border pb-2 text-center text-sm text-muted-foreground">
             {dayLabels.map((d, i) => (
-              <div key={i}>{d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+              <div key={i}>{formatWeekdayDate(d)}</div>
             ))}
           </div>
 

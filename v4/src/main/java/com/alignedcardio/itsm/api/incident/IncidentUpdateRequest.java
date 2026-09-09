@@ -14,6 +14,7 @@ public record IncidentUpdateRequest(
         @Min(1) @Max(5) Integer urgency,
         UUID priorityId,
         UUID categoryId,
-        UUID assigneeId
+        UUID assigneeId,
+        UUID locationId
 ) {
 }

@@ -6,6 +6,8 @@ import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { SchemaForm, type SchemaField } from '../../components/ui/SchemaForm'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { isValidPhone, PHONE_ERROR } from '../../lib/phone'
 
 interface CatalogItem {
   id: string
@@ -17,14 +19,29 @@ interface CatalogItem {
   active: boolean
 }
 
+interface Location {
+  id: string
+  name: string
+}
+
 export function CatalogBrowse() {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
+  const [locationId, setLocationId] = useState('')
+  const [phone, setPhone] = useState('')
   const [serverError, setServerError] = useState<string | null>(null)
   const [schemaError, setSchemaError] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const catalogQuery = useQuery<CatalogItem[]>({
     queryKey: ['catalog-items'],
@@ -33,6 +50,16 @@ export function CatalogBrowse() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       return data.filter((item: CatalogItem) => item.active !== false)
+    },
+    enabled: !!account,
+  })
+
+  const locationsQuery = useQuery<Location[]>({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/locations')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
     },
     enabled: !!account,
   })
@@ -64,7 +91,7 @@ export function CatalogBrowse() {
     }
   }, [selectedItem])
 
-  const createMutation = useMutation<CatalogItem, Error, { catalogItemId: string; formData: string }>({
+  const createMutation = useMutation<{ id: string; number: number }, Error, { catalogItemId: string; formData: string; locationId: string | null; phone: string | null }>({
     mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, '/api/v1/service-requests', {
         method: 'POST',
@@ -76,14 +103,16 @@ export function CatalogBrowse() {
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       setSelectedItem(null)
       setFormValues({})
+      setLocationId('')
       setServerError(null)
-      alert('Request submitted successfully.')
+      pushToast('success', `Request #${created.number} submitted successfully`)
     },
     onError: (error) => {
-      setServerError(error.message)
+      console.error('Service request submission failed:', error)
+      setServerError('Something went wrong submitting your request. Please try again or contact IT support.')
     },
   })
 
@@ -91,7 +120,8 @@ export function CatalogBrowse() {
   if (catalogQuery.error) return <ErrorFallback error={catalogQuery.error} message="Could not load catalog." onRetry={() => catalogQuery.refetch()} />
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
+    <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Service Catalog</h1>
         <p className="text-sm text-muted-foreground">Choose a service below to submit a request for your clinic.</p>
@@ -109,6 +139,7 @@ export function CatalogBrowse() {
                 onClick={() => {
                   setSelectedItem(item)
                   setFormValues({})
+                  setLocationId('')
                   setServerError(null)
                 }}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -127,9 +158,12 @@ export function CatalogBrowse() {
       <FormDrawer
         open={!!selectedItem}
         title={selectedItem?.name ?? 'Request'}
+        dirty={Object.values(formValues).some((v) => v !== '' && v != null) || locationId !== '' || phone !== ''}
         onClose={() => {
           setSelectedItem(null)
           setFormValues({})
+          setLocationId('')
+          setPhone('')
           setServerError(null)
           setSchemaError(null)
         }}
@@ -137,21 +171,54 @@ export function CatalogBrowse() {
         {schemaError ? (
           <ErrorFallback error={new Error(schemaError)} message={schemaError} />
         ) : (
+          <>
+          <div className="mb-4 space-y-2">
+            <label htmlFor="sr-location" className="text-sm font-medium">Location</label>
+            <select
+              id="sr-location"
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Select location (optional)</option>
+              {locationsQuery.data?.map((loc) => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-4 space-y-2">
+            <label htmlFor="sr-phone" className="text-sm font-medium">Phone Number</label>
+            <input
+              id="sr-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g., +1 555-012-3456"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
           <SchemaForm
             schema={schema}
             values={formValues}
             onChange={(name, value) => setFormValues({ ...formValues, [name]: value })}
             onSubmit={(values) => {
               if (!selectedItem) return
+              if (!isValidPhone(phone)) {
+                setServerError(PHONE_ERROR)
+                return
+              }
               createMutation.mutate({
                 catalogItemId: selectedItem.id,
                 formData: JSON.stringify(values),
+                locationId: locationId || null,
+                phone: phone || null,
               })
             }}
             submitLabel="Submit Request"
             pending={createMutation.isPending}
             serverError={serverError}
           />
+          </>
         )}
       </FormDrawer>
     </div>
