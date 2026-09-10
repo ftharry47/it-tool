@@ -8,7 +8,8 @@ export interface SchemaField {
   label?: string
   type?: 'string' | 'textarea' | 'number' | 'boolean' | 'select' | 'select_with_other'
   required?: boolean
-  options?: Array<{ value: string; label: string } | string>
+  otherRequiresApproval?: boolean
+  options?: Array<{ value: string; label: string; requiresApproval?: boolean } | string>
 }
 
 interface SchemaFormProps {

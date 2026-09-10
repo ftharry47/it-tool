@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
-import { fetchWithToken, AUTH_REFRESH_EVENT } from '../api/client'
+import { fetchWithToken, AUTH_REFRESH_EVENT, AUTH_UNAUTHORIZED_EVENT } from '../api/client'
 import { loginRequest } from './authConfig'
 import { useIdleTimeout } from '../hooks/useIdleTimeout'
 
@@ -114,6 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Silent re-fetch of /api/auth/me — used by the 403 listener and the
   // window-focus listener below. Does not touch `loading` so the UI
   // doesn't flash a spinner on a background refresh.
+  const redirectToLogin = useCallback(() => {
+    if (LOCAL_AUTH_TOKEN) {
+      window.location.href = '/login'
+      return
+    }
+    // Force a fresh interactive login when silent token refresh fails.
+    instance.loginRedirect({ ...loginRequest, prompt: 'login' } as any)
+  }, [instance])
+
   const refreshCurrentUser = useCallback(() => {
     const account = accounts[0]
     if (!account) return
@@ -137,12 +146,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     window.addEventListener(AUTH_REFRESH_EVENT, refreshCurrentUser)
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, redirectToLogin)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.removeEventListener(AUTH_REFRESH_EVENT, refreshCurrentUser)
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, redirectToLogin)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [isAuthenticated, refreshCurrentUser])
+  }, [isAuthenticated, refreshCurrentUser, redirectToLogin])
 
   const login = () => {
     if (LOCAL_AUTH_TOKEN) {

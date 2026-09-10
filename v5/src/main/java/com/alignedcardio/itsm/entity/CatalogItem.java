@@ -25,9 +25,6 @@ public class CatalogItem extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     private JsonNode formSchema;
 
-    @Column(name = "approval_required", nullable = false)
-    private boolean approvalRequired = false;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approver_id")
     private AppUser approver;
@@ -69,14 +66,6 @@ public class CatalogItem extends BaseEntity {
 
     public void setFormSchema(JsonNode formSchema) {
         this.formSchema = formSchema;
-    }
-
-    public boolean isApprovalRequired() {
-        return approvalRequired;
-    }
-
-    public void setApprovalRequired(boolean approvalRequired) {
-        this.approvalRequired = approvalRequired;
     }
 
     public AppUser getApprover() {

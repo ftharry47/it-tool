@@ -1,6 +1,5 @@
 package com.alignedcardio.itsm.service;
 
-import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 
 import java.util.Map;
@@ -26,8 +25,7 @@ public final class ServiceRequestStatusMachine {
             return;
         }
 
-        CatalogItem item = request.getCatalogItem();
-        boolean approvalRequired = item != null && item.isApprovalRequired();
+        boolean approvalRequired = request.isApprovalRequired();
 
         if (request.getStatus() == ServiceRequest.Status.SUBMITTED && to == ServiceRequest.Status.IN_FULFILLMENT && !approvalRequired) {
             // non-approval-required items skip approval

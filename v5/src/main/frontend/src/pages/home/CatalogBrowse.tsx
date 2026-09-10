@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { Link, useLocation } from 'react-router-dom'
 import { fetchWithToken } from '../../api/client'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
@@ -27,6 +28,8 @@ interface Location {
 export function CatalogBrowse() {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
+  const location = useLocation()
+  const incidentPath = location.pathname.startsWith('/home') ? '/home/incidents' : '/dashboard/incidents'
 
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
@@ -124,6 +127,17 @@ export function CatalogBrowse() {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Service Catalog</h1>
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Not sure where to start?</p>
+          <ul className="mt-1 list-inside list-disc">
+            <li>
+              Is something broken or not working right?{' '}
+              <Link to={incidentPath} className="text-primary underline hover:text-primary/80">Report an Incident</Link>{' '}
+              instead.
+            </li>
+            <li>Need a new device, replacement, or access to something? Use the catalog below.</li>
+          </ul>
+        </div>
         <p className="text-sm text-muted-foreground">Choose a service below to submit a request for your clinic.</p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

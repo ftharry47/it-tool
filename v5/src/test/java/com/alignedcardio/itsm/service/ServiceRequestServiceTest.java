@@ -2,7 +2,10 @@ package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.servicerequest.ApprovalRequest;
 import com.alignedcardio.itsm.api.servicerequest.ServiceRequestActivityResponse;
+import com.alignedcardio.itsm.api.servicerequest.ServiceRequestCreateRequest;
 import com.alignedcardio.itsm.api.servicerequest.ServiceRequestResponse;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.entity.CatalogItem;
@@ -20,8 +23,10 @@ import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.ServiceRequestRepository;
 import com.alignedcardio.itsm.service.notification.NotificationService;
 import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +35,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,6 +64,7 @@ class ServiceRequestServiceTest {
     @Mock private SlaEngine slaEngine;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final Map<UUID, ServiceRequest> savedRequests = new HashMap<>();
     private ServiceRequestService service;
 
     @BeforeEach
@@ -86,15 +94,46 @@ class ServiceRequestServiceTest {
         return u;
     }
 
-    private CatalogItem item(String name, boolean approvalRequired, AppUser approver) {
+    private CatalogItem item(String name, boolean requiresApproval, AppUser approver) {
         CatalogItem item = new CatalogItem();
         item.setId(UUID.randomUUID());
         item.setOrgId(ORG_ID);
         item.setName(name);
-        item.setApprovalRequired(approvalRequired);
         item.setApprover(approver);
-        item.setFormSchema(objectMapper.createArrayNode());
+
+        ObjectNode option = objectMapper.createObjectNode();
+        option.put("value", "Standard");
+        option.put("label", "Standard");
+        option.put("requiresApproval", requiresApproval);
+
+        ArrayNode options = objectMapper.createArrayNode().add(option);
+
+        ObjectNode field = objectMapper.createObjectNode();
+        field.put("name", "request");
+        field.put("label", "Request");
+        field.put("type", "select");
+        field.set("options", options);
+
+        item.setFormSchema(objectMapper.createArrayNode().add(field));
         return item;
+    }
+
+    private boolean requiresApprovalFor(CatalogItem item) {
+        if (item.getFormSchema() == null || !item.getFormSchema().isArray()) {
+            return false;
+        }
+        for (JsonNode field : item.getFormSchema()) {
+            JsonNode options = field.get("options");
+            if (options == null || !options.isArray()) {
+                continue;
+            }
+            for (JsonNode opt : options) {
+                if (opt.isObject() && "Standard".equals(opt.get("value").asText())) {
+                    return opt.has("requiresApproval") && opt.get("requiresApproval").asBoolean();
+                }
+            }
+        }
+        return false;
     }
 
     private ServiceRequest pendingRequest(CatalogItem item, AppUser requester, Location location) {
@@ -105,9 +144,9 @@ class ServiceRequestServiceTest {
         sr.setCatalogItem(item);
         sr.setRequester(requester);
         sr.setLocation(location);
-        sr.setApprovalRequired(item.isApprovalRequired());
+        sr.setFormData(objectMapper.createObjectNode().put("request", "Standard"));
+        sr.setApprovalRequired(requiresApprovalFor(item));
         sr.setStatus(ServiceRequest.Status.SUBMITTED);
-        sr.setFormData(objectMapper.createObjectNode());
         return sr;
     }
 
@@ -116,6 +155,25 @@ class ServiceRequestServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(any()))
                 .thenReturn(List.of());
+    }
+
+    private void stubCreate() {
+        savedRequests.clear();
+        Query numberQuery = mock(Query.class);
+        when(numberQuery.getSingleResult()).thenReturn(1L);
+        when(entityManager.createNativeQuery("SELECT nextval('service_request_number_seq')")).thenReturn(numberQuery);
+
+        when(serviceRequestRepository.save(any(ServiceRequest.class)))
+                .thenAnswer(inv -> {
+                    ServiceRequest r = inv.getArgument(0);
+                    if (r.getId() == null) r.setId(UUID.randomUUID());
+                    savedRequests.put(r.getId(), r);
+                    return r;
+                });
+        when(fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(any()))
+                .thenReturn(List.of());
+        when(serviceRequestRepository.findByOrgIdAndId(eq(ORG_ID), any(UUID.class)))
+                .thenAnswer(inv -> Optional.ofNullable(savedRequests.get(inv.getArgument(1))));
     }
 
     @Test
@@ -635,5 +693,66 @@ class ServiceRequestServiceTest {
         verify(eventPublisher).publishEvent(argThat((Object ev) ->
                 ev instanceof ServiceRequestEvent sre
                         && "FULFILLED".equals(sre.triggerType())));
+    }
+
+    @Test
+    void sameFieldDifferentOptionsRouteDifferently() {
+        AppUser requester = user("Requester");
+        AppUser catalogApprover = user("Catalog Approver");
+
+        // One catalog item, one select field, two options with different approval flags
+        CatalogItem item = new CatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setOrgId(ORG_ID);
+        item.setName("Printer");
+        item.setApprover(catalogApprover);
+
+        ObjectNode approved = objectMapper.createObjectNode();
+        approved.put("value", "New printer (capital)");
+        approved.put("label", "New printer (capital)");
+        approved.put("requiresApproval", true);
+
+        ObjectNode notApproved = objectMapper.createObjectNode();
+        notApproved.put("value", "Toner / supplies");
+        notApproved.put("label", "Toner / supplies");
+        notApproved.put("requiresApproval", false);
+
+        ArrayNode options = objectMapper.createArrayNode().add(approved).add(notApproved);
+
+        ObjectNode field = objectMapper.createObjectNode();
+        field.put("name", "request");
+        field.put("label", "What do you need?");
+        field.put("type", "select");
+        field.set("options", options);
+
+        item.setFormSchema(objectMapper.createArrayNode().add(field));
+
+        when(catalogItemRepository.findByOrgIdAndId(ORG_ID, item.getId())).thenReturn(Optional.of(item));
+        Location location = new Location();
+        location.setId(UUID.randomUUID());
+        when(locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, location.getId())).thenReturn(Optional.of(location));
+
+        stubCreate();
+
+        // Option requiring approval -> PENDING_APPROVAL
+        ServiceRequestCreateRequest approvalReq = new ServiceRequestCreateRequest(
+                item.getId(),
+                objectMapper.createObjectNode().put("request", "New printer (capital)").toString(),
+                null,
+                location.getId(),
+                null);
+        ServiceRequestResponse approvalResponse = service.create(requester, ORG_ID, approvalReq);
+        assertEquals(ServiceRequest.Status.PENDING_APPROVAL, approvalResponse.status());
+        assertEquals(catalogApprover.getId(), approvalResponse.approverId());
+
+        // Option NOT requiring approval -> IN_FULFILLMENT
+        ServiceRequestCreateRequest noApprovalReq = new ServiceRequestCreateRequest(
+                item.getId(),
+                objectMapper.createObjectNode().put("request", "Toner / supplies").toString(),
+                null,
+                location.getId(),
+                null);
+        ServiceRequestResponse noApprovalResponse = service.create(requester, ORG_ID, noApprovalReq);
+        assertEquals(ServiceRequest.Status.IN_FULFILLMENT, noApprovalResponse.status());
     }
 }

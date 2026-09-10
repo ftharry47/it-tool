@@ -53,7 +53,6 @@ public class ServiceCatalogService {
         } catch (Exception e) {
             throw new IllegalStateException("Invalid form schema JSON", e);
         }
-        item.setApprovalRequired(request.approvalRequired());
         item.setActive(request.active());
         item.setCreatedBy(user.getId());
         item.setUpdatedBy(user.getId());
@@ -93,7 +92,6 @@ public class ServiceCatalogService {
         } catch (Exception e) {
             throw new IllegalStateException("Invalid form schema JSON", e);
         }
-        item.setApprovalRequired(request.approvalRequired());
         item.setActive(request.active());
 
         if (request.approverId() != null) {
@@ -129,7 +127,6 @@ public class ServiceCatalogService {
                 item.getDescription(),
                 item.getCategory(),
                 item.getFormSchema().toString(),
-                item.isApprovalRequired(),
                 item.getApprover() != null ? item.getApprover().getId() : null,
                 item.getApprover() != null ? item.getApprover().getDisplayName() : null,
                 item.getFulfillmentTasks() != null ? item.getFulfillmentTasks().toString() : "[]",

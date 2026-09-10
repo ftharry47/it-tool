@@ -9,7 +9,6 @@ public record CatalogItemResponse(
         String description,
         String category,
         String formSchema,
-        boolean approvalRequired,
         UUID approverId,
         String approverName,
         String fulfillmentTasks,

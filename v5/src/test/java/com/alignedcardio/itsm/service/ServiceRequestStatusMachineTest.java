@@ -1,6 +1,5 @@
 package com.alignedcardio.itsm.service;
 
-import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 import org.junit.jupiter.api.Test;
 
@@ -9,27 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ServiceRequestStatusMachineTest {
 
-    private ServiceRequest createRequest(CatalogItem item) {
+    private ServiceRequest createRequest(boolean approvalRequired) {
         ServiceRequest request = new ServiceRequest();
-        request.setCatalogItem(item);
+        request.setApprovalRequired(approvalRequired);
         return request;
-    }
-
-    private CatalogItem approvalRequiredItem() {
-        CatalogItem item = new CatalogItem();
-        item.setApprovalRequired(true);
-        return item;
-    }
-
-    private CatalogItem noApprovalItem() {
-        CatalogItem item = new CatalogItem();
-        item.setApprovalRequired(false);
-        return item;
     }
 
     @Test
     void approvalRequiredGoesToPendingApproval() {
-        ServiceRequest request = createRequest(approvalRequiredItem());
+        ServiceRequest request = createRequest(true);
         request.setStatus(ServiceRequest.Status.SUBMITTED);
         assertDoesNotThrow(
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.PENDING_APPROVAL));
@@ -37,7 +24,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void noApprovalGoesStraightToInFulfillment() {
-        ServiceRequest request = createRequest(noApprovalItem());
+        ServiceRequest request = createRequest(false);
         request.setStatus(ServiceRequest.Status.SUBMITTED);
         assertDoesNotThrow(
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.IN_FULFILLMENT));
@@ -45,7 +32,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void approvalRequiredCannotSkipApproval() {
-        ServiceRequest request = createRequest(approvalRequiredItem());
+        ServiceRequest request = createRequest(true);
         request.setStatus(ServiceRequest.Status.SUBMITTED);
         assertThrows(IllegalStateException.class,
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.IN_FULFILLMENT));
@@ -53,7 +40,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void approvedGoesToInFulfillment() {
-        ServiceRequest request = createRequest(approvalRequiredItem());
+        ServiceRequest request = createRequest(true);
         request.setStatus(ServiceRequest.Status.APPROVED);
         assertDoesNotThrow(
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.IN_FULFILLMENT));
@@ -61,7 +48,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void inFulfillmentGoesToFulfilledWhenAllTasksComplete() {
-        ServiceRequest request = createRequest(noApprovalItem());
+        ServiceRequest request = createRequest(false);
         request.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
         assertDoesNotThrow(
                 () -> ServiceRequestStatusMachine.validate(request, true, ServiceRequest.Status.FULFILLED));
@@ -69,7 +56,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void cannotMarkFulfilledWithIncompleteTasks() {
-        ServiceRequest request = createRequest(noApprovalItem());
+        ServiceRequest request = createRequest(false);
         request.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
         assertThrows(IllegalStateException.class,
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.FULFILLED));
@@ -77,7 +64,7 @@ class ServiceRequestStatusMachineTest {
 
     @Test
     void rejectedCanBeCancelled() {
-        ServiceRequest request = createRequest(approvalRequiredItem());
+        ServiceRequest request = createRequest(true);
         request.setStatus(ServiceRequest.Status.REJECTED);
         assertDoesNotThrow(
                 () -> ServiceRequestStatusMachine.validate(request, false, ServiceRequest.Status.CANCELLED));

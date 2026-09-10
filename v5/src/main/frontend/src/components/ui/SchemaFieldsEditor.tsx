@@ -11,13 +11,31 @@ const FIELD_TYPES: Array<NonNullable<SchemaField['type']>> = [
   'select_with_other',
 ]
 
+interface OptionObject {
+  value: string
+  label: string
+  requiresApproval: boolean
+}
+
+function optionObjects(field: SchemaField): OptionObject[] {
+  return (field.options ?? []).map((o) =>
+    typeof o === 'string'
+      ? { value: o, label: o, requiresApproval: false }
+      : {
+          value: o.value ?? '',
+          label: o.label ?? o.value ?? '',
+          requiresApproval: o.requiresApproval ?? false,
+        }
+  )
+}
+
+function valuesOnly(field: SchemaField): string[] {
+  return optionObjects(field).map((o) => o.value)
+}
+
 interface SchemaFieldsEditorProps {
   schema: SchemaField[]
   onChange: (schema: SchemaField[]) => void
-}
-
-function optionStrings(field: SchemaField): string[] {
-  return (field.options ?? []).map((o) => (typeof o === 'string' ? o : o.value))
 }
 
 export function SchemaFieldsEditor({ schema, onChange }: SchemaFieldsEditorProps) {
@@ -39,18 +57,36 @@ export function SchemaFieldsEditor({ schema, onChange }: SchemaFieldsEditorProps
   const addOption = (index: number) => {
     const raw = (newOption[index] ?? '').trim()
     if (!raw) return
-    const existing = optionStrings(schema[index])
+    const existing = valuesOnly(schema[index])
     if (existing.some((o) => o.toLowerCase() === raw.toLowerCase())) {
       setOptionError((e) => ({ ...e, [index]: `"${raw}" is already an option` }))
       return
     }
     setOptionError((e) => ({ ...e, [index]: '' }))
-    updateField(index, { options: [...existing, raw] })
+    const options = schema[index].options ?? []
+    updateField(index, { options: [...options, { value: raw, label: raw, requiresApproval: false }] })
     setNewOption((n) => ({ ...n, [index]: '' }))
   }
 
-  const removeOption = (index: number, option: string) => {
-    updateField(index, { options: optionStrings(schema[index]).filter((o) => o !== option) })
+  const removeOption = (index: number, optionValue: string) => {
+    const options = schema[index].options?.filter((o) => (typeof o === 'string' ? o : o.value) !== optionValue)
+    updateField(index, { options })
+  }
+
+  const toggleRequiresApproval = (index: number, optionValue: string) => {
+    const options = (schema[index].options ?? []).map((o) => {
+      if (typeof o === 'string') {
+        if (o !== optionValue) return o
+        return { value: o, label: o, requiresApproval: true }
+      }
+      if (o.value !== optionValue) return o
+      return { ...o, requiresApproval: !o.requiresApproval }
+    })
+    updateField(index, { options })
+  }
+
+  const toggleOtherRequiresApproval = (index: number) => {
+    updateField(index, { otherRequiresApproval: !(schema[index].otherRequiresApproval ?? false) })
   }
 
   return (
@@ -104,23 +140,32 @@ export function SchemaFieldsEditor({ schema, onChange }: SchemaFieldsEditorProps
           {(field.type === 'select' || field.type === 'select_with_other') && (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                {optionStrings(field).map((opt) => (
+                {optionObjects(field).map((opt) => (
                   <span
-                    key={opt}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs"
+                    key={opt.value}
+                    className="inline-flex items-center gap-2 rounded-full bg-muted px-2.5 py-0.5 text-xs"
                   >
-                    {opt}
+                    <span>{opt.label}</span>
+                    <label className="inline-flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground" title="Requires approval">
+                      <input
+                        type="checkbox"
+                        checked={opt.requiresApproval}
+                        onChange={() => toggleRequiresApproval(i, opt.value)}
+                        className="h-3 w-3 rounded border-border text-primary focus:ring-ring"
+                      />
+                      approval
+                    </label>
                     <button
                       type="button"
-                      onClick={() => removeOption(i, opt)}
-                      aria-label={`Remove option ${opt}`}
+                      onClick={() => removeOption(i, opt.value)}
+                      aria-label={`Remove option ${opt.label}`}
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
                 ))}
-                {optionStrings(field).length === 0 && (
+                {optionObjects(field).length === 0 && (
                   <span className="text-xs text-muted-foreground">No options yet.</span>
                 )}
               </div>
@@ -152,9 +197,15 @@ export function SchemaFieldsEditor({ schema, onChange }: SchemaFieldsEditorProps
               </div>
               {optionError[i] && <p className="text-xs text-destructive">{optionError[i]}</p>}
               {field.type === 'select_with_other' && (
-                <p className="text-xs text-muted-foreground">
-                  An "Other" choice is appended automatically; the user can type a custom answer (max 255 chars).
-                </p>
+                <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={field.otherRequiresApproval ?? false}
+                    onChange={() => toggleOtherRequiresApproval(i)}
+                    className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-ring"
+                  />
+                  Other free-text answers require approval
+                </label>
               )}
             </div>
           )}

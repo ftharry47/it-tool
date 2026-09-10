@@ -10,7 +10,6 @@ public record CatalogItemCreateRequest(
         String description,
         String category,
         @NotNull String formSchema,
-        boolean approvalRequired,
         UUID approverId,
         String fulfillmentTasks,
         boolean active

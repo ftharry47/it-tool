@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
@@ -41,6 +41,7 @@ export function Incidents() {
   const account = accounts[0]
   const { currentUser } = useAuth()
   const homeRoute = location.pathname.startsWith('/home') ? '/home' : '/dashboard'
+  const catalogPath = location.pathname.startsWith('/home') ? '/home/catalog' : '/dashboard/service-requests/new'
   
   const isEndUser = currentUser?.roles.includes('END_USER') && !currentUser?.roles.some(r => ['AGENT', 'TEAM_LEAD', 'ADMIN', 'SUPER_ADMIN'].includes(r))
   const severityMap: Record<string, { impact: number; urgency: number }> = {
@@ -239,6 +240,11 @@ export function Incidents() {
             <div className="border-b border-border px-6 py-4">
               <h2 className="text-base font-semibold tracking-tight">New Incident</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">Describe the issue and we'll route it to the right team.</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Need a NEW item or replacement (not a repair)?{' '}
+                <Link to={catalogPath} className="text-primary underline hover:text-primary/80">Submit a Service Request</Link>{' '}
+                instead.
+              </p>
             </div>
 
             <div className="space-y-5 p-6">

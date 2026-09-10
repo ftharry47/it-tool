@@ -19,7 +19,6 @@ interface CatalogItem {
   category: string | null
   formSchema: string
   fulfillmentTasks: string
-  approvalRequired: boolean
   approverId: string | null
   active: boolean
 }
@@ -31,7 +30,6 @@ interface CatalogFormValues {
   category: string
   formSchema: string
   fulfillmentTasks: string
-  approvalRequired: string
   approverId: string
   active: string
 }
@@ -42,7 +40,6 @@ const initialValues: CatalogFormValues = {
   category: '',
   formSchema: '[]',
   fulfillmentTasks: '[]',
-  approvalRequired: 'false',
   approverId: '',
   active: 'true',
 }
@@ -55,7 +52,6 @@ function valuesFromItem(item: CatalogItem | null): CatalogFormValues {
     category: item.category ?? '',
     formSchema: item.formSchema ?? '[]',
     fulfillmentTasks: item.fulfillmentTasks ?? '[]',
-    approvalRequired: item.approvalRequired ? 'true' : 'false',
     approverId: item.approverId ?? '',
     active: item.active ? 'true' : 'false',
   }
@@ -132,7 +128,6 @@ export function CatalogAdmin() {
         category: formValues.category,
         formSchema: formValues.formSchema,
         fulfillmentTasks: formValues.fulfillmentTasks,
-        approvalRequired: formValues.approvalRequired === 'true',
         approverId: formValues.approverId || null,
         active: formValues.active === 'true',
       }
@@ -207,7 +202,6 @@ export function CatalogAdmin() {
             { key: 'name', header: 'Name' },
             { key: 'category', header: 'Category' },
             { key: 'active', header: 'Active', render: (row) => (row.active ? 'Yes' : 'No') },
-            { key: 'approvalRequired', header: 'Approval', render: (row) => (row.approvalRequired ? 'Yes' : 'No') },
             {
               key: 'actions',
               header: 'Actions',
@@ -240,7 +234,6 @@ export function CatalogAdmin() {
             { name: 'category', label: 'Category', type: 'text', placeholder: 'e.g., Clinical Software, Workstation, Network' },
             { name: 'fulfillmentTasks', label: 'Fulfillment Tasks JSON', type: 'textarea' },
             { name: 'approverId', label: 'Approver ID (UUID)', type: 'text' },
-            { name: 'approvalRequired', label: 'Approval Required', type: 'boolean' },
             { name: 'active', label: 'Active', type: 'boolean' },
           ]}
           values={values}

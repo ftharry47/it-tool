@@ -158,7 +158,7 @@ public class ServiceRequestService {
         Location location = locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(orgId, request.locationId())
                 .orElseThrow(() -> new NotFoundException("Location not found"));
         sr.setLocation(location);
-        sr.setApprovalRequired(item.isApprovalRequired());
+        sr.setApprovalRequired(computeApprovalRequired(item, sr.getFormData()));
         sr.setCreatedBy(user.getId());
         sr.setUpdatedBy(user.getId());
 
@@ -242,6 +242,56 @@ public class ServiceRequestService {
 
         publishEvent(saved, target.name());
         return toResponse(saved);
+    }
+
+    private boolean computeApprovalRequired(CatalogItem item, JsonNode formData) {
+        if (item.getFormSchema() == null || !item.getFormSchema().isArray()) {
+            return false;
+        }
+        for (JsonNode field : item.getFormSchema()) {
+            String type = field.has("type") ? field.get("type").asText() : "string";
+            if (!("select".equals(type) || "select_with_other".equals(type))) {
+                continue;
+            }
+            String name = field.get("name").asText();
+            JsonNode valueNode = formData.get(name);
+            if (valueNode == null || valueNode.isNull() || !valueNode.isTextual()) {
+                continue;
+            }
+            String selected = valueNode.asText();
+            if (selected.isBlank()) {
+                continue;
+            }
+            boolean matchedPreset = false;
+            if (field.hasNonNull("options")) {
+                for (JsonNode opt : field.get("options")) {
+                    String optionValue = null;
+                    boolean optionRequiresApproval = false;
+                    if (opt.isTextual()) {
+                        optionValue = opt.asText();
+                    } else if (opt.isObject() && opt.hasNonNull("value")) {
+                        optionValue = opt.get("value").asText();
+                        optionRequiresApproval = opt.hasNonNull("requiresApproval")
+                                && opt.get("requiresApproval").asBoolean();
+                    }
+                    if (selected.equals(optionValue)) {
+                        matchedPreset = true;
+                        if (optionRequiresApproval) {
+                            return true;
+                        }
+                        break;
+                    }
+                }
+            }
+            if (!matchedPreset && "select_with_other".equals(type)) {
+                boolean otherRequiresApproval = field.hasNonNull("otherRequiresApproval")
+                        && field.get("otherRequiresApproval").asBoolean();
+                if (otherRequiresApproval) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private AppUser resolveApprover(ServiceRequest sr) {
