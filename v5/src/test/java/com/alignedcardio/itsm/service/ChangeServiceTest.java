@@ -12,6 +12,8 @@ import com.alignedcardio.itsm.repository.ChangeApprovalRepository;
 import com.alignedcardio.itsm.repository.ChangeRequestRepository;
 import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
+import com.alignedcardio.itsm.service.notification.NotificationService;
+import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,14 +66,24 @@ class ChangeServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private NotificationTemplateBuilder notificationTemplateBuilder;
+
     @InjectMocks
     private ChangeService changeService;
+
+    private final com.alignedcardio.itsm.service.notification.NotificationContent dummyContent =
+            new com.alignedcardio.itsm.service.notification.NotificationContent("", "", "", "", "", "");
 
     private UUID orgId;
 
     @BeforeEach
     void setUp() {
         orgId = UUID.randomUUID();
+        lenient().when(notificationTemplateBuilder.forEvent(any(), any())).thenReturn(dummyContent);
     }
 
     private AppUser userWithRole(String roleName) {

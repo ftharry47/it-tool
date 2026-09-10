@@ -10,6 +10,8 @@ import com.alignedcardio.itsm.repository.AuditLogRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.ProblemIncidentLinkRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
+import com.alignedcardio.itsm.service.notification.NotificationService;
+import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +26,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,14 +57,24 @@ class ProblemServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private NotificationTemplateBuilder notificationTemplateBuilder;
+
     @InjectMocks
     private ProblemService problemService;
+
+    private final com.alignedcardio.itsm.service.notification.NotificationContent dummyContent =
+            new com.alignedcardio.itsm.service.notification.NotificationContent("", "", "", "", "", "");
 
     private UUID orgId;
 
     @BeforeEach
     void setUp() {
         orgId = UUID.randomUUID();
+        lenient().when(notificationTemplateBuilder.forEvent(any(), any())).thenReturn(dummyContent);
     }
 
     private AppUser userWithRole(String roleName) {

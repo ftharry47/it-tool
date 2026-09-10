@@ -33,7 +33,8 @@ public class NotificationService {
      * remain digestible.
      */
     private static final java.util.Set<String> DIGEST_BYPASS_TYPES = java.util.Set.of(
-            "INCIDENT_ASSIGNED", "SLA_BREACH", "SLA_ESCALATION", "MENTION",
+            "INCIDENT_ASSIGNED", "PROBLEM_ASSIGNED", "CHANGE_ASSIGNED", "FULFILLMENT_TASK_ASSIGNED",
+            "SLA_BREACH", "SLA_ESCALATION", "MENTION",
             "REJECTED", "PENDING_APPROVAL");
 
     private final NotificationRepository notificationRepository;
@@ -293,9 +294,12 @@ public class NotificationService {
         if (type == null) {
             return true;
         }
-        return switch (type.toUpperCase()) {
+        String t = type.toUpperCase();
+        if (t.endsWith("_ASSIGNED")) {
+            return preference.isNotifyAssignment();
+        }
+        return switch (t) {
             case "INCIDENT_UPDATE", "INCIDENT_PRIORITY_CHANGED" -> preference.isNotifyStatusChange();
-            case "INCIDENT_ASSIGNED" -> preference.isNotifyAssignment();
             case "INCIDENT_COMMENT" -> preference.isNotifyComment();
             case "MENTION" -> preference.isNotifyMention();
             default -> true;

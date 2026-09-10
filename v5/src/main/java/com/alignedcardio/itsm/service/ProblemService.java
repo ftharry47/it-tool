@@ -11,6 +11,9 @@ import com.alignedcardio.itsm.repository.AuditLogRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.ProblemIncidentLinkRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
+import com.alignedcardio.itsm.service.notification.NotificationRequest;
+import com.alignedcardio.itsm.service.notification.NotificationService;
+import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
@@ -23,6 +26,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,6 +43,8 @@ public class ProblemService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
+    private final NotificationTemplateBuilder notificationTemplateBuilder;
 
     public ProblemService(ProblemRepository problemRepository,
                           ProblemIncidentLinkRepository problemIncidentLinkRepository,
@@ -47,7 +53,9 @@ public class ProblemService {
                           EntityManager entityManager,
                           AuditLogRepository auditLogRepository,
                           ObjectMapper objectMapper,
-                          AuditLogService auditLogService) {
+                          AuditLogService auditLogService,
+                          NotificationService notificationService,
+                          NotificationTemplateBuilder notificationTemplateBuilder) {
         this.problemRepository = problemRepository;
         this.problemIncidentLinkRepository = problemIncidentLinkRepository;
         this.incidentRepository = incidentRepository;
@@ -56,6 +64,8 @@ public class ProblemService {
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
         this.auditLogService = auditLogService;
+        this.notificationService = notificationService;
+        this.notificationTemplateBuilder = notificationTemplateBuilder;
     }
 
     @Transactional(readOnly = true)
@@ -104,6 +114,10 @@ public class ProblemService {
         entityManager.flush();
         entityManager.refresh(saved);
 
+        if (saved.getAssignee() != null) {
+            publishAssignment(saved, user, saved.getAssignee());
+        }
+
         return toResponse(saved);
     }
 
@@ -130,6 +144,7 @@ public class ProblemService {
         if (request.rootCause() != null) problem.setRootCause(request.rootCause());
         if (request.workaround() != null) problem.setWorkaround(request.workaround());
 
+        UUID previousAssigneeId = problem.getAssignee() == null ? null : problem.getAssignee().getId();
         if (request.assigneeId() != null) {
             AppUser assignee = appUserRepository.findById(request.assigneeId())
                     .orElseThrow(() -> new NotFoundException("Assignee not found"));
@@ -153,6 +168,10 @@ public class ProblemService {
                     Map.of("status", saved.getStatus().name()));
         }
         writeProblemFieldUpdateAudit(saved, user.getId(), beforeState, saved.getStatus() != oldStatus);
+
+        if (saved.getAssignee() != null && !Objects.equals(previousAssigneeId, saved.getAssignee().getId())) {
+            publishAssignment(saved, user, saved.getAssignee());
+        }
 
         return toResponse(saved);
     }
@@ -335,6 +354,34 @@ public class ProblemService {
                 problem.getClosedAt(),
                 problem.getCreatedAt()
         );
+    }
+
+    private void publishAssignment(Problem saved, AppUser updater, AppUser assignee) {
+        if (assignee.getId().equals(updater.getId())) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("number", saved.getNumber());
+            payload.put("title", saved.getTitle());
+            payload.put("actorName", updater.getDisplayName());
+            payload.put("assigneeName", assignee.getDisplayName());
+            payload.put("entityType", "PROBLEM");
+            payload.put("entityId", saved.getId());
+            var content = notificationTemplateBuilder.forEvent("PROBLEM_ASSIGNED", payload);
+            notificationService.send(new NotificationRequest(
+                    saved.getOrgId(),
+                    assignee.getId(),
+                    "PROBLEM_ASSIGNED",
+                    content.inAppSubject(),
+                    content.inAppBody(),
+                    "PROBLEM",
+                    saved.getId(),
+                    null,
+                    content));
+        } catch (Exception e) {
+            logger.warn("Failed to send problem assignment notification to {}", assignee.getId(), e);
+        }
     }
 
     private String generateProblemNumber() {

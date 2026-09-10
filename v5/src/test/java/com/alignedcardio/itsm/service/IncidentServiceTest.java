@@ -443,10 +443,17 @@ class IncidentServiceTest {
                 .thenReturn(Optional.of(tierTeam(TIER_L2, "L2 Support")));
         when(teamMemberRepository.findByTeamId(TIER_L2)).thenReturn(List.of());
 
-        incidentService.escalateTier(admin, ORG_ID, incident.getId(), "needs L2");
+        IncidentResponse response = incidentService.escalateTier(admin, ORG_ID, incident.getId(), "needs L2");
 
         // Assignee cleared — ticket visibly needs a new owner in the new tier.
+        assertNull(response.assigneeId());
         assertNull(incident.getAssignee());
+
+        // Regression: the audit action must be exactly ESCALATE_TIER so the detail
+        // page can derive hasBeenTierEscalated from the activity feed.
+        ArgumentCaptor<AuditLog> auditCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(auditCaptor.capture());
+        assertEquals("ESCALATE_TIER", auditCaptor.getValue().getAction());
 
         // The old agent can no longer transition status (not assignee, not admin).
         assertThrows(IllegalStateException.class,

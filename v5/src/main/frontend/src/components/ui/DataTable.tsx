@@ -1,16 +1,5 @@
 import type { ReactNode } from 'react'
 
-function forwardWheelToMain(e: React.WheelEvent<HTMLDivElement>) {
-  const el = e.currentTarget
-  if (e.deltaY === 0) return
-  if (el.scrollHeight > el.clientHeight) return
-  const scrollParent = el.closest('main')
-  if (scrollParent && scrollParent !== el) {
-    e.preventDefault()
-    scrollParent.scrollBy({ top: e.deltaY })
-  }
-}
-
 interface Column<T> {
   key: string
   header: string
@@ -39,7 +28,6 @@ export function DataTable<T>({
   return (
     <div
       className="overflow-x-auto scrollbar-themed rounded-xl border border-border bg-card p-4 shadow-sm"
-      onWheel={forwardWheelToMain}
     >
       <table className="w-full text-sm">
         {caption && <caption className="sr-only">{caption}</caption>}

@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -103,7 +104,8 @@ public class ServiceRequestService {
                         user.getId(),
                         List.of(FulfillmentTask.Status.PENDING,
                                 FulfillmentTask.Status.ORDERED,
-                                FulfillmentTask.Status.DELIVERY_DATE_SET))
+                                FulfillmentTask.Status.DELIVERY_DATE_SET,
+                                FulfillmentTask.Status.DELIVERED))
                 .stream()
                 .map(t -> new MyTaskResponse(
                         t.getId(),
@@ -498,6 +500,31 @@ public class ServiceRequestService {
         payload.put("assigneeName", assignee.getDisplayName());
         eventPublisher.publishEvent(
                 new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "TASK_ASSIGNED", payload));
+
+        if (!assignee.getId().equals(user.getId())) {
+            try {
+                Map<String, Object> notificationPayload = new LinkedHashMap<>();
+                notificationPayload.put("number", sr.getNumber());
+                notificationPayload.put("title", task.getDescription());
+                notificationPayload.put("actorName", user.getDisplayName());
+                notificationPayload.put("assigneeName", assignee.getDisplayName());
+                notificationPayload.put("entityType", "SERVICE_REQUEST");
+                notificationPayload.put("entityId", sr.getId());
+                var content = notificationTemplateBuilder.forEvent("FULFILLMENT_TASK_ASSIGNED", notificationPayload);
+                notificationService.send(new NotificationRequest(
+                        sr.getOrgId(),
+                        assignee.getId(),
+                        "FULFILLMENT_TASK_ASSIGNED",
+                        content.inAppSubject(),
+                        content.inAppBody(),
+                        "SERVICE_REQUEST",
+                        sr.getId(),
+                        null,
+                        content));
+            } catch (Exception e) {
+                logger.warn("Failed to send fulfillment task assignment notification to {}", assignee.getId(), e);
+            }
+        }
 
         return toResponse(sr);
     }

@@ -26,17 +26,6 @@ import { StatusBadge } from '../../components/ui/StatusBadge'
 import { SlaCountdown } from '../../components/ui/SlaCountdown'
 import { formatDate, formatDateTime } from '../../lib/date'
 
-function forwardWheelToMain(e: React.WheelEvent<HTMLDivElement>) {
-  const el = e.currentTarget
-  if (e.deltaY === 0) return
-  if (el.scrollHeight > el.clientHeight) return
-  const scrollParent = el.closest('main')
-  if (scrollParent && scrollParent !== el) {
-    e.preventDefault()
-    scrollParent.scrollBy({ top: e.deltaY })
-  }
-}
-
 const COLORS = [
   'var(--chart-1)',
   'var(--chart-3)',
@@ -352,7 +341,7 @@ function AgentPerformanceTable({ reports, isLoading }: { reports: AgentPerforman
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">Agent Performance — {sorted[0].period}</h3>
-      <div className="overflow-x-auto scrollbar-themed" onWheel={forwardWheelToMain}>
+      <div className="overflow-x-auto scrollbar-themed">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">

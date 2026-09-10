@@ -13,6 +13,9 @@ import com.alignedcardio.itsm.repository.ChangeApprovalRepository;
 import com.alignedcardio.itsm.repository.ChangeRequestRepository;
 import com.alignedcardio.itsm.repository.LocationRepository;
 import com.alignedcardio.itsm.repository.ProblemRepository;
+import com.alignedcardio.itsm.service.notification.NotificationRequest;
+import com.alignedcardio.itsm.service.notification.NotificationService;
+import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
@@ -28,6 +31,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -44,6 +48,8 @@ public class ChangeService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
+    private final NotificationTemplateBuilder notificationTemplateBuilder;
 
     public ChangeService(ChangeRequestRepository changeRequestRepository,
                          ChangeApprovalRepository changeApprovalRepository,
@@ -53,7 +59,9 @@ public class ChangeService {
                          EntityManager entityManager,
                          AuditLogRepository auditLogRepository,
                          ObjectMapper objectMapper,
-                         AuditLogService auditLogService) {
+                         AuditLogService auditLogService,
+                         NotificationService notificationService,
+                         NotificationTemplateBuilder notificationTemplateBuilder) {
         this.changeRequestRepository = changeRequestRepository;
         this.changeApprovalRepository = changeApprovalRepository;
         this.appUserRepository = appUserRepository;
@@ -63,6 +71,8 @@ public class ChangeService {
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
         this.auditLogService = auditLogService;
+        this.notificationService = notificationService;
+        this.notificationTemplateBuilder = notificationTemplateBuilder;
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +144,10 @@ public class ChangeService {
         entityManager.flush();
         entityManager.refresh(saved);
 
+        if (saved.getAssignee() != null) {
+            publishAssignment(saved, user, saved.getAssignee());
+        }
+
         return toResponse(saved);
     }
 
@@ -169,6 +183,7 @@ public class ChangeService {
             change.setRequestedBy(req);
         }
 
+        UUID previousAssigneeId = change.getAssignee() == null ? null : change.getAssignee().getId();
         if (request.assigneeId() != null) {
             AppUser assignee = appUserRepository.findById(request.assigneeId())
                     .orElseThrow(() -> new NotFoundException("Assignee not found"));
@@ -192,6 +207,10 @@ public class ChangeService {
 
         ChangeRequest saved = changeRequestRepository.save(change);
         writeChangeFieldUpdateAudit(saved, user.getId(), beforeState, false);
+
+        if (saved.getAssignee() != null && !Objects.equals(previousAssigneeId, saved.getAssignee().getId())) {
+            publishAssignment(saved, user, saved.getAssignee());
+        }
 
         return toResponse(saved);
     }
@@ -535,6 +554,34 @@ public class ChangeService {
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> ur.getRole().getName())
                 .anyMatch(targets::contains);
+    }
+
+    private void publishAssignment(ChangeRequest saved, AppUser updater, AppUser assignee) {
+        if (assignee.getId().equals(updater.getId())) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("number", saved.getNumber());
+            payload.put("title", saved.getTitle());
+            payload.put("actorName", updater.getDisplayName());
+            payload.put("assigneeName", assignee.getDisplayName());
+            payload.put("entityType", "CHANGE");
+            payload.put("entityId", saved.getId());
+            var content = notificationTemplateBuilder.forEvent("CHANGE_ASSIGNED", payload);
+            notificationService.send(new NotificationRequest(
+                    saved.getOrgId(),
+                    assignee.getId(),
+                    "CHANGE_ASSIGNED",
+                    content.inAppSubject(),
+                    content.inAppBody(),
+                    "CHANGE",
+                    saved.getId(),
+                    null,
+                    content));
+        } catch (Exception e) {
+            logger.warn("Failed to send change assignment notification to {}", assignee.getId(), e);
+        }
     }
 
     private String generateChangeNumber() {

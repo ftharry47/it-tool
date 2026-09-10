@@ -55,6 +55,30 @@ public class NotificationTemplateBuilder {
                     "\"" + str(p, "title") + "\"",
                     str(p, "number") + " – Assigned",
                     str(p, "actorName") + " assigned this to you");
+            case "PROBLEM_ASSIGNED" -> content(
+                    str(p, "number") + " – " + str(p, "title") + " – Assigned to you",
+                    str(p, "actorName") + " assigned problem " + str(p, "number")
+                            + " (\"" + str(p, "title") + "\") to you." + link(p),
+                    str(p, "number") + " assigned to you by " + str(p, "actorName"),
+                    "\"" + str(p, "title") + "\"",
+                    str(p, "number") + " – Assigned",
+                    str(p, "actorName") + " assigned this to you");
+            case "CHANGE_ASSIGNED" -> content(
+                    str(p, "number") + " – " + str(p, "title") + " – Assigned to you",
+                    str(p, "actorName") + " assigned change " + str(p, "number")
+                            + " (\"" + str(p, "title") + "\") to you." + link(p),
+                    str(p, "number") + " assigned to you by " + str(p, "actorName"),
+                    "\"" + str(p, "title") + "\"",
+                    str(p, "number") + " – Assigned",
+                    str(p, "actorName") + " assigned this to you");
+            case "FULFILLMENT_TASK_ASSIGNED" -> content(
+                    str(p, "number") + " – " + str(p, "title") + " – Assigned to you",
+                    str(p, "actorName") + " assigned fulfillment task " + str(p, "number")
+                            + " (\"" + str(p, "title") + "\") to you." + link(p),
+                    str(p, "number") + " assigned to you by " + str(p, "actorName"),
+                    "\"" + str(p, "title") + "\"",
+                    str(p, "number") + " – Assigned",
+                    str(p, "actorName") + " assigned this to you");
             case "INCIDENT_PRIORITY_CHANGED" -> content(
                     str(p, "number") + " – " + str(p, "title") + " – Priority escalated",
                     str(p, "actorName") + " changed priority of " + str(p, "number")
