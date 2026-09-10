@@ -33,9 +33,10 @@ public class ServiceRequestController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public List<ServiceRequestResponse> list(@AuthenticationPrincipal Jwt jwt) {
+    public List<ServiceRequestResponse> list(@AuthenticationPrincipal Jwt jwt,
+                                             @RequestParam(required = false, defaultValue = "false") boolean showDeleted) {
         AppUser user = userService.syncFromJwt(jwt);
-        return serviceRequestService.list(user.getOrgId());
+        return serviceRequestService.list(user.getOrgId(), showDeleted);
     }
 
     @PostMapping
@@ -65,6 +66,13 @@ public class ServiceRequestController {
     public List<ServiceRequestResponse> myApprovals(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return serviceRequestService.listPendingApprovals(user);
+    }
+
+    @GetMapping("/approved")
+    @PreAuthorize("isAuthenticated()")
+    public List<ServiceRequestResponse> approvedByMe(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.listApprovedByMe(user);
     }
 
     @GetMapping("/{id}")

@@ -28,9 +28,10 @@ public class IncidentController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
-    public List<IncidentSummary> list(@AuthenticationPrincipal Jwt jwt) {
+    public List<IncidentSummary> list(@AuthenticationPrincipal Jwt jwt,
+                                      @RequestParam(required = false, defaultValue = "false") boolean showDeleted) {
         AppUser user = userService.syncFromJwt(jwt);
-        return incidentService.list(user.getOrgId());
+        return incidentService.list(user.getOrgId(), showDeleted);
     }
 
     @GetMapping("/my")

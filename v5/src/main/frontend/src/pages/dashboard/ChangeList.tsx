@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Calendar, Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
@@ -9,6 +9,9 @@ import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { formatDate } from '../../lib/date'
+import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 export interface Change {
   id: string
@@ -25,17 +28,52 @@ const statusOptions = ['', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SCHEDULED',
 
 export function ChangeList() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [filter, setFilter] = useState('')
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [confirm, setConfirm] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const query = useQuery<Change[]>({
-    queryKey: ['changes', filter],
+    queryKey: ['changes', filter, showDeleted],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account!, '/api/v1/changes')
+      const res = await fetchWithToken(instance, account!, `/api/v1/changes?showDeleted=${showDeleted}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       return filter ? data.filter((c: Change) => c.status === filter) : data
+    },
+  })
+
+  const bulkAction = useMutation<void, Error, void>({
+    mutationFn: async () => {
+      const ids = Array.from(selectedIds)
+      const action = confirm?.action ?? 'delete'
+      const url = `/api/v1/bulk/change-requests/${action === 'delete' ? 'soft-delete' : 'restore'}`
+      const res = await fetchWithToken(instance, account!, url, {
+        method: 'POST',
+        body: JSON.stringify(ids),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    },
+    onSuccess: () => {
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['changes'] })
+      pushToast('success', confirm?.action === 'delete' ? 'Selected changes deleted.' : 'Selected changes restored.')
+      setConfirm(null)
+    },
+    onError: (err) => {
+      pushToast('error', `Bulk ${confirm?.action} failed: ${err.message}`)
+      setConfirm(null)
     },
   })
 
@@ -44,6 +82,20 @@ export function ChangeList() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.action === 'delete' ? 'Delete selected change requests?' : 'Restore selected change requests?'}
+        description={
+          confirm?.action === 'delete'
+            ? `Delete ${selectedIds.size} change requests? This can be undone via Restore.`
+            : `Restore ${selectedIds.size} change requests? They will be visible again in all views and reports.`
+        }
+        confirmLabel={confirm?.action === 'delete' ? 'Delete' : 'Restore'}
+        destructive={confirm?.action === 'delete'}
+        onConfirm={() => bulkAction.mutate()}
+        onCancel={() => setConfirm(null)}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Change Requests</h1>
@@ -65,7 +117,7 @@ export function ChangeList() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="status-filter" className="text-sm font-medium">Filter</label>
           <select
             id="status-filter"
@@ -77,6 +129,14 @@ export function ChangeList() {
             {statusOptions.slice(1).map((s) => <option key={s} value={s}>{formatStatusLabel(s)}</option>)}
           </select>
         </div>
+
+        <BulkActionToolbar
+          selectedCount={selectedIds.size}
+          showDeleted={showDeleted}
+          onToggleShowDeleted={() => { setShowDeleted((v) => !v); setSelectedIds(new Set()) }}
+          onDelete={() => setConfirm({ open: true, action: 'delete' })}
+          onRestore={() => setConfirm({ open: true, action: 'restore' })}
+        />
 
         <DataTable<Change>
           caption="Change requests"
@@ -91,6 +151,9 @@ export function ChangeList() {
           data={query.data ?? []}
           getRowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/dashboard/changes/${row.id}`)}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           emptyText="No change requests found."
         />
       </div>

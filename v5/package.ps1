@@ -39,5 +39,5 @@ if ($LASTEXITCODE -ne 0) { throw "Maven build failed with exit code $LASTEXITCOD
 $zipPath = "target/app.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath }
 
-Compress-Archive -Path "target/app.jar", "startup.sh" -DestinationPath $zipPath -Force
+Compress-Archive -Path "target/app.jar" -DestinationPath $zipPath -Force
 Write-Host "Created $zipPath"

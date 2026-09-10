@@ -10,6 +10,8 @@ import { Home } from '../pages/home/Home'
 import { CatalogBrowse } from '../pages/home/CatalogBrowse'
 import { MyRequests } from '../pages/home/MyRequests'
 import { MyRequestDetail } from '../pages/home/MyRequestDetail'
+import { ApprovedRequests } from '../pages/shared/ApprovedRequests'
+import { ApprovedRequestDetail } from '../pages/shared/ApprovedRequestDetail'
 import { KbBrowse } from '../pages/home/KbBrowse'
 import { KbArticleView } from '../pages/home/KbArticleView'
 import { Dashboard } from '../pages/dashboard/Dashboard'
@@ -66,6 +68,8 @@ const dashboardRoutes: RouteDefinition[] = [
   { path: 'dashboard/incidents/:id', label: 'Incident Detail', element: <IncidentDetail /> },
   { path: 'dashboard/service-requests', label: 'Service Requests', element: <ServiceRequestList />, group: 'Work' },
   { path: 'dashboard/approvals', label: 'Approvals', element: <Approvals />, group: 'Work' },
+  { path: 'dashboard/approved-requests', label: 'Approved Requests', element: <ApprovedRequests />, group: 'Work' },
+  { path: 'dashboard/approved-requests/:id', label: 'Request Detail', element: <ApprovedRequestDetail />, hidden: true },
   { path: 'dashboard/service-requests/new', label: 'New Request', element: <CatalogBrowse /> },
   { path: 'dashboard/service-requests/:id', label: 'Request Detail', element: <ServiceRequestDetail /> },
   { path: 'dashboard/problems', label: 'Problems', element: <ProblemList />, group: 'Work' },
@@ -116,6 +120,8 @@ export function getRouteDefinitions(role: string, currentUser?: CurrentUser | nu
   if (currentUser?.isApprovalManager) {
     routes.push({ path: 'home/approvals', label: 'Approvals', element: <Approvals /> })
     routes.push({ path: 'home/approvals/:id', label: 'Request Detail', element: <ServiceRequestDetail />, hidden: true })
+    routes.push({ path: 'home/approved-requests', label: 'Approved Requests', element: <ApprovedRequests /> })
+    routes.push({ path: 'home/approved-requests/:id', label: 'Request Detail', element: <ApprovedRequestDetail />, hidden: true })
   }
   return routes
 }

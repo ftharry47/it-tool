@@ -10,6 +10,9 @@ import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { EntityForm, type Field } from '../../components/ui/EntityForm'
+import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 export interface Problem {
   id: string
@@ -32,11 +35,22 @@ export function ProblemList() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', description: '' })
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [confirm, setConfirm] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
 
   const query = useQuery<Problem[]>({
-    queryKey: ['problems'],
+    queryKey: ['problems', showDeleted],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account!, '/api/v1/problems')
+      const res = await fetchWithToken(instance, account!, `/api/v1/problems?showDeleted=${showDeleted}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -64,11 +78,48 @@ export function ProblemList() {
     onError: (error) => setCreateError(error.message),
   })
 
+  const bulkAction = useMutation<void, Error, void>({
+    mutationFn: async () => {
+      const ids = Array.from(selectedIds)
+      const action = confirm?.action ?? 'delete'
+      const url = `/api/v1/bulk/problems/${action === 'delete' ? 'soft-delete' : 'restore'}`
+      const res = await fetchWithToken(instance, account!, url, {
+        method: 'POST',
+        body: JSON.stringify(ids),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    },
+    onSuccess: () => {
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['problems'] })
+      pushToast('success', confirm?.action === 'delete' ? 'Selected problems deleted.' : 'Selected problems restored.')
+      setConfirm(null)
+    },
+    onError: (err) => {
+      pushToast('error', `Bulk ${confirm?.action} failed: ${err.message}`)
+      setConfirm(null)
+    },
+  })
+
   if (query.isLoading) return <Loading />
   if (query.error) return <ErrorFallback error={query.error} message="Could not load problems." onRetry={() => query.refetch()} />
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.action === 'delete' ? 'Delete selected problems?' : 'Restore selected problems?'}
+        description={
+          confirm?.action === 'delete'
+            ? `Delete ${selectedIds.size} problems? This can be undone via Restore.`
+            : `Restore ${selectedIds.size} problems? They will be visible again in all views and reports.`
+        }
+        confirmLabel={confirm?.action === 'delete' ? 'Delete' : 'Restore'}
+        destructive={confirm?.action === 'delete'}
+        onConfirm={() => bulkAction.mutate()}
+        onCancel={() => setConfirm(null)}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Problems</h1>
@@ -81,6 +132,14 @@ export function ProblemList() {
           </button>
         </div>
 
+        <BulkActionToolbar
+          selectedCount={selectedIds.size}
+          showDeleted={showDeleted}
+          onToggleShowDeleted={() => { setShowDeleted((v) => !v); setSelectedIds(new Set()) }}
+          onDelete={() => setConfirm({ open: true, action: 'delete' })}
+          onRestore={() => setConfirm({ open: true, action: 'restore' })}
+        />
+
         <DataTable<Problem>
           caption="List of problems"
           columns={[
@@ -92,6 +151,9 @@ export function ProblemList() {
           data={query.data ?? []}
           getRowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/dashboard/problems/${row.id}`)}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           emptyText="No problems found."
         />
       </div>

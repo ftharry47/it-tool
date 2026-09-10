@@ -23,4 +23,7 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     List<ServiceRequest> findByOrgIdAndStatusAndApprover_IdOrderByCreatedAtDesc(
             UUID orgId, ServiceRequest.Status status, UUID approverId);
+
+    List<ServiceRequest> findByOrgIdAndApprover_IdAndApprovalDecisionAndDeletedAtIsNullOrderByCreatedAtDesc(
+            UUID orgId, UUID approverId, ServiceRequest.ApprovalDecision approvalDecision);
 }

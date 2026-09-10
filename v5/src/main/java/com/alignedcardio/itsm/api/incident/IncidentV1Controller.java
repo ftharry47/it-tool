@@ -47,6 +47,7 @@ public class IncidentV1Controller {
                                         @RequestParam(required = false) UUID assigneeId,
                                         @RequestParam(required = false) UUID teamId,
                                         @RequestParam(required = false) Boolean unassigned,
+                                        @RequestParam(required = false, defaultValue = "false") boolean showDeleted,
                                         @RequestParam(required = false, defaultValue = "20") int limit) {
         AppUser user = userService.syncFromJwt(jwt);
         if (query != null && !query.isBlank()) {
@@ -58,12 +59,12 @@ public class IncidentV1Controller {
                     .map(Incident.Status::valueOf)
                     .toList();
             if (unassigned != null && unassigned) {
-                return incidentService.listUnassigned(user.getOrgId(), statuses, limit);
+                return incidentService.listUnassigned(user.getOrgId(), statuses, limit, showDeleted);
             }
-            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, teamId, limit);
+            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, teamId, limit, showDeleted);
         }
         if (unassigned != null && unassigned) {
-            return incidentService.listUnassigned(user.getOrgId(), null, limit);
+            return incidentService.listUnassigned(user.getOrgId(), null, limit, showDeleted);
         }
         if (assigneeId != null) {
             List<Incident.Status> statuses = List.of(
@@ -72,9 +73,9 @@ public class IncidentV1Controller {
                     Incident.Status.ON_HOLD,
                     Incident.Status.RESOLVED,
                     Incident.Status.REOPENED);
-            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, limit);
+            return incidentService.listFiltered(user.getOrgId(), statuses, assigneeId, null, limit, showDeleted);
         }
-        return incidentService.list(user.getOrgId());
+        return incidentService.list(user.getOrgId(), showDeleted);
     }
 
     @PostMapping

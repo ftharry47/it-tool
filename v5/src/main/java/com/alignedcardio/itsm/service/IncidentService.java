@@ -112,8 +112,11 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentSummary> list(UUID orgId) {
-        return toSummaries(incidentRepository.findByOrgIdOrderByCreatedAtDesc(orgId));
+    public List<IncidentSummary> list(UUID orgId, boolean showDeleted) {
+        List<Incident> incidents = incidentRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
+                .filter(i -> showDeleted ? i.getDeletedAt() != null : i.getDeletedAt() == null)
+                .toList();
+        return toSummaries(incidents);
     }
 
     @Transactional(readOnly = true)
@@ -122,12 +125,12 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentSummary> listFiltered(UUID orgId, List<Incident.Status> statuses, UUID assigneeId, int limit) {
-        return listFiltered(orgId, statuses, assigneeId, null, limit);
+    public List<IncidentSummary> listFiltered(UUID orgId, List<Incident.Status> statuses, UUID assigneeId, int limit, boolean showDeleted) {
+        return listFiltered(orgId, statuses, assigneeId, null, limit, showDeleted);
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentSummary> listFiltered(UUID orgId, List<Incident.Status> statuses, UUID assigneeId, UUID teamId, int limit) {
+    public List<IncidentSummary> listFiltered(UUID orgId, List<Incident.Status> statuses, UUID assigneeId, UUID teamId, int limit, boolean showDeleted) {
         Pageable pageable = PageRequest.of(0, Math.max(1, limit), Sort.by(Sort.Direction.DESC, "createdAt"));
         List<Incident> incidents;
         if (teamId != null && statuses != null && !statuses.isEmpty()) {
@@ -139,11 +142,13 @@ public class IncidentService {
         } else {
             incidents = incidentRepository.findByOrgIdOrderByCreatedAtDesc(orgId);
         }
-        return toSummaries(incidents);
+        return toSummaries(incidents.stream()
+                .filter(i -> showDeleted ? i.getDeletedAt() != null : i.getDeletedAt() == null)
+                .toList());
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentSummary> listUnassigned(UUID orgId, List<Incident.Status> statuses, int limit) {
+    public List<IncidentSummary> listUnassigned(UUID orgId, List<Incident.Status> statuses, int limit, boolean showDeleted) {
         Pageable pageable = PageRequest.of(0, Math.max(1, limit), Sort.by(Sort.Direction.DESC, "createdAt"));
         List<Incident.Status> active = (statuses != null && !statuses.isEmpty()) ? statuses : List.of(
                 Incident.Status.NEW,
@@ -151,7 +156,9 @@ public class IncidentService {
                 Incident.Status.ON_HOLD,
                 Incident.Status.REOPENED);
         List<Incident> incidents = incidentRepository.findByOrgIdAndAssigneeIsNullAndStatusInOrderByCreatedAtDesc(orgId, active, pageable);
-        return toSummaries(incidents);
+        return toSummaries(incidents.stream()
+                .filter(i -> showDeleted ? i.getDeletedAt() != null : i.getDeletedAt() == null)
+                .toList());
     }
 
     @Transactional(readOnly = true)

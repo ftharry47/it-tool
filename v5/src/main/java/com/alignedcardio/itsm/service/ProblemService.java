@@ -70,15 +70,16 @@ public class ProblemService {
 
     @Transactional(readOnly = true)
     public List<ProblemResponse> list(UUID orgId) {
-        return list(orgId, null);
+        return list(orgId, null, false);
     }
 
     @Transactional(readOnly = true)
-    public List<ProblemResponse> list(UUID orgId, UUID assigneeId) {
+    public List<ProblemResponse> list(UUID orgId, UUID assigneeId, boolean showDeleted) {
         List<Problem> problems = assigneeId == null
                 ? problemRepository.findByOrgIdOrderByCreatedAtDesc(orgId)
                 : problemRepository.findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(orgId, assigneeId);
         return problems.stream()
+                .filter(p -> showDeleted ? p.getDeletedAt() != null : p.getDeletedAt() == null)
                 .map(this::toResponse)
                 .toList();
     }

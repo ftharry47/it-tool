@@ -97,7 +97,7 @@ public class NotificationTemplateBuilder {
                     "was " + str(p, "oldStatus"),
                     str(p, "number") + " – Status",
                     str(p, "oldStatus") + " → " + str(p, "newStatus"));
-            case "INCIDENT_COMMENT" -> content(
+            case "INCIDENT_COMMENT", "SR_COMMENT" -> content(
                     str(p, "number") + " – " + str(p, "title") + " – New comment",
                     str(p, "authorName") + " commented on " + str(p, "number")
                             + " (\"" + str(p, "title") + "\"): \"" + str(p, "commentPreview") + "\"" + link(p),

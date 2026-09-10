@@ -91,8 +91,9 @@ public class ServiceRequestService {
     }
 
     @Transactional(readOnly = true)
-    public List<ServiceRequestResponse> list(UUID orgId) {
+    public List<ServiceRequestResponse> list(UUID orgId, boolean showDeleted) {
         return serviceRequestRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
+                .filter(sr -> showDeleted ? sr.getDeletedAt() != null : sr.getDeletedAt() == null)
                 .map(this::toResponse)
                 .toList();
     }
@@ -370,6 +371,16 @@ public class ServiceRequestService {
         return serviceRequestRepository
                 .findByOrgIdAndStatusAndApprover_IdOrderByCreatedAtDesc(
                         user.getOrgId(), ServiceRequest.Status.PENDING_APPROVAL, user.getId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> listApprovedByMe(AppUser user) {
+        return serviceRequestRepository
+                .findByOrgIdAndApprover_IdAndApprovalDecisionAndDeletedAtIsNullOrderByCreatedAtDesc(
+                        user.getOrgId(), user.getId(), ServiceRequest.ApprovalDecision.APPROVED)
                 .stream()
                 .map(this::toResponse)
                 .toList();

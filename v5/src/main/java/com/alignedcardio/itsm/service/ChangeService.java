@@ -77,15 +77,16 @@ public class ChangeService {
 
     @Transactional(readOnly = true)
     public List<ChangeResponse> list(UUID orgId) {
-        return list(orgId, null);
+        return list(orgId, null, false);
     }
 
     @Transactional(readOnly = true)
-    public List<ChangeResponse> list(UUID orgId, UUID assigneeId) {
+    public List<ChangeResponse> list(UUID orgId, UUID assigneeId, boolean showDeleted) {
         List<ChangeRequest> changes = assigneeId == null
                 ? changeRequestRepository.findByOrgIdOrderByCreatedAtDesc(orgId)
                 : changeRequestRepository.findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(orgId, assigneeId);
         return changes.stream()
+                .filter(c -> showDeleted ? c.getDeletedAt() != null : c.getDeletedAt() == null)
                 .map(this::toResponse)
                 .toList();
     }

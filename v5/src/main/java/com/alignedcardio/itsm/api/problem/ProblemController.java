@@ -28,9 +28,10 @@ public class ProblemController {
     @GetMapping
     @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public List<ProblemResponse> list(@AuthenticationPrincipal Jwt jwt,
-                                  @RequestParam(defaultValue = "false") boolean mine) {
+                                      @RequestParam(defaultValue = "false") boolean mine,
+                                      @RequestParam(required = false, defaultValue = "false") boolean showDeleted) {
         AppUser user = userService.syncFromJwt(jwt);
-        return problemService.list(user.getOrgId(), mine ? user.getId() : null);
+        return problemService.list(user.getOrgId(), mine ? user.getId() : null, showDeleted);
     }
 
     @PostMapping

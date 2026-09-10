@@ -6,6 +6,8 @@ import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { DataTable } from '../../components/ui/DataTable'
+import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 import { FilterBar, FilterSelect, useSessionFilters, enumLabel } from '../../components/ui/FilterBar'
@@ -56,6 +58,9 @@ export function Incidents() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [confirmCloseForm, setConfirmCloseForm] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
 
   const EMPTY_INCIDENT_FORM = { title: '', description: '', impact: 3, urgency: 3, priorityId: '', categoryId: '', locationId: '', phone: '', severity: 'medium' }
   const isFormDirty = JSON.stringify(form) !== JSON.stringify(EMPTY_INCIDENT_FORM) || selectedFile !== null
@@ -81,13 +86,37 @@ export function Incidents() {
   }
 
   const listQuery = useQuery<Incident[]>({
-    queryKey: ['incidents'],
+    queryKey: ['incidents', showDeleted],
     enabled: isAuthenticated && !!account,
     queryFn: async () => {
-      const endpoint = isEndUser ? '/api/v1/incidents/my' : '/api/v1/incidents'
+      const base = isEndUser ? '/api/v1/incidents/my' : '/api/v1/incidents'
+      const endpoint = `${base}?showDeleted=${showDeleted}`
       const res = await fetchWithToken(instance, account!, endpoint)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
+    },
+  })
+
+  const bulkMutation = useMutation<void, Error, void>({
+    mutationFn: async () => {
+      const ids = Array.from(selectedIds)
+      const action = confirmBulk?.action ?? 'delete'
+      const url = `/api/v1/bulk/incidents/${action === 'delete' ? 'soft-delete' : 'restore'}`
+      const res = await fetchWithToken(instance, account!, url, {
+        method: 'POST',
+        body: JSON.stringify(ids),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    },
+    onSuccess: () => {
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['incidents'] })
+      pushToast('success', confirmBulk?.action === 'delete' ? 'Selected incidents deleted.' : 'Selected incidents restored.')
+      setConfirmBulk(null)
+    },
+    onError: (err) => {
+      pushToast('error', `Bulk ${confirmBulk?.action} failed: ${err.message}`)
+      setConfirmBulk(null)
     },
   })
 
@@ -201,6 +230,19 @@ export function Incidents() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={!!confirmBulk}
+        title={confirmBulk?.action === 'delete' ? 'Delete selected incidents?' : 'Restore selected incidents?'}
+        description={
+          confirmBulk?.action === 'delete'
+            ? `Delete ${selectedIds.size} incidents? This can be undone via Restore.`
+            : `Restore ${selectedIds.size} incidents? They will be visible again in all views and reports.`
+        }
+        confirmLabel={confirmBulk?.action === 'delete' ? 'Delete' : 'Restore'}
+        destructive={confirmBulk?.action === 'delete'}
+        onConfirm={() => bulkMutation.mutate()}
+        onCancel={() => setConfirmBulk(null)}
+      />
       <ConfirmDialog
         open={confirmCloseForm}
         title="Discard unsaved changes?"
@@ -430,55 +472,39 @@ export function Incidents() {
               )}
             </FilterBar>
           </div>
+          {!isEndUser && (
+            <BulkActionToolbar
+              selectedCount={selectedIds.size}
+              showDeleted={showDeleted}
+              onToggleShowDeleted={() => { setShowDeleted((v) => !v); setSelectedIds(new Set()) }}
+              onDelete={() => setConfirmBulk({ open: true, action: 'delete' })}
+              onRestore={() => setConfirmBulk({ open: true, action: 'restore' })}
+            />
+          )}
           {isLoading ? (
             <div role="status" aria-live="polite" className="py-12 text-center text-muted-foreground">Loading incidents…</div>
           ) : (
-            <div className="overflow-x-auto scrollbar-themed">
-              <table className="w-full text-sm">
-                <caption className="sr-only">List of incidents</caption>
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th scope="col" className="py-2 pr-4 font-medium">Number</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Title</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Status</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Priority</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Category</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Location</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Phone</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Requester</th>
-                    <th scope="col" className="py-2 pr-4 font-medium">Assignee</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredIncidents.length === 0 && (
-                    <tr>
-                      <td colSpan={9} className="py-8 text-center text-muted-foreground">
-                        {incidents.length === 0 ? 'No incidents yet.' : 'No incidents match the selected filters.'}
-                      </td>
-                    </tr>
-                  )}
-                  {filteredIncidents.map((incident) => (
-                    <tr
-                      key={incident.id}
-                      onClick={() => navigate(isEndUser ? `/home/incidents/${incident.id}` : `/dashboard/incidents/${incident.id}`)}
-                      className="border-b border-border/50 cursor-pointer last:border-0 transition hover:bg-muted/50"
-                    >
-                      <td className="py-3 pr-4">{incident.number}</td>
-                      <td className="py-3 pr-4 font-medium">{incident.title}</td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={incident.status} />
-                      </td>
-                      <td className="py-3 pr-4">{incident.priority ?? '—'}</td>
-                      <td className="py-3 pr-4">{incident.category ?? '—'}</td>
-                      <td className="py-3 pr-4">{incident.location ?? '—'}</td>
-                      <td className="py-3 pr-4">{incident.phone ?? '—'}</td>
-                      <td className="py-3 pr-4">{incident.requester ?? '—'}</td>
-                      <td className="py-3 pr-4">{incident.assignee ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<Incident>
+              caption="List of incidents"
+              columns={[
+                { key: 'number', header: 'Number' },
+                { key: 'title', header: 'Title' },
+                { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+                { key: 'priority', header: 'Priority', render: (row) => row.priority ?? '—' },
+                { key: 'category', header: 'Category', render: (row) => row.category ?? '—' },
+                { key: 'location', header: 'Location', render: (row) => row.location ?? '—' },
+                { key: 'phone', header: 'Phone', render: (row) => row.phone ?? '—' },
+                { key: 'requester', header: 'Requester', render: (row) => row.requester ?? '—' },
+                { key: 'assignee', header: 'Assignee', render: (row) => row.assignee ?? '—' },
+              ]}
+              data={filteredIncidents}
+              getRowKey={(row) => row.id}
+              onRowClick={(row) => navigate(isEndUser ? `/home/incidents/${row.id}` : `/dashboard/incidents/${row.id}`)}
+              selectable={!isEndUser}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              emptyText={incidents.length === 0 ? 'No incidents yet.' : 'No incidents match the selected filters.'}
+            />
           )}
         </div>
       </div>

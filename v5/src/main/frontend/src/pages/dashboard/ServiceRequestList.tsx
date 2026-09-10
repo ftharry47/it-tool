@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
 import { Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
@@ -8,6 +9,9 @@ import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FilterBar, FilterSelect, useSessionFilters, enumLabel } from '../../components/ui/FilterBar'
+import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 
 const SR_STATUSES = ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'IN_FULFILLMENT', 'FULFILLED', 'CANCELLED']
 const APPROVAL_DECISIONS = ['PENDING', 'APPROVED', 'REJECTED']
@@ -24,17 +28,54 @@ export interface ServiceRequest {
 
 export function ServiceRequestList() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [confirm, setConfirm] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
+
+  const pushToast = (type: ToastItem['type'], message: string) => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
+  }
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
   const query = useQuery<ServiceRequest[]>({
-    queryKey: ['service-requests'],
+    queryKey: ['service-requests', showDeleted],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account!, '/api/v1/service-requests')
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests?showDeleted=${showDeleted}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
     enabled: !!account,
+  })
+
+  const bulkAction = useMutation<{ action: 'delete' | 'restore' }, Error, void>({
+    mutationFn: async () => {
+      const ids = Array.from(selectedIds)
+      const action = confirm?.action ?? 'delete'
+      const url = `/api/v1/bulk/service-requests/${action === 'delete' ? 'soft-delete' : 'restore'}`
+      const res = await fetchWithToken(instance, account!, url, {
+        method: 'POST',
+        body: JSON.stringify(ids),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return { action }
+    },
+    onSuccess: ({ action }) => {
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['service-requests'] })
+      pushToast('success', action === 'delete' ? 'Selected requests deleted.' : 'Selected requests restored.')
+      setConfirm(null)
+    },
+    onError: (err) => {
+      pushToast('error', `Bulk ${confirm?.action} failed: ${err.message}`)
+      setConfirm(null)
+    },
   })
 
   const { filters, setFilter, clearFilters, activeCount } = useSessionFilters('sr-filters', {
@@ -60,6 +101,20 @@ export function ServiceRequestList() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.action === 'delete' ? 'Delete selected requests?' : 'Restore selected requests?'}
+        description={
+          confirm?.action === 'delete'
+            ? `Delete ${selectedIds.size} requests? This can be undone via Restore.`
+            : `Restore ${selectedIds.size} requests? They will be visible again in all views and reports.`
+        }
+        confirmLabel={confirm?.action === 'delete' ? 'Delete' : 'Restore'}
+        destructive={confirm?.action === 'delete'}
+        onConfirm={() => bulkAction.mutate()}
+        onCancel={() => setConfirm(null)}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Service Requests</h1>
@@ -97,6 +152,13 @@ export function ServiceRequestList() {
             onChange={(v) => setFilter('approval', v)}
           />
         </FilterBar>
+        <BulkActionToolbar
+          selectedCount={selectedIds.size}
+          showDeleted={showDeleted}
+          onToggleShowDeleted={() => { setShowDeleted((v) => !v); setSelectedIds(new Set()) }}
+          onDelete={() => setConfirm({ open: true, action: 'delete' })}
+          onRestore={() => setConfirm({ open: true, action: 'restore' })}
+        />
         <DataTable<ServiceRequest>
           caption="List of service requests"
           columns={[
@@ -105,11 +167,14 @@ export function ServiceRequestList() {
             { key: 'requesterName', header: 'Requester' },
             { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
             { key: 'approvalDecision', header: 'Approval', render: (row) => <StatusBadge status={row.approvalDecision} /> },
-            { key: 'title', header: 'Title' },
+            { key: 'locationName', header: 'Location', render: (row) => row.locationName ?? '—' },
           ]}
           data={filtered}
           getRowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/dashboard/service-requests/${row.id}`)}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
           emptyText={requests.length === 0 ? 'No service requests found.' : 'No requests match the selected filters.'}
         />
       </div>
