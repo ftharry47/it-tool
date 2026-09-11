@@ -117,6 +117,30 @@ public class ReportingController {
         return reportingService.sprintVelocity(user.getOrgId());
     }
 
+    @GetMapping("/incidents-by-category")
+    public List<Map<String, Object>> incidentsByCategory(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.incidentsByCategory(user.getOrgId());
+    }
+
+    @GetMapping("/requests-by-catalog")
+    public List<Map<String, Object>> requestsByCatalog(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.requestsByCatalogItem(user.getOrgId());
+    }
+
+    @GetMapping("/sla-by-priority")
+    public List<Map<String, Object>> slaByPriority(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceByPriority(user.getOrgId());
+    }
+
+    @GetMapping("/pending-approvals-backlog")
+    public List<Map<String, Object>> pendingApprovalsBacklog(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.pendingApprovalsBacklog(user.getOrgId());
+    }
+
     @PostMapping("/query")
     public AdHocQueryResponse adHocQuery(@AuthenticationPrincipal Jwt jwt,
                                          @RequestBody AdHocQueryRequest request,

@@ -87,6 +87,22 @@ class SlaBreachMonitorJobTest {
     }
 
     @Test
+    void deletedIncidentIsExcludedFromEscalation() {
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        incident.setDeletedAt(OffsetDateTime.now());
+        SlaInstance instance = instance(policy, incident);
+        instance.setResponseDueAt(OffsetDateTime.now().minusMinutes(10));
+
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+
+        job.execute(null);
+
+        assertEquals(0, instance.getEscalationLevel());
+        verifyNoInteractions(escalationTierRepository);
+    }
+
+    @Test
     void resolvedIncidentIsExcludedFromEscalation() {
         SlaPolicy policy = policy();
         Incident incident = incident(Incident.Status.RESOLVED);

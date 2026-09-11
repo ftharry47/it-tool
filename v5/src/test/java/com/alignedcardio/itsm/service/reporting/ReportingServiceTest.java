@@ -111,6 +111,7 @@ class ReportingServiceTest {
         when(path.getJavaType()).thenReturn((Class) Incident.Status.class);
         when(criteriaBuilder.count(root)).thenReturn(countExpr);
         lenient().when(criteriaBuilder.equal(any(Path.class), any(Object.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNull(any(Path.class))).thenReturn(predicate);
         when(criteriaQuery.where(any(Predicate[].class))).thenReturn(criteriaQuery);
         when(criteriaQuery.groupBy(any(Expression[].class))).thenReturn(criteriaQuery);
         when(criteriaQuery.multiselect(any(Selection[].class))).thenReturn(criteriaQuery);
@@ -142,6 +143,7 @@ class ReportingServiceTest {
 
         verify(criteriaBuilder).equal(path, orgId);
         verify(criteriaBuilder).equal(path, Incident.Status.NEW);
+        verify(criteriaBuilder).isNull(path);
         verify(criteriaQuery).groupBy(any(Expression[].class));
         verify(typedQuery).setMaxResults(1000);
     }

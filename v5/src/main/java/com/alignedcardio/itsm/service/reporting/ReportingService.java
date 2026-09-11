@@ -105,6 +105,7 @@ public class ReportingService {
 
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
+        predicates.add(cb.isNull(root.get("deletedAt")));
 
         if (mineUserId != null) {
             String mineField = switch (request.entity()) {
@@ -176,6 +177,7 @@ public class ReportingService {
                 FROM Incident i
                 LEFT JOIN i.priority p
                 WHERE i.orgId = :orgId
+                  AND i.deletedAt IS NULL
                   AND i.status IN :statuses
                 GROUP BY p.name
                 """;
@@ -258,6 +260,7 @@ public class ReportingService {
     private Predicate[] baseIncidentPredicates(CriteriaBuilder cb, Root<Incident> root, UUID orgId, UUID mineUserId) {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
+        predicates.add(cb.isNull(root.get("deletedAt")));
         if (mineUserId != null) {
             predicates.add(cb.equal(root.get("assignee").get("id"), mineUserId));
         }
@@ -267,6 +270,13 @@ public class ReportingService {
     private Predicate[] baseSlaInstancePredicates(CriteriaBuilder cb, Root<SlaInstance> root, UUID orgId, UUID mineUserId) {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
+        Predicate incidentNotDeleted = cb.and(
+                cb.isNotNull(root.get("incident")),
+                cb.isNull(root.get("incident").get("deletedAt")));
+        Predicate requestNotDeleted = cb.and(
+                cb.isNotNull(root.get("serviceRequest")),
+                cb.isNull(root.get("serviceRequest").get("deletedAt")));
+        predicates.add(cb.or(incidentNotDeleted, requestNotDeleted));
         if (mineUserId != null) {
             Predicate incidentAssigned = cb.equal(root.get("incident").get("assignee").get("id"), mineUserId);
             Predicate requestRequested = cb.equal(root.get("serviceRequest").get("requester").get("id"), mineUserId);
@@ -408,6 +418,7 @@ public class ReportingService {
         cq.multiselect(root.get("id"), agentName);
         cq.where(
                 cb.equal(root.get("orgId"), orgId),
+                cb.isNull(root.get("deletedAt")),
                 root.get("status").in(
                         Incident.Status.NEW,
                         Incident.Status.IN_PROGRESS,
@@ -780,6 +791,124 @@ public class ReportingService {
                     return row;
                 })
                 .collect(Collectors.toList());
+    }
+
+    /** First-phase standard reports. */
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> incidentsByCategory(UUID orgId) {
+        String jpql = """
+                SELECT COALESCE(c.name, 'Unassigned'), COUNT(i)
+                FROM Incident i
+                LEFT JOIN i.category c
+                WHERE i.orgId = :orgId
+                  AND i.deletedAt IS NULL
+                  AND i.status IN :statuses
+                GROUP BY c.name
+                """;
+        List<Incident.Status> statuses = List.of(
+                Incident.Status.NEW, Incident.Status.IN_PROGRESS,
+                Incident.Status.ON_HOLD, Incident.Status.REOPENED, Incident.Status.WAITING_ON_CUSTOMER);
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("orgId", orgId)
+                .setParameter("statuses", statuses);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("group", t.get(0, String.class));
+            row.put("count", t.get(1, Long.class));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> requestsByCatalogItem(UUID orgId) {
+        String jpql = """
+                SELECT COALESCE(ci.name, 'Unknown'), COUNT(sr)
+                FROM ServiceRequest sr
+                LEFT JOIN sr.catalogItem ci
+                WHERE sr.orgId = :orgId
+                  AND sr.deletedAt IS NULL
+                GROUP BY ci.name
+                """;
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("orgId", orgId);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("group", t.get(0, String.class));
+            row.put("count", t.get(1, Long.class));
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> slaComplianceByPriority(UUID orgId) {
+        String jpql = """
+                SELECT COALESCE(p.name, 'Unassigned'),
+                       COUNT(si),
+                       SUM(CASE WHEN si.breachStatus = :breached THEN 1 ELSE 0 END)
+                FROM SlaInstance si
+                LEFT JOIN si.incident i
+                LEFT JOIN i.priority p
+                WHERE i.orgId = :orgId
+                  AND i.deletedAt IS NULL
+                  AND si.resolutionDueAt IS NOT NULL
+                GROUP BY p.name
+                """;
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("orgId", orgId)
+                .setParameter("breached", SlaInstance.BreachStatus.BREACHED);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            String priority = t.get(0, String.class);
+            Long total = t.get(1, Long.class);
+            Long breached = t.get(2, Long.class);
+            double compliance = total == null || total == 0 ? 100.0
+                    : ((total - breached) * 100.0 / total);
+            Map<String, Object> row = new HashMap<>();
+            row.put("priority", priority);
+            row.put("total", total);
+            row.put("breached", breached);
+            row.put("compliancePercent", Math.round(compliance * 100.0) / 100.0);
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> pendingApprovalsBacklog(UUID orgId) {
+        String jpql = """
+                SELECT COALESCE(a.displayName, 'Unassigned'),
+                       COUNT(sr),
+                       MIN(sr.createdAt)
+                FROM ServiceRequest sr
+                LEFT JOIN sr.approver a
+                WHERE sr.orgId = :orgId
+                  AND sr.deletedAt IS NULL
+                  AND sr.status = :status
+                GROUP BY a.displayName
+                """;
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("orgId", orgId)
+                .setParameter("status", ServiceRequest.Status.PENDING_APPROVAL);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now();
+        for (Tuple t : q.getResultList()) {
+            String approver = t.get(0, String.class);
+            Long count = t.get(1, Long.class);
+            OffsetDateTime oldest = t.get(2, OffsetDateTime.class);
+            int oldestDays = oldest == null ? 0
+                    : (int) Math.max(0, ChronoUnit.DAYS.between(oldest, now));
+            Map<String, Object> row = new HashMap<>();
+            row.put("approver", approver);
+            row.put("count", count);
+            row.put("oldestDays", oldestDays);
+            rows.add(row);
+        }
+        return rows;
     }
 
     private void validateDateRange(AdHocQueryRequest.DateRange dateRange) {

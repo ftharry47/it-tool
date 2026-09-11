@@ -41,6 +41,7 @@ public class IncidentV1Controller {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public List<IncidentSummary> search(@AuthenticationPrincipal Jwt jwt,
                                         @RequestParam(name = "search", required = false) String query,
                                         @RequestParam(required = false) String status,

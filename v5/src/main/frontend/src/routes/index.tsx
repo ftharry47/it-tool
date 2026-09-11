@@ -27,6 +27,7 @@ import { ChangeDetail } from '../pages/dashboard/ChangeDetail'
 import { ChangeCalendar } from '../pages/dashboard/ChangeCalendar'
 import { IncidentDetail } from '../pages/dashboard/IncidentDetail'
 import { ReportsDashboard } from '../pages/dashboard/ReportsDashboard'
+import { StandardReports } from '../pages/dashboard/StandardReports'
 import { SavedReportList } from '../pages/dashboard/SavedReportList'
 import { AdHocQueryBuilder } from '../pages/dashboard/AdHocQueryBuilder'
 import { NotificationPreferences } from '../pages/dashboard/NotificationPreferences'
@@ -46,6 +47,7 @@ import { BusinessCalendars } from '../pages/admin/BusinessCalendars'
 import { LocationAdmin } from '../pages/admin/LocationAdmin'
 import { CategoryAdmin } from '../pages/admin/CategoryAdmin'
 import { SupportTiers } from '../pages/admin/SupportTiers'
+import { HowItWorks } from '../pages/admin/HowItWorks'
 import { NotFound } from '../pages/shared/NotFound'
 import type { RouteDefinition } from './types'
 import type { CurrentUser } from '../auth/AuthProvider'
@@ -84,6 +86,7 @@ const dashboardRoutes: RouteDefinition[] = [
   { path: 'dashboard/kb', label: 'KB Articles', element: <KbArticleList />, group: 'Knowledge' },
   { path: 'dashboard/kb/:id', label: 'KB Editor', element: <KbArticleEditor /> },
   { path: 'dashboard/reports', label: 'Reports', element: <ReportsDashboard />, group: 'Insights' },
+  { path: 'dashboard/reports/standard', label: 'Standard Reports', element: <StandardReports />, group: 'Insights' },
   { path: 'dashboard/reports/saved', label: 'Saved Reports', element: <SavedReportList />, group: 'Insights' },
   { path: 'dashboard/reports/query', label: 'Ad-Hoc Query', element: <AdHocQueryBuilder />, group: 'Insights' },
   { path: 'dashboard/sla', label: 'SLA', element: <SlaDetails />, group: 'Insights' },
@@ -101,6 +104,7 @@ const adminRoutes: RouteDefinition[] = [
   { path: 'admin/business-calendars', label: 'Business Calendars', element: <BusinessCalendars />, group: 'Administration' },
   { path: 'admin/locations', label: 'Locations', element: <LocationAdmin />, group: 'Administration' },
 { path: 'admin/categories', label: 'Categories', element: <CategoryAdmin />, group: 'Administration' },
+  { path: 'admin/how-it-works', label: 'How It Works', element: <HowItWorks />, group: 'Administration' },
 ]
 
 const defaultRoute: Record<string, string> = {

@@ -86,8 +86,11 @@ public class SlaBreachMonitorJob implements Job {
             }
 
             Incident incident = instance.getIncident();
-            // Never escalate an incident that reached a terminal status mid-escalation.
-            if (incident != null && TERMINAL_STATUSES.contains(incident.getStatus())) {
+            // Never escalate a deleted or terminal incident.
+            if (incident != null && (incident.getDeletedAt() != null || TERMINAL_STATUSES.contains(incident.getStatus()))) {
+                continue;
+            }
+            if (incident == null && instance.getServiceRequest() != null && instance.getServiceRequest().getDeletedAt() != null) {
                 continue;
             }
 

@@ -103,7 +103,10 @@ public class AgentPerformanceService {
                 .findByOrgIdAndAssigneeIdAndStatusInOrderByCreatedAtDesc(
                         agent.getOrgId(), agent.getId(),
                         List.of(Incident.Status.values()),
-                        PageRequest.of(0, 1000));
+                        PageRequest.of(0, 1000))
+                .stream()
+                .filter(i -> i.getDeletedAt() == null)
+                .toList();
         List<UUID> ids = incidents.stream().map(Incident::getId).toList();
         if (ids.isEmpty()) return -1;
         int evaluated = 0;
@@ -138,11 +141,17 @@ public class AgentPerformanceService {
 
         // --- Incidents assigned to the agent created in the period ---
         List<Incident> incidents = incidentRepository
-                .findByOrgIdAndAssigneeIdAndCreatedAtBetween(orgId, agentId, from, to);
+                .findByOrgIdAndAssigneeIdAndCreatedAtBetween(orgId, agentId, from, to)
+                .stream()
+                .filter(i -> i.getDeletedAt() == null)
+                .toList();
 
         // --- Fulfillment tasks assigned in the period ---
         List<FulfillmentTask> tasks = fulfillmentTaskRepository
-                .findByAssignee_IdAndAssignedAtBetween(agentId, from, to);
+                .findByAssignee_IdAndAssignedAtBetween(agentId, from, to)
+                .stream()
+                .filter(t -> t.getServiceRequest() != null && t.getServiceRequest().getDeletedAt() == null)
+                .toList();
 
         int handled = incidents.size() + tasks.size();
 

@@ -32,7 +32,7 @@ public class ServiceRequestController {
     }
 
     @GetMapping
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public List<ServiceRequestResponse> list(@AuthenticationPrincipal Jwt jwt,
                                              @RequestParam(required = false, defaultValue = "false") boolean showDeleted) {
         AppUser user = userService.syncFromJwt(jwt);

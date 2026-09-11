@@ -383,6 +383,10 @@ export function ReportsDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">{isAdmin ? 'Reporting Dashboards' : 'My Reporting'}</h1>
           {isAdmin && (
             <div className="flex gap-2">
+              <Link to="/dashboard/reports/standard" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
+                <FileQuestion className="h-4 w-4" />
+                Standard Reports
+              </Link>
               <Link to="/dashboard/reports/saved" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
                 <FolderOpen className="h-4 w-4" />
                 Saved Reports
