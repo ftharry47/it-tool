@@ -61,6 +61,7 @@ public class IncidentService {
     private final com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder notificationTemplateBuilder;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
     // Fixed global support-tier chain (seeded in V38): L1 -> L2 -> L3.
     private static final UUID TIER_L1_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
@@ -86,7 +87,8 @@ public class IncidentService {
                            NotificationService notificationService,
                            com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder notificationTemplateBuilder,
                            ApplicationEventPublisher eventPublisher,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           AuditLogService auditLogService) {
         this.incidentRepository = incidentRepository;
         this.priorityRepository = priorityRepository;
         this.categoryRepository = categoryRepository;
@@ -106,6 +108,7 @@ public class IncidentService {
         this.notificationTemplateBuilder = notificationTemplateBuilder;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -791,6 +794,8 @@ public class IncidentService {
         state.put("assigneeName", incident.getAssignee() == null ? null : incident.getAssignee().getDisplayName());
         state.put("priorityId", incident.getPriority() == null ? null : incident.getPriority().getId());
         state.put("priorityName", incident.getPriority() == null ? null : incident.getPriority().getName());
+        state.put("assignmentTeamId", incident.getAssignmentTeam() == null ? null : incident.getAssignmentTeam().getId());
+        state.put("assignmentTeamName", incident.getAssignmentTeam() == null ? null : incident.getAssignmentTeam().getName());
         return state;
     }
 
@@ -1036,17 +1041,12 @@ public class IncidentService {
                 .orElseThrow(() -> new NotFoundException("Incident not found"));
 
         return linkRepository.findByFromIncidentIdAndDeletedAtIsNull(incident.getId()).stream()
-                .map(l -> new IncidentLinkResponse(
-                        l.getId(),
-                        l.getToIncident().getId(),
-                        l.getLinkType().name(),
-                        l.getToIncident().getNumber()
-                ))
+                .map(l -> toIncidentLinkResponse(l, orgId))
                 .toList();
     }
 
     @Transactional
-    public IncidentLinkResponse addLink(UUID orgId, UUID fromIncidentId, LinkCreateRequest request) {
+    public IncidentLinkResponse addLink(UUID orgId, UUID fromIncidentId, LinkCreateRequest request, UUID actorId) {
         Incident from = incidentRepository.findByOrgIdAndId(orgId, fromIncidentId)
                 .orElseThrow(() -> new NotFoundException("Source incident not found"));
         Incident to = incidentRepository.findByOrgIdAndId(orgId, request.toIncidentId())
@@ -1057,8 +1057,8 @@ public class IncidentService {
         link.setFromIncident(from);
         link.setToIncident(to);
         link.setLinkType(IncidentLink.LinkType.valueOf(request.linkType()));
-        link.setCreatedBy(from.getCreatedBy());
-        link.setUpdatedBy(from.getCreatedBy());
+        link.setCreatedBy(actorId);
+        link.setUpdatedBy(actorId);
 
         linkRepository.save(link);
 
@@ -1066,7 +1066,24 @@ public class IncidentService {
                 link.getId(),
                 to.getId(),
                 link.getLinkType().name(),
-                to.getNumber()
+                to.getNumber(),
+                to.getTitle(),
+                to.getStatus().name()
+        );
+    }
+
+    private IncidentLinkResponse toIncidentLinkResponse(IncidentLink link, UUID orgId) {
+        UUID toIncidentId = link.getToIncident() == null ? null : link.getToIncident().getId();
+        Incident to = toIncidentId == null
+                ? null
+                : incidentRepository.findByOrgIdAndId(orgId, toIncidentId).orElse(null);
+        return new IncidentLinkResponse(
+                link.getId(),
+                toIncidentId,
+                link.getLinkType().name(),
+                to == null ? null : to.getNumber(),
+                to == null ? null : to.getTitle(),
+                to == null ? null : to.getStatus().name()
         );
     }
 
@@ -1137,17 +1154,29 @@ public class IncidentService {
     }
 
     private IncidentSummary toSummary(Incident incident, SlaInstance sla) {
+        UUID priorityId = incident.getPriority() == null ? null : incident.getPriority().getId();
+        UUID categoryId = incident.getCategory() == null ? null : incident.getCategory().getId();
+        UUID locationId = incident.getLocation() == null ? null : incident.getLocation().getId();
+        UUID requesterId = incident.getRequester() == null ? null : incident.getRequester().getId();
+        UUID assigneeId = incident.getAssignee() == null ? null : incident.getAssignee().getId();
+
+        Priority priority = priorityId == null ? null : priorityRepository.findById(priorityId).orElse(null);
+        Category category = categoryId == null ? null : categoryRepository.findById(categoryId).orElse(null);
+        Location location = locationId == null ? null : locationRepository.findById(locationId).orElse(null);
+        AppUser requester = requesterId == null ? null : appUserRepository.findById(requesterId).orElse(null);
+        AppUser assignee = assigneeId == null ? null : appUserRepository.findById(assigneeId).orElse(null);
+
         return new IncidentSummary(
                 incident.getId(),
                 incident.getNumber(),
                 incident.getTitle(),
                 incident.getStatus().name(),
-                Optional.ofNullable(incident.getPriority()).map(Priority::getName).orElse(null),
-                Optional.ofNullable(incident.getCategory()).map(Category::getName).orElse(null),
-                Optional.ofNullable(incident.getLocation()).map(Location::getName).orElse(null),
+                priority == null ? null : priority.getName(),
+                category == null ? null : category.getName(),
+                location == null ? null : location.getName(),
                 incident.getPhone(),
-                Optional.ofNullable(incident.getRequester()).map(AppUser::getDisplayName).orElse(null),
-                Optional.ofNullable(incident.getAssignee()).map(AppUser::getDisplayName).orElse(null),
+                requester == null ? null : requester.getDisplayName(),
+                assignee == null ? null : assignee.getDisplayName(),
                 incident.getCreatedAt(),
                 sla != null && sla.getBreachStatus() != null ? sla.getBreachStatus().name() : null,
                 sla != null ? sla.getResponseDueAt() : null,
@@ -1162,6 +1191,22 @@ public class IncidentService {
     }
 
     private IncidentResponse toResponse(Incident incident, boolean includeStaffFields) {
+        // Reload lazy/soft-deleted associations through repositories before mapping.
+        // See AGENTS.md: "Reload associations before mapping to responses".
+        UUID assigneeId = incident.getAssignee() == null ? null : incident.getAssignee().getId();
+        UUID assignmentTeamId = incident.getAssignmentTeam() == null ? null : incident.getAssignmentTeam().getId();
+        UUID requesterId = incident.getRequester() == null ? null : incident.getRequester().getId();
+        UUID priorityId = incident.getPriority() == null ? null : incident.getPriority().getId();
+        UUID categoryId = incident.getCategory() == null ? null : incident.getCategory().getId();
+        UUID locationId = incident.getLocation() == null ? null : incident.getLocation().getId();
+
+        AppUser assignee = assigneeId == null ? null : appUserRepository.findById(assigneeId).orElse(null);
+        Team assignmentTeam = assignmentTeamId == null ? null : teamRepository.findById(assignmentTeamId).orElse(null);
+        AppUser requester = requesterId == null ? null : appUserRepository.findById(requesterId).orElse(null);
+        Priority priority = priorityId == null ? null : priorityRepository.findById(priorityId).orElse(null);
+        Category category = categoryId == null ? null : categoryRepository.findById(categoryId).orElse(null);
+        Location location = locationId == null ? null : locationRepository.findById(locationId).orElse(null);
+
         Integer totalLogged = timeEntryRepository
                 .findByEntityTypeAndEntityIdAndDeletedAtIsNull("INCIDENT", incident.getId())
                 .stream()
@@ -1173,16 +1218,16 @@ public class IncidentService {
                 incident.getTitle(),
                 incident.getDescription(),
                 incident.getStatus().name(),
-                Optional.ofNullable(incident.getPriority()).map(Priority::getName).orElse(null),
-                Optional.ofNullable(incident.getCategory()).map(Category::getName).orElse(null),
-                Optional.ofNullable(incident.getRequester()).map(AppUser::getDisplayName).orElse(null),
-                Optional.ofNullable(incident.getAssignee()).map(AppUser::getDisplayName).orElse(null),
-                Optional.ofNullable(incident.getAssignee()).map(AppUser::getId).orElse(null),
-                Optional.ofNullable(incident.getAssignmentTeam()).map(Team::getId).orElse(null),
-                Optional.ofNullable(incident.getAssignmentTeam()).map(Team::getName).orElse(null),
+                priority == null ? null : priority.getName(),
+                category == null ? null : category.getName(),
+                requester == null ? null : requester.getDisplayName(),
+                assignee == null ? null : assignee.getDisplayName(),
+                assignee == null ? null : assignee.getId(),
+                assignmentTeam == null ? null : assignmentTeam.getId(),
+                assignmentTeam == null ? null : assignmentTeam.getName(),
                 includeStaffFields ? incident.getClosingNotes() : null,
-                Optional.ofNullable(incident.getLocation()).map(Location::getName).orElse(null),
-                Optional.ofNullable(incident.getLocation()).map(Location::getId).orElse(null),
+                location == null ? null : location.getName(),
+                location == null ? null : location.getId(),
                 incident.getPhone(),
                 incident.getEstimatedMinutes(),
                 totalLogged,
@@ -1264,10 +1309,7 @@ public class IncidentService {
         return auditLogRepository
                 .findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(orgId, "INCIDENT", incidentId)
                 .stream()
-                .map(l -> new com.alignedcardio.itsm.api.auth.AuditLogResponse(
-                        l.getId(), l.getActorUserId(), l.getAction(), l.getEntityType(),
-                        l.getEntityId(), l.getBeforeState(), l.getAfterState(),
-                        l.getIpAddress(), l.getCreatedAt()))
+                .map(auditLogService::toResponse)
                 .toList();
     }
 

@@ -24,7 +24,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -116,12 +118,18 @@ public class SlaBreachMonitorJob implements Job {
                             incident.getNumber()));
                 }
 
-                if (to == SlaInstance.BreachStatus.BREACHED && instance.getIncident() != null
-                        && instance.getIncident().getRequester() != null) {
-                    Incident breached = instance.getIncident();
+                if (instance.getIncident() == null) {
+                    continue;
+                }
+                Incident breached = instance.getIncident();
+                if (to == SlaInstance.BreachStatus.BREACHED && breached.getRequester() != null) {
                     Map<String, Object> breachPayload = new java.util.HashMap<>();
                     breachPayload.put("number", breached.getNumber());
                     breachPayload.put("title", breached.getTitle());
+                    breachPayload.put("priority", breached.getPriority() != null ? breached.getPriority().getName() : "");
+                    breachPayload.put("targetTime", formatTime(instance.getResolutionDueAt()));
+                    breachPayload.put("elapsedTime", formatElapsed(breached.getCreatedAt(), now));
+                    breachPayload.put("requesterFirstName", firstName(breached.getRequester().getDisplayName()));
                     breachPayload.put("entityType", "INCIDENT");
                     breachPayload.put("entityId", breached.getId());
                     var content = notificationTemplateBuilder.forEvent("SLA_BREACH", breachPayload);
@@ -129,6 +137,29 @@ public class SlaBreachMonitorJob implements Job {
                             breached.getOrgId(),
                             breached.getRequester().getId(),
                             "SLA_BREACH",
+                            content.inAppSubject(),
+                            content.inAppBody(),
+                            "INCIDENT",
+                            breached.getId(),
+                            Notification.Channel.BOTH,
+                            content));
+                }
+
+                if (to == SlaInstance.BreachStatus.AT_RISK && breached.getAssignee() != null) {
+                    Map<String, Object> atRiskPayload = new java.util.HashMap<>();
+                    atRiskPayload.put("number", breached.getNumber());
+                    atRiskPayload.put("title", breached.getTitle());
+                    atRiskPayload.put("priority", breached.getPriority() != null ? breached.getPriority().getName() : "");
+                    atRiskPayload.put("targetTime", formatTime(instance.getResolutionDueAt()));
+                    atRiskPayload.put("elapsedTime", formatElapsed(breached.getCreatedAt(), now));
+                    atRiskPayload.put("assigneeFirstName", firstName(breached.getAssignee().getDisplayName()));
+                    atRiskPayload.put("entityType", "INCIDENT");
+                    atRiskPayload.put("entityId", breached.getId());
+                    var content = notificationTemplateBuilder.forEvent("SLA_AT_RISK", atRiskPayload);
+                    notificationService.send(new NotificationRequest(
+                            breached.getOrgId(),
+                            breached.getAssignee().getId(),
+                            "SLA_AT_RISK",
                             content.inAppSubject(),
                             content.inAppBody(),
                             "INCIDENT",
@@ -278,5 +309,23 @@ public class SlaBreachMonitorJob implements Job {
                 // Auditing must never break the escalation itself.
             }
         }
+    }
+
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
+    }
+
+    private String formatTime(OffsetDateTime t) {
+        if (t == null) return "unknown";
+        return t.format(DateTimeFormatter.ofPattern("d MMM yyyy HH:mm"));
+    }
+
+    private String formatElapsed(OffsetDateTime start, OffsetDateTime now) {
+        if (start == null || now == null) return "unknown";
+        Duration d = Duration.between(start, now);
+        long hours = d.toHours();
+        long minutes = d.toMinutesPart();
+        return hours + "h " + minutes + "m";
     }
 }

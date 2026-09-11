@@ -43,9 +43,13 @@ public class GraphMailClient {
     }
 
     public void sendEmail(String to, String subject, String body) {
+        sendEmail(to, subject, body, false);
+    }
+
+    public void sendEmail(String to, String subject, String body, boolean html) {
         String token = getAccessToken();
         try {
-            String json = objectMapper.writeValueAsString(buildMessage(to, subject, body));
+            String json = objectMapper.writeValueAsString(buildMessage(to, subject, body, html));
             restClient.post()
                     .uri("https://graph.microsoft.com/v1.0/users/{upn}/sendMail", fromMailbox)
                     .header("Authorization", "Bearer " + token)
@@ -58,11 +62,11 @@ public class GraphMailClient {
         }
     }
 
-    private Object buildMessage(String to, String subject, String body) {
+    private Object buildMessage(String to, String subject, String body, boolean html) {
         return Map.of(
                 "message", Map.of(
                         "subject", subject,
-                        "body", Map.of("contentType", "Text", "content", body),
+                        "body", Map.of("contentType", html ? "HTML" : "Text", "content", body),
                         "toRecipients", List.of(
                                 Map.of("emailAddress", Map.of("address", to))
                         )

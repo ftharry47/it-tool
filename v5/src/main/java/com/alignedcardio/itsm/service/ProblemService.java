@@ -367,7 +367,9 @@ public class ProblemService {
             payload.put("title", saved.getTitle());
             payload.put("actorName", updater.getDisplayName());
             payload.put("assigneeName", assignee.getDisplayName());
+            payload.put("assigneeFirstName", firstName(assignee.getDisplayName()));
             payload.put("entityType", "PROBLEM");
+            payload.put("entityTypePlural", "problems");
             payload.put("entityId", saved.getId());
             var content = notificationTemplateBuilder.forEvent("PROBLEM_ASSIGNED", payload);
             notificationService.send(new NotificationRequest(
@@ -383,6 +385,11 @@ public class ProblemService {
         } catch (Exception e) {
             logger.warn("Failed to send problem assignment notification to {}", assignee.getId(), e);
         }
+    }
+
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
     }
 
     private String generateProblemNumber() {

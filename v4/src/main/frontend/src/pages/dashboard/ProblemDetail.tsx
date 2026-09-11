@@ -206,6 +206,7 @@ export function ProblemDetail() {
       list.push({
         id: `${problem.id}-assigned`,
         title: `Assigned to ${problem.assigneeName}`,
+        actorName: problem.assigneeName,
         createdAt: problem.updatedAt,
         icon: <Link2 className="h-4 w-4" />,
       })
@@ -215,6 +216,8 @@ export function ProblemDetail() {
         id: `audit-${entry.id}`,
         title: auditTitle(entry),
         description: auditDescription(entry),
+        actorName: entry.actorName ?? 'System',
+        actorBadge: entry.actorRole ?? undefined,
         createdAt: entry.createdAt,
         icon: <History className="h-4 w-4" />,
       })

@@ -122,6 +122,26 @@ public class IncidentCommentService {
             commentPayload.put("commentPreview", bodyPreview(request.body()));
             commentPayload.put("entityType", "INCIDENT");
             commentPayload.put("entityId", incident.getId());
+
+            Map<String, Object> newComment = new java.util.HashMap<>();
+            newComment.put("authorName", author.getDisplayName());
+            newComment.put("body", request.body());
+            newComment.put("createdAt", comment.getCreatedAt() != null ? comment.getCreatedAt() : OffsetDateTime.now());
+            newComment.put("public", true);
+            commentPayload.put("newComment", newComment);
+
+            List<Map<String, Object>> prior = new java.util.ArrayList<>();
+            for (IncidentComment c : commentRepository.findByIncidentIdOrderByCreatedAtAsc(incident.getId())) {
+                if (c.isPublic() && !c.getId().equals(comment.getId())) {
+                    Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("authorName", c.getAuthor() != null ? c.getAuthor().getDisplayName() : "");
+                    m.put("body", c.getBody());
+                    m.put("createdAt", c.getCreatedAt() != null ? c.getCreatedAt() : OffsetDateTime.now());
+                    m.put("public", c.isPublic());
+                    prior.add(m);
+                }
+            }
+            commentPayload.put("priorComments", prior);
             notifyWatchers(incident, author, "INCIDENT_COMMENT", commentPayload);
             notifyMentions(incident, author, orgId, request.body());
         }
@@ -160,11 +180,18 @@ public class IncidentCommentService {
         return body.length() > 200 ? body.substring(0, 200) + "..." : body;
     }
 
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
+    }
+
     private void notifyWatchers(Incident incident, AppUser author, String type, Map<String, ?> payload) {
-        var content = notificationTemplateBuilder.forEvent(type, payload);
         watcherRepository.findByIncidentIdAndDeletedAtIsNull(incident.getId()).forEach(w -> {
             if (w.getUser().getId().equals(author.getId())) return;
             try {
+                Map<String, Object> userPayload = new java.util.HashMap<>(payload);
+                userPayload.put("recipientFirstName", firstName(w.getUser().getDisplayName()));
+                var content = notificationTemplateBuilder.forEvent(type, userPayload);
                 notificationService.send(new NotificationRequest(
                         incident.getOrgId(),
                         w.getUser().getId(),
@@ -202,6 +229,7 @@ public class IncidentCommentService {
             mentionPayload.put("title", incident.getTitle());
             mentionPayload.put("authorName", author.getDisplayName());
             mentionPayload.put("commentPreview", bodyPreview(commentBody));
+            mentionPayload.put("recipientFirstName", firstName(mentioned.getDisplayName()));
             mentionPayload.put("entityType", "INCIDENT");
             mentionPayload.put("entityId", incident.getId());
             var content = notificationTemplateBuilder.forEvent("MENTION", mentionPayload);

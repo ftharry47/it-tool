@@ -1,13 +1,17 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.api.incident.IncidentCreateRequest;
+import com.alignedcardio.itsm.api.incident.IncidentLinkResponse;
 import com.alignedcardio.itsm.api.incident.IncidentResponse;
+import com.alignedcardio.itsm.api.incident.LinkCreateRequest;
+import com.alignedcardio.itsm.api.auth.AuditLogResponse;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.entity.BaseEntity;
 import com.alignedcardio.itsm.entity.Category;
 import com.alignedcardio.itsm.entity.Incident;
 import com.alignedcardio.itsm.entity.IncidentComment;
+import com.alignedcardio.itsm.entity.IncidentLink;
 import com.alignedcardio.itsm.entity.Location;
 import com.alignedcardio.itsm.entity.Priority;
 import com.alignedcardio.itsm.entity.Role;
@@ -41,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -97,12 +102,21 @@ class IncidentServiceTest {
                 notificationService,
                 new com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder("http://localhost:8080"),
                 eventPublisher,
-                new ObjectMapper());
+                new ObjectMapper(),
+                new AuditLogService(auditLogRepository, appUserRepository));
 
         lenient().when(incidentRepository.save(any(Incident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(timeEntryRepository.findByEntityTypeAndEntityIdAndDeletedAtIsNull(anyString(), any()))
                 .thenReturn(List.of());
         lenient().when(watcherRepository.findByIncidentIdAndDeletedAtIsNull(any())).thenReturn(List.of());
+
+        // Default empty reloads for toResponse lazy-association lookups.
+        // Tests that assert response fields override these for specific IDs.
+        lenient().when(appUserRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(teamRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(locationRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(priorityRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(categoryRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
     }
 
     @Test
@@ -229,6 +243,7 @@ class IncidentServiceTest {
         when(categoryRepository.findById(category.getId())).thenReturn(Optional.of(category));
         when(locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, location.getId()))
                 .thenReturn(Optional.of(location));
+        when(locationRepository.findById(location.getId())).thenReturn(Optional.of(location));
         when(priorityRepository.findByOrgIdAndName(ORG_ID, "Medium"))
                 .thenReturn(Optional.of(priority("Medium", 3)));
         when(incidentRepository.saveAndFlush(any(Incident.class))).thenAnswer(invocation -> {
@@ -281,6 +296,7 @@ class IncidentServiceTest {
         when(priorityRepository.findByOrgIdAndName(ORG_ID, "Medium")).thenReturn(Optional.empty());
         when(priorityRepository.findByOrgIdAndStatusOrderByDisplayOrderAsc(ORG_ID, Priority.Status.ACTIVE))
                 .thenReturn(List.of(fallback));
+        when(priorityRepository.findById(fallback.getId())).thenReturn(Optional.of(fallback));
         when(incidentRepository.saveAndFlush(any(Incident.class))).thenAnswer(invocation -> {
             Incident i = invocation.getArgument(0);
             i.setId(UUID.randomUUID());
@@ -404,6 +420,7 @@ class IncidentServiceTest {
         when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
         when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, TIER_L2))
                 .thenReturn(Optional.of(l2));
+        when(teamRepository.findById(TIER_L2)).thenReturn(Optional.of(l2));
         when(teamMemberRepository.findByTeamId(TIER_L2)).thenReturn(List.of());
 
         IncidentResponse response = incidentService.escalateTier(admin, ORG_ID, incident.getId(), "needs network team");
@@ -704,6 +721,117 @@ class IncidentServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> incidentService.setEstimatedMinutes(agent, ORG_ID, incident.getId(), 60));
+    }
+
+    // --- Regression coverage for detail-page fixes ---
+
+    @Test
+    void assignResponseIncludesAssigneeAndAssignmentTeam() {
+        AppUser admin = userWithRole("ADMIN");
+        AppUser agent = userWithRole("AGENT");
+        Incident incident = incident(null, priority("Medium", 3));
+        Team l1 = tierTeam(TIER_L1, "L1 Support");
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(appUserRepository.findById(agent.getId())).thenReturn(Optional.of(agent));
+        when(teamMemberRepository.findByUserId(agent.getId()))
+                .thenReturn(List.of(membership(TIER_L1, agent)));
+        when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, TIER_L1)).thenReturn(Optional.of(l1));
+        when(teamRepository.findById(TIER_L1)).thenReturn(Optional.of(l1));
+
+        IncidentResponse response = incidentService.assign(admin, ORG_ID, incident.getId(), agent.getId());
+
+        assertEquals(agent.getId(), response.assigneeId());
+        assertEquals(agent.getDisplayName(), response.assignee());
+        assertEquals(TIER_L1, response.assignmentTeamId());
+        assertEquals("L1 Support", response.assignmentTeamName());
+    }
+
+    @Test
+    void statusTransitionAccessFollowsAssigneeAndAdminsRetainAccess() {
+        AppUser admin = userWithRole("ADMIN");
+        AppUser agentA = userWithRole("AGENT");
+        AppUser agentB = userWithRole("AGENT");
+        Incident assignedToA = incident(agentA, priority("Medium", 3));
+        assignedToA.setStatus(Incident.Status.IN_PROGRESS);
+        Incident unrelated = incident(agentB, priority("Medium", 3));
+        unrelated.setStatus(Incident.Status.IN_PROGRESS);
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, assignedToA.getId())).thenReturn(Optional.of(assignedToA));
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, unrelated.getId())).thenReturn(Optional.of(unrelated));
+
+        // Assigned agent can transition.
+        IncidentResponse responseA = incidentService.updateStatus(agentA, ORG_ID, assignedToA.getId(), Incident.Status.RESOLVED, null);
+        assertEquals(Incident.Status.RESOLVED.name(), responseA.status());
+
+        assignedToA.setStatus(Incident.Status.IN_PROGRESS);
+
+        // Other agent cannot transition a ticket not assigned to them.
+        assertThrows(IllegalStateException.class,
+                () -> incidentService.updateStatus(agentB, ORG_ID, assignedToA.getId(), Incident.Status.RESOLVED, null));
+
+        // The same agent cannot transition an unrelated ticket assigned to someone else.
+        assertThrows(IllegalStateException.class,
+                () -> incidentService.updateStatus(agentA, ORG_ID, unrelated.getId(), Incident.Status.RESOLVED, null));
+
+        // Admin can transition regardless of assignment.
+        IncidentResponse responseAdmin = incidentService.updateStatus(admin, ORG_ID, assignedToA.getId(), Incident.Status.RESOLVED, null);
+        assertEquals(Incident.Status.RESOLVED.name(), responseAdmin.status());
+    }
+
+    @Test
+    void addLinkUsesToIncidentIdAndReturnsTargetDetails() {
+        AppUser admin = userWithRole("ADMIN");
+        Incident from = incident(null, priority("Medium", 3));
+        Incident to = incident(null, priority("Medium", 3));
+        to.setTitle("Linked incident title");
+        to.setStatus(Incident.Status.IN_PROGRESS);
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, from.getId())).thenReturn(Optional.of(from));
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, to.getId())).thenReturn(Optional.of(to));
+        when(linkRepository.save(any(IncidentLink.class))).thenAnswer(inv -> {
+            IncidentLink link = inv.getArgument(0);
+            link.setId(UUID.randomUUID());
+            return link;
+        });
+
+        IncidentLinkResponse response = incidentService.addLink(ORG_ID, from.getId(),
+                new LinkCreateRequest(to.getId(), "RELATED"), admin.getId());
+
+        assertNotNull(response.id());
+        assertEquals(to.getId(), response.toIncidentId());
+        assertEquals(to.getNumber(), response.toIncidentNumber());
+        assertEquals(to.getTitle(), response.toIncidentTitle());
+        assertEquals(to.getStatus().name(), response.toIncidentStatus());
+        assertEquals("RELATED", response.linkType());
+    }
+
+    @Test
+    void listActivityResolvesActorNameAndRole() {
+        AppUser actor = userWithRole("AGENT");
+        Incident incident = incident(null, priority("Medium", 3));
+        AuditLog log = new AuditLog();
+        log.setId(UUID.randomUUID());
+        log.setOrgId(ORG_ID);
+        log.setActorUserId(actor.getId());
+        log.setAction("STATUS");
+        log.setEntityType("INCIDENT");
+        log.setEntityId(incident.getId());
+        log.setBeforeState("{\"status\":\"NEW\"}");
+        log.setAfterState("{\"status\":\"IN_PROGRESS\"}");
+        log.setCreatedAt(OffsetDateTime.now());
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(auditLogRepository.findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(ORG_ID, "INCIDENT", incident.getId()))
+                .thenReturn(List.of(log));
+        when(appUserRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+
+        List<com.alignedcardio.itsm.api.auth.AuditLogResponse> activity = incidentService.listActivity(ORG_ID, incident.getId());
+
+        assertEquals(1, activity.size());
+        com.alignedcardio.itsm.api.auth.AuditLogResponse entry = activity.get(0);
+        assertEquals(actor.getDisplayName(), entry.actorName());
+        assertEquals("AGENT", entry.actorRole());
     }
 
     private AppUser userWithRole(String roleName) {

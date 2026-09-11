@@ -38,6 +38,7 @@ public class ProblemService {
     private final EntityManager entityManager;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
     public ProblemService(ProblemRepository problemRepository,
                           ProblemIncidentLinkRepository problemIncidentLinkRepository,
@@ -45,7 +46,8 @@ public class ProblemService {
                           AppUserRepository appUserRepository,
                           EntityManager entityManager,
                           AuditLogRepository auditLogRepository,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          AuditLogService auditLogService) {
         this.problemRepository = problemRepository;
         this.problemIncidentLinkRepository = problemIncidentLinkRepository;
         this.incidentRepository = incidentRepository;
@@ -53,6 +55,7 @@ public class ProblemService {
         this.entityManager = entityManager;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -220,10 +223,7 @@ public class ProblemService {
         return auditLogRepository
                 .findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(orgId, "PROBLEM", problemId)
                 .stream()
-                .map(l -> new com.alignedcardio.itsm.api.auth.AuditLogResponse(
-                        l.getId(), l.getActorUserId(), l.getAction(), l.getEntityType(),
-                        l.getEntityId(), l.getBeforeState(), l.getAfterState(),
-                        l.getIpAddress(), l.getCreatedAt()))
+                .map(auditLogService::toResponse)
                 .toList();
     }
 
@@ -312,6 +312,8 @@ public class ProblemService {
     }
 
     private ProblemResponse toResponse(Problem problem) {
+        UUID assigneeId = problem.getAssignee() == null ? null : problem.getAssignee().getId();
+        AppUser assignee = assigneeId == null ? null : appUserRepository.findById(assigneeId).orElse(null);
         return new ProblemResponse(
                 problem.getId(),
                 problem.getNumber(),
@@ -320,8 +322,8 @@ public class ProblemService {
                 problem.getStatus(),
                 problem.getRootCause(),
                 problem.getWorkaround(),
-                problem.getAssignee() != null ? problem.getAssignee().getId() : null,
-                problem.getAssignee() != null ? problem.getAssignee().getDisplayName() : null,
+                assignee == null ? null : assignee.getId(),
+                assignee == null ? null : assignee.getDisplayName(),
                 problem.getResolvedAt(),
                 problem.getClosedAt(),
                 problem.getCreatedAt()

@@ -257,6 +257,10 @@ class SlaBreachMonitorJobTest {
 
         job.execute(null);
 
+        // Automatic escalation moves ownership to the new tier and clears the previous assignee.
+        assertNull(incident.getAssignee());
+        assertSame(newTeam, incident.getAssignmentTeam());
+
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(auditLogRepository).save(captor.capture());
         AuditLog log = captor.getValue();

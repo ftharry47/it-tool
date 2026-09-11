@@ -218,10 +218,12 @@ public class IncidentService {
         Map<String, Object> eventData = new HashMap<>();
         eventData.put("id", incident.getId());
         eventData.put("number", incident.getNumber());
+        eventData.put("title", incident.getTitle());
         eventData.put("status", incident.getStatus().name());
         eventData.put("priority", incident.getPriority() != null ? incident.getPriority().getName() : null);
         eventData.put("category", incident.getCategory().getName());
         eventData.put("requesterId", incident.getRequester().getId());
+        eventData.put("requesterFirstName", firstName(incident.getRequester().getDisplayName()));
         eventPublisher.publishEvent(new IncidentCreatedEvent(
                 incident.getOrgId(),
                 incident.getId(),
@@ -483,9 +485,12 @@ public class IncidentService {
                 Map.of(
                         "id", saved.getId(),
                         "number", saved.getNumber(),
+                        "title", saved.getTitle(),
                         "oldStatus", oldStatus,
                         "newStatus", saved.getStatus().name(),
-                        "requesterId", saved.getRequester().getId())));
+                        "actorName", updater.getDisplayName(),
+                        "requesterId", saved.getRequester().getId(),
+                        "requesterFirstName", firstName(saved.getRequester().getDisplayName()))));
 
         notifyWatchers(saved, updater, "INCIDENT_UPDATE", Map.of(
                 "number", saved.getNumber(),
@@ -558,7 +563,7 @@ public class IncidentService {
         if (priorityChanged) {
             slaEngine.onPriorityChanged(saved);
             publishPriorityChanged(saved, oldPriorityName,
-                    saved.getPriority() == null ? null : saved.getPriority().getName(), null);
+                    saved.getPriority() == null ? null : saved.getPriority().getName(), null, updater);
         }
 
         writeIncidentAudit(saved, updater.getId(), firstAssignment ? "ASSIGN" : "REASSIGN",
@@ -610,7 +615,7 @@ public class IncidentService {
         afterState.put("priorityName", newPriority.getName());
         afterState.put("reason", trimmedReason);
         writeIncidentAudit(saved, updater.getId(), "ESCALATE_PRIORITY", beforePriority, afterState);
-        publishPriorityChanged(saved, oldPriorityName, newPriority.getName(), trimmedReason);
+        publishPriorityChanged(saved, oldPriorityName, newPriority.getName(), trimmedReason, updater);
 
         Map<String, Object> contentPayload = new LinkedHashMap<>();
         contentPayload.put("number", saved.getNumber());
@@ -676,16 +681,14 @@ public class IncidentService {
         Map<String, Object> contentPayload = new LinkedHashMap<>();
         contentPayload.put("number", saved.getNumber());
         contentPayload.put("title", saved.getTitle());
-        contentPayload.put("fromTeam", oldTeamName);
-        contentPayload.put("toTeam", nextTier.getName());
+        contentPayload.put("oldTierName", oldTeamName);
+        contentPayload.put("newTierName", nextTier.getName());
         contentPayload.put("reason", trimmedReason);
         contentPayload.put("actorName", updater.getDisplayName());
         contentPayload.put("entityType", "INCIDENT");
         contentPayload.put("entityId", saved.getId());
-        notifyWatchers(saved, updater, "INCIDENT_UPDATE", contentPayload);
-        notifyUser(saved.getAssignee(), updater, saved, "INCIDENT_UPDATE", contentPayload);
         for (TeamMember member : teamMemberRepository.findByTeamId(nextTier.getId())) {
-            notifyUser(member.getUser(), updater, saved, "INCIDENT_UPDATE", contentPayload);
+            notifyUser(member.getUser(), updater, saved, "INCIDENT_TIER_ESCALATED", contentPayload);
         }
 
         return toResponse(saved);
@@ -869,7 +872,11 @@ public class IncidentService {
                 Map<String, Object> contentPayload = new LinkedHashMap<>();
                 contentPayload.put("number", saved.getNumber());
                 contentPayload.put("title", saved.getTitle());
+                contentPayload.put("priority", saved.getPriority() != null ? saved.getPriority().getName() : "");
+                contentPayload.put("status", saved.getStatus().name());
+                contentPayload.put("location", saved.getLocation() != null ? saved.getLocation().getName() : "");
                 contentPayload.put("actorName", updater.getDisplayName());
+                contentPayload.put("assigneeFirstName", firstName(assignee.getDisplayName()));
                 contentPayload.put("entityType", "INCIDENT");
                 contentPayload.put("entityId", saved.getId());
                 var content = notificationTemplateBuilder.forEvent("INCIDENT_ASSIGNED", contentPayload);
@@ -889,14 +896,22 @@ public class IncidentService {
         }
     }
 
-    private void publishPriorityChanged(Incident saved, String oldPriority, String newPriority, String reason) {
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
+    }
+
+    private void publishPriorityChanged(Incident saved, String oldPriority, String newPriority, String reason, AppUser updater) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("id", saved.getId());
         payload.put("number", saved.getNumber());
+        payload.put("title", saved.getTitle());
         payload.put("oldPriority", oldPriority);
         payload.put("newPriority", newPriority);
         payload.put("reason", reason);
+        payload.put("actorName", updater.getDisplayName());
         payload.put("requesterId", saved.getRequester() == null ? null : saved.getRequester().getId());
+        payload.put("requesterFirstName", firstName(saved.getRequester() == null ? null : saved.getRequester().getDisplayName()));
         payload.put("assigneeId", saved.getAssignee() == null ? null : saved.getAssignee().getId());
 
         eventPublisher.publishEvent(new IncidentPriorityChangedEvent(saved.getOrgId(), saved.getId(), payload));
@@ -908,7 +923,9 @@ public class IncidentService {
             return;
         }
         try {
-            var content = notificationTemplateBuilder.forEvent(type, payload);
+            Map<String, Object> userPayload = new java.util.HashMap<>(payload);
+            userPayload.put("recipientFirstName", firstName(recipient.getDisplayName()));
+            var content = notificationTemplateBuilder.forEvent(type, userPayload);
             notificationService.send(new NotificationRequest(
                     incident.getOrgId(),
                     recipient.getId(),
@@ -932,6 +949,7 @@ public class IncidentService {
             payload.put("number", incident.getNumber());
             payload.put("title", incident.getTitle());
             payload.put("requesterName", requesterName);
+            payload.put("priority", incident.getPriority() != null ? incident.getPriority().getName() : "");
             payload.put("entityType", "INCIDENT");
             payload.put("entityId", incident.getId());
             try {
@@ -1347,12 +1365,14 @@ public class IncidentService {
     }
 
     private void notifyWatchers(Incident incident, AppUser actor, String type, Map<String, ?> payload) {
-        var content = notificationTemplateBuilder.forEvent(type, payload);
         watcherRepository.findByIncidentIdAndDeletedAtIsNull(incident.getId()).forEach(w -> {
             if (w.getUser().getId().equals(actor.getId())) {
                 return;
             }
             try {
+                Map<String, Object> userPayload = new java.util.HashMap<>(payload);
+                userPayload.put("recipientFirstName", firstName(w.getUser().getDisplayName()));
+                var content = notificationTemplateBuilder.forEvent(type, userPayload);
                 notificationService.send(new NotificationRequest(
                         incident.getOrgId(),
                         w.getUser().getId(),

@@ -50,6 +50,9 @@ class ProblemServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private ProblemService problemService;
 

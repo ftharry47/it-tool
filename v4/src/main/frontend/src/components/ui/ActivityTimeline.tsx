@@ -5,6 +5,8 @@ import { formatStatusLabel } from './StatusBadge'
 export interface AuditEntry {
   id: string
   actorUserId: string
+  actorName?: string | null
+  actorRole?: string | null
   action: string
   beforeState: string | null
   afterState: string | null
@@ -15,6 +17,8 @@ export interface Activity {
   id: string
   title: string
   description?: string
+  actorName?: string | null
+  actorBadge?: string | null
   createdAt: string
   icon: ReactNode
 }
@@ -29,6 +33,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   REOPEN: 'Reopened',
   ESCALATE_PRIORITY: 'Priority escalated',
   ESCALATE_TIER: 'Escalated to next tier',
+  AUTO_ESCALATE_TIER: 'Automatically escalated to next tier',
   LINK_INCIDENT: 'Incident linked',
   APPROVAL_ADDED: 'Approval added',
   APPROVED: 'Approved',
@@ -61,7 +66,7 @@ export const AUDIT_FIELD_LABELS: Record<string, string> = {
   comment: 'Comment',
 }
 
-function parseState(json: string | null): Record<string, unknown> {
+export function parseState(json: string | null): Record<string, unknown> {
   if (!json) return {}
   try {
     return JSON.parse(json) as Record<string, unknown>
@@ -74,12 +79,55 @@ export function auditTitle(entry: AuditEntry): string {
   return AUDIT_ACTION_LABELS[entry.action] ?? entry.action
 }
 
+function formatNamedTransition(
+  action: string,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): string | undefined {
+  const reason = typeof after.reason === 'string' && after.reason ? after.reason : undefined
+
+  if (action === 'ASSIGN' || action === 'REASSIGN') {
+    const beforeName = before.assigneeName == null || before.assigneeName === '' ? undefined : String(before.assigneeName)
+    const afterName = after.assigneeName == null || after.assigneeName === '' ? undefined : String(after.assigneeName)
+    const teamName = after.assignmentTeamName == null || after.assignmentTeamName === '' ? undefined : String(after.assignmentTeamName)
+    if (!afterName) return undefined
+    const destination = teamName ? `${afterName} (${teamName})` : afterName
+    if (action === 'REASSIGN' && beforeName && beforeName !== afterName) {
+      return `from ${beforeName} to ${destination}`
+    }
+    return `to ${destination}`
+  }
+
+  if (action === 'ESCALATE_TIER' || action === 'AUTO_ESCALATE_TIER') {
+    const fromTeam = before.assignmentTeamName == null || before.assignmentTeamName === '' ? '—' : String(before.assignmentTeamName)
+    const toTeam = after.assignmentTeamName == null || after.assignmentTeamName === '' ? '—' : String(after.assignmentTeamName)
+    return reason ? `from ${fromTeam} to ${toTeam} · Reason: ${reason}` : `from ${fromTeam} to ${toTeam}`
+  }
+
+  if (action === 'ESCALATE_PRIORITY') {
+    const fromPriority = before.priorityName == null || before.priorityName === '' ? '—' : String(before.priorityName)
+    const toPriority = after.priorityName == null || after.priorityName === '' ? '—' : String(after.priorityName)
+    return reason ? `from ${fromPriority} to ${toPriority} · Reason: ${reason}` : `from ${fromPriority} to ${toPriority}`
+  }
+
+  if (action === 'UNASSIGN') {
+    const beforeName = before.assigneeName == null || before.assigneeName === '' ? undefined : String(before.assigneeName)
+    return beforeName ? `from ${beforeName}` : undefined
+  }
+
+  return undefined
+}
+
 export function auditDescription(entry: AuditEntry): string | undefined {
   const before = parseState(entry.beforeState)
   const after = parseState(entry.afterState)
+
+  const named = formatNamedTransition(entry.action, before, after)
+  if (named) return named
+
   const parts: string[] = []
   for (const key of Object.keys(after)) {
-    if (key.endsWith('Id')) continue
+    if (key.endsWith('Id') || key === 'reason' || key === 'assigneeName' || key === 'assignmentTeamName' || key === 'priorityName') continue
     const label = AUDIT_FIELD_LABELS[key] ?? key
     const from = before[key] == null || before[key] === '' ? '—' : String(before[key])
     const to = after[key] == null || after[key] === '' ? '—' : String(after[key])
@@ -117,7 +165,12 @@ export function ActivityTimeline({ activities, emptyText = 'No activity yet.' }:
                 {activity.description && (
                   <p className="line-clamp-2 text-xs text-muted-foreground">{activity.description}</p>
                 )}
-                <p className="text-xs text-muted-foreground">{formatDateTime(activity.createdAt)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {activity.actorName ? `by ${activity.actorName}` : 'by System'}
+                  {activity.actorBadge ? ` · ${activity.actorBadge}` : ''}
+                  {' · '}
+                  {formatDateTime(activity.createdAt)}
+                </p>
               </div>
             </li>
           ))}

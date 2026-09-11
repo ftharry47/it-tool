@@ -170,6 +170,7 @@ public class ServiceRequestService {
         // Start the service-request SLA clock as soon as the request is created.
         slaEngine.onServiceRequestCreated(saved);
 
+        publishEvent(saved, "SUBMITTED");
         return submit(user, orgId, saved.getId());
     }
 
@@ -478,18 +479,34 @@ public class ServiceRequestService {
     }
 
     private void publishEvent(ServiceRequest sr, String triggerType) {
+        publishEvent(sr, triggerType, null);
+    }
+
+    private void publishEvent(ServiceRequest sr, String triggerType, AppUser actor) {
         Map<String, Object> payload = new java.util.HashMap<>();
         payload.put("id", sr.getId());
         payload.put("number", sr.getNumber());
         payload.put("status", sr.getStatus().name());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterId", sr.getRequester().getId());
+        payload.put("requesterName", sr.getRequester().getDisplayName());
+        payload.put("requesterFirstName", firstName(sr.getRequester().getDisplayName()));
+        payload.put("locationName", sr.getLocation() != null ? sr.getLocation().getName() : "");
         if (sr.getApprover() != null) {
             payload.put("approverId", sr.getApprover().getId());
             payload.put("approverName", sr.getApprover().getDisplayName());
+            payload.put("approverFirstName", firstName(sr.getApprover().getDisplayName()));
         }
         if (sr.getApprovalComment() != null) {
             payload.put("reason", sr.getApprovalComment());
+            payload.put("rejectionReason", sr.getApprovalComment());
+            payload.put("approvalComment", sr.getApprovalComment());
+        }
+        if (sr.getDecidedAt() != null) {
+            payload.put("approvedDate", sr.getDecidedAt().toString());
+        }
+        if (actor != null) {
+            payload.put("fulfillerName", actor.getDisplayName());
         }
         eventPublisher.publishEvent(new ServiceRequestEvent(sr.getOrgId(), sr.getId(), triggerType, payload));
     }
@@ -501,6 +518,7 @@ public class ServiceRequestService {
             Map<String, Object> payload = new java.util.HashMap<>();
             payload.put("number", sr.getNumber());
             payload.put("catalogItemName", sr.getCatalogItem().getName());
+            payload.put("approvedDate", sr.getDecidedAt() != null ? sr.getDecidedAt().toString() : "");
             payload.put("entityType", "SERVICE_REQUEST");
             payload.put("entityId", sr.getId());
             try {
@@ -521,15 +539,23 @@ public class ServiceRequestService {
         }
     }
 
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
+    }
+
     private void notifyApproverOfRetroactiveApproval(AppUser sender, ServiceRequest sr, String reason) {
         if (sr.getApprover() == null) return;
         Map<String, Object> payload = new java.util.HashMap<>();
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
-        payload.put("entityType", "SERVICE_REQUEST");
-        payload.put("entityId", sr.getId());
+        payload.put("requesterName", sr.getRequester().getDisplayName());
+        payload.put("locationName", sr.getLocation() != null ? sr.getLocation().getName() : "");
         payload.put("actorName", sender.getDisplayName());
         payload.put("reason", reason);
+        payload.put("approverFirstName", firstName(sr.getApprover().getDisplayName()));
+        payload.put("entityType", "SERVICE_REQUEST");
+        payload.put("entityId", sr.getId());
         try {
             var content = notificationTemplateBuilder.forEvent("SR_SENT_TO_APPROVAL", payload);
             notificationService.send(new NotificationRequest(
@@ -548,16 +574,18 @@ public class ServiceRequestService {
     }
 
     private void notifyAdminsOfRetroactiveRejection(ServiceRequest sr, AppUser approver, String comment) {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("entityType", "SERVICE_REQUEST");
+        payload.put("entityId", sr.getId());
+        payload.put("approverName", approver.getDisplayName());
+        payload.put("requesterFirstName", firstName(sr.getRequester().getDisplayName()));
+        payload.put("comment", comment != null ? comment : "");
+
         List<AppUser> admins = appUserRepository.findByOrgIdAndRoleNames(
                 sr.getOrgId(), List.of("ADMIN", "SUPER_ADMIN"));
         for (AppUser admin : admins) {
-            Map<String, Object> payload = new java.util.HashMap<>();
-            payload.put("number", sr.getNumber());
-            payload.put("catalogItemName", sr.getCatalogItem().getName());
-            payload.put("entityType", "SERVICE_REQUEST");
-            payload.put("entityId", sr.getId());
-            payload.put("approverName", approver.getDisplayName());
-            payload.put("comment", comment != null ? comment : "");
             try {
                 var content = notificationTemplateBuilder.forEvent("SR_RETROACTIVE_APPROVAL_REJECTED", payload);
                 notificationService.send(new NotificationRequest(
@@ -573,6 +601,22 @@ public class ServiceRequestService {
             } catch (Exception e) {
                 logger.warn("Failed to send SR_RETROACTIVE_APPROVAL_REJECTED to {}", admin.getId(), e);
             }
+        }
+
+        try {
+            var requesterContent = notificationTemplateBuilder.forEvent("SR_RETROACTIVE_APPROVAL_REJECTED", payload);
+            notificationService.send(new NotificationRequest(
+                    sr.getOrgId(),
+                    sr.getRequester().getId(),
+                    "SR_RETROACTIVE_APPROVAL_REJECTED",
+                    requesterContent.inAppSubject(),
+                    requesterContent.inAppBody(),
+                    "SERVICE_REQUEST",
+                    sr.getId(),
+                    null,
+                    requesterContent));
+        } catch (Exception e) {
+            logger.warn("Failed to send SR_RETROACTIVE_APPROVAL_REJECTED to requester {}", sr.getRequester().getId(), e);
         }
     }
 
@@ -592,6 +636,7 @@ public class ServiceRequestService {
         // Update the service-request SLA clock for pause/resume/stop.
         slaEngine.onServiceRequestStatusChanged(saved);
 
+        publishEvent(saved, newStatus.name());
         return toResponse(saved);
     }
 
@@ -674,9 +719,10 @@ public class ServiceRequestService {
             try {
                 Map<String, Object> notificationPayload = new LinkedHashMap<>();
                 notificationPayload.put("number", sr.getNumber());
-                notificationPayload.put("title", task.getDescription());
+                notificationPayload.put("catalogItemName", sr.getCatalogItem().getName());
+                notificationPayload.put("taskDescription", task.getDescription());
                 notificationPayload.put("actorName", user.getDisplayName());
-                notificationPayload.put("assigneeName", assignee.getDisplayName());
+                notificationPayload.put("assigneeFirstName", firstName(assignee.getDisplayName()));
                 notificationPayload.put("entityType", "SERVICE_REQUEST");
                 notificationPayload.put("entityId", sr.getId());
                 var content = notificationTemplateBuilder.forEvent("FULFILLMENT_TASK_ASSIGNED", notificationPayload);
@@ -801,8 +847,10 @@ public class ServiceRequestService {
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterId", sr.getRequester().getId());
+        payload.put("requesterFirstName", firstName(sr.getRequester().getDisplayName()));
         payload.put("taskId", task.getId());
         payload.put("taskDescription", task.getDescription());
+        payload.put("fulfillerName", user.getDisplayName());
         eventPublisher.publishEvent(
                 new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "TASK_COMPLETED", payload));
 
@@ -810,7 +858,7 @@ public class ServiceRequestService {
             sr.setStatus(ServiceRequest.Status.FULFILLED);
             sr.setUpdatedBy(user.getId());
             sr.setUpdatedAt(OffsetDateTime.now());
-            publishEvent(sr, "FULFILLED");
+            publishEvent(sr, "FULFILLED", user);
         }
 
         ServiceRequest saved = serviceRequestRepository.save(sr);
@@ -855,12 +903,14 @@ public class ServiceRequestService {
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterId", sr.getRequester().getId());
+        payload.put("requesterFirstName", firstName(sr.getRequester().getDisplayName()));
         payload.put("taskId", task.getId());
         payload.put("taskDescription", task.getDescription());
         payload.put("expectedDeliveryDate", DateFormats.formatDate(expectedDeliveryDate));
         if (task.getAssignee() != null) {
             payload.put("assigneeId", task.getAssignee().getId());
             payload.put("assigneeName", task.getAssignee().getDisplayName());
+            payload.put("assigneeFirstName", firstName(task.getAssignee().getDisplayName()));
         }
         payload.put("locationName", sr.getLocation() != null ? sr.getLocation().getName() : "the delivery location");
         eventPublisher.publishEvent(
@@ -900,8 +950,10 @@ public class ServiceRequestService {
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterId", sr.getRequester().getId());
+        payload.put("requesterFirstName", firstName(sr.getRequester().getDisplayName()));
         payload.put("taskId", task.getId());
         payload.put("taskDescription", task.getDescription());
+        payload.put("fulfillerName", user.getDisplayName());
         eventPublisher.publishEvent(
                 new ServiceRequestEvent(sr.getOrgId(), sr.getId(), "DELIVERED", payload));
 
@@ -973,7 +1025,11 @@ public class ServiceRequestService {
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterName", sr.getRequester().getDisplayName());
+        payload.put("submittedDate", sr.getCreatedAt() != null ? sr.getCreatedAt().toString() : "");
+        payload.put("adminName", user.getDisplayName());
+        payload.put("reminderMessage", trimmed);
         payload.put("message", trimmed);
+        payload.put("approverFirstName", firstName(sr.getApprover().getDisplayName()));
         payload.put("entityType", "SERVICE_REQUEST");
         payload.put("entityId", sr.getId());
 

@@ -7,6 +7,7 @@ import com.alignedcardio.itsm.entity.TeamMember;
 import com.alignedcardio.itsm.event.IncidentCreatedEvent;
 import com.alignedcardio.itsm.event.ServiceRequestEvent;
 import com.alignedcardio.itsm.repository.AppUserRepository;
+import com.alignedcardio.itsm.repository.NotificationPreferenceRepository;
 import com.alignedcardio.itsm.repository.TeamMemberRepository;
 import com.alignedcardio.itsm.repository.TeamRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -40,6 +41,9 @@ class NotificationHandlerTest {
     @Mock
     private TeamMemberRepository teamMemberRepository;
 
+    @Mock
+    private NotificationPreferenceRepository preferenceRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final NotificationTemplateBuilder templateBuilder =
@@ -47,7 +51,7 @@ class NotificationHandlerTest {
 
     private NotificationHandler handler() {
         return new NotificationHandler(notificationService, appUserRepository,
-                teamRepository, teamMemberRepository, templateBuilder);
+                teamRepository, teamMemberRepository, templateBuilder, preferenceRepository);
     }
 
     @Test

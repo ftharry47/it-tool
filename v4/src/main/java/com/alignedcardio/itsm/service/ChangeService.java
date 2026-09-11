@@ -43,6 +43,7 @@ public class ChangeService {
     private final EntityManager entityManager;
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
 
     public ChangeService(ChangeRequestRepository changeRequestRepository,
                          ChangeApprovalRepository changeApprovalRepository,
@@ -51,7 +52,8 @@ public class ChangeService {
                          LocationRepository locationRepository,
                          EntityManager entityManager,
                          AuditLogRepository auditLogRepository,
-                         ObjectMapper objectMapper) {
+                         ObjectMapper objectMapper,
+                         AuditLogService auditLogService) {
         this.changeRequestRepository = changeRequestRepository;
         this.changeApprovalRepository = changeApprovalRepository;
         this.appUserRepository = appUserRepository;
@@ -60,6 +62,7 @@ public class ChangeService {
         this.entityManager = entityManager;
         this.auditLogRepository = auditLogRepository;
         this.objectMapper = objectMapper;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -411,10 +414,7 @@ public class ChangeService {
         return auditLogRepository
                 .findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(orgId, "CHANGE_REQUEST", changeId)
                 .stream()
-                .map(l -> new com.alignedcardio.itsm.api.auth.AuditLogResponse(
-                        l.getId(), l.getActorUserId(), l.getAction(), l.getEntityType(),
-                        l.getEntityId(), l.getBeforeState(), l.getAfterState(),
-                        l.getIpAddress(), l.getCreatedAt()))
+                .map(auditLogService::toResponse)
                 .toList();
     }
 
@@ -523,6 +523,15 @@ public class ChangeService {
     }
 
     private ChangeResponse toResponse(ChangeRequest change) {
+        // Reload lazy/soft-deleted associations through repositories before mapping.
+        UUID requestedById = change.getRequestedBy() == null ? null : change.getRequestedBy().getId();
+        UUID linkedProblemId = change.getLinkedProblem() == null ? null : change.getLinkedProblem().getId();
+        UUID locationId = change.getLocation() == null ? null : change.getLocation().getId();
+
+        AppUser requestedBy = requestedById == null ? null : appUserRepository.findById(requestedById).orElse(null);
+        Problem linkedProblem = linkedProblemId == null ? null : problemRepository.findById(linkedProblemId).orElse(null);
+        Location location = locationId == null ? null : locationRepository.findById(locationId).orElse(null);
+
         List<ChangeApproval> approvals = changeApprovalRepository
                 .findByChangeRequestIdOrderBySequenceOrderAsc(change.getId());
 
@@ -534,25 +543,29 @@ public class ChangeService {
                 change.getChangeType(),
                 change.getRisk(),
                 change.getStatus(),
-                change.getRequestedBy() != null ? change.getRequestedBy().getId() : null,
-                change.getRequestedBy() != null ? change.getRequestedBy().getDisplayName() : null,
+                requestedBy == null ? null : requestedBy.getId(),
+                requestedBy == null ? null : requestedBy.getDisplayName(),
                 change.getPlannedStart(),
                 change.getPlannedEnd(),
                 change.getRollbackPlan(),
                 change.getPostImplementationReview(),
-                change.getLinkedProblem() != null ? change.getLinkedProblem().getId() : null,
-                change.getLocation() != null ? change.getLocation().getId() : null,
-                change.getLocation() != null ? change.getLocation().getName() : null,
+                linkedProblem == null ? null : linkedProblem.getId(),
+                location == null ? null : location.getId(),
+                location == null ? null : location.getName(),
                 approvals.stream()
                         .sorted(Comparator.comparingInt(ChangeApproval::getSequenceOrder))
-                        .map(a -> new ChangeApprovalResponse(
-                                a.getId(),
-                                a.getApprover().getId(),
-                                a.getApprover().getDisplayName(),
-                                a.getSequenceOrder(),
-                                a.getStatus(),
-                                a.getDecidedAt(),
-                                a.getComment()))
+                        .map(a -> {
+                            UUID approverId = a.getApprover() == null ? null : a.getApprover().getId();
+                            AppUser approver = approverId == null ? null : appUserRepository.findById(approverId).orElse(null);
+                            return new ChangeApprovalResponse(
+                                    a.getId(),
+                                    approver == null ? null : approver.getId(),
+                                    approver == null ? null : approver.getDisplayName(),
+                                    a.getSequenceOrder(),
+                                    a.getStatus(),
+                                    a.getDecidedAt(),
+                                    a.getComment());
+                        })
                         .toList(),
                 change.getCreatedAt()
         );

@@ -96,15 +96,18 @@ public class IssueService {
 
         Issue saved = issueRepository.save(issue);
 
-        eventPublisher.publishEvent(new IssueCreatedEvent(
-                saved.getOrgId(),
-                saved.getId(),
-                Map.of(
-                        "id", saved.getId(),
-                        "key", saved.getKey(),
-                        "projectId", saved.getProject().getId(),
-                        "workflowStatusId", saved.getWorkflowStatus().getId(),
-                        "priority", saved.getPriority().name())));
+        Map<String, Object> createdPayload = new java.util.HashMap<>();
+        createdPayload.put("id", saved.getId());
+        createdPayload.put("key", saved.getKey());
+        createdPayload.put("projectId", saved.getProject().getId());
+        createdPayload.put("projectKey", saved.getProject().getKey());
+        createdPayload.put("workflowStatusId", saved.getWorkflowStatus().getId());
+        createdPayload.put("summary", saved.getSummary());
+        createdPayload.put("priority", saved.getPriority().name());
+        createdPayload.put("assigneeId", saved.getAssignee() != null ? saved.getAssignee().getId() : null);
+        createdPayload.put("leadId", saved.getProject().getLead() != null ? saved.getProject().getLead().getId() : null);
+        createdPayload.put("requesterId", saved.getReporter().getId());
+        eventPublisher.publishEvent(new IssueCreatedEvent(saved.getOrgId(), saved.getId(), createdPayload));
 
         return toResponse(saved);
     }
@@ -278,22 +281,26 @@ public class IssueService {
 
         workflowTransitionValidator.validate(issue.getWorkflow().getId(), issue.getWorkflowStatus().getId(), newStatus.getId());
 
-        UUID oldStatusId = issue.getWorkflowStatus().getId();
+        WorkflowStatus oldStatus = issue.getWorkflowStatus();
         issue.setWorkflowStatus(newStatus);
         issue.setUpdatedBy(updatedBy);
         issue.setUpdatedAt(OffsetDateTime.now());
 
         Issue saved = issueRepository.save(issue);
 
-        eventPublisher.publishEvent(new IssueStatusChangedEvent(
-                saved.getOrgId(),
-                saved.getId(),
-                Map.of(
-                        "id", saved.getId(),
-                        "key", saved.getKey(),
-                        "projectId", saved.getProject().getId(),
-                        "oldWorkflowStatusId", oldStatusId,
-                        "newWorkflowStatusId", saved.getWorkflowStatus().getId())));
+        Map<String, Object> statusPayload = new java.util.HashMap<>();
+        statusPayload.put("id", saved.getId());
+        statusPayload.put("key", saved.getKey());
+        statusPayload.put("projectId", saved.getProject().getId());
+        statusPayload.put("projectKey", saved.getProject().getKey());
+        statusPayload.put("oldStatus", oldStatus.getName());
+        statusPayload.put("newStatus", saved.getWorkflowStatus().getName());
+        statusPayload.put("summary", saved.getSummary());
+        statusPayload.put("priority", saved.getPriority().name());
+        statusPayload.put("assigneeId", saved.getAssignee() != null ? saved.getAssignee().getId() : null);
+        statusPayload.put("leadId", saved.getProject().getLead() != null ? saved.getProject().getLead().getId() : null);
+        statusPayload.put("requesterId", saved.getReporter().getId());
+        eventPublisher.publishEvent(new IssueStatusChangedEvent(saved.getOrgId(), saved.getId(), statusPayload));
 
         return toResponse(saved);
     }

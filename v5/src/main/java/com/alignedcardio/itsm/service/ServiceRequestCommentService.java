@@ -22,6 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -90,12 +92,17 @@ public class ServiceRequestCommentService {
 
         comment = commentRepository.save(comment);
 
-        notifyOnComment(sr, author, request);
+        notifyOnComment(sr, author, comment, request);
 
         return toResponse(comment);
     }
 
-    private void notifyOnComment(ServiceRequest sr, AppUser author, CommentCreateRequest request) {
+    private String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "there";
+        return displayName.trim().split("\\s+")[0];
+    }
+
+    private void notifyOnComment(ServiceRequest sr, AppUser author, ServiceRequestComment comment, CommentCreateRequest request) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("number", sr.getNumber());
         payload.put("title", sr.getCatalogItem() != null ? sr.getCatalogItem().getName() : "");
@@ -104,53 +111,37 @@ public class ServiceRequestCommentService {
         payload.put("entityType", "SERVICE_REQUEST");
         payload.put("entityId", sr.getId());
 
-        NotificationContent content = null;
-        try {
-            content = notificationTemplateBuilder.forEvent("SR_COMMENT", payload);
-        } catch (Exception e) {
-            logger.warn("Could not build SR comment notification content", e);
-            return;
+        Map<String, Object> newComment = new HashMap<>();
+        newComment.put("authorName", author.getDisplayName());
+        newComment.put("body", request.body());
+        newComment.put("createdAt", comment.getCreatedAt() != null ? comment.getCreatedAt() : OffsetDateTime.now());
+        newComment.put("public", request.isPublic());
+        payload.put("newComment", newComment);
+
+        List<Map<String, Object>> prior = new ArrayList<>();
+        for (ServiceRequestComment c : commentRepository.findByServiceRequestIdOrderByCreatedAtAsc(sr.getId())) {
+            if (c.isPublic() && !c.getId().equals(comment.getId())) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("authorName", c.getAuthor() != null ? c.getAuthor().getDisplayName() : "");
+                m.put("body", c.getBody());
+                m.put("createdAt", c.getCreatedAt() != null ? c.getCreatedAt() : OffsetDateTime.now());
+                m.put("public", c.isPublic());
+                prior.add(m);
+            }
         }
+        payload.put("priorComments", prior);
 
         Set<UUID> notified = new HashSet<>();
         notified.add(author.getId());
 
         // 1. Requester is notified only for public comments.
         if (request.isPublic() && sr.getRequester() != null && !notified.contains(sr.getRequester().getId())) {
-            try {
-                notificationService.send(new NotificationRequest(
-                        sr.getOrgId(),
-                        sr.getRequester().getId(),
-                        "SR_COMMENT",
-                        content.inAppSubject(),
-                        content.inAppBody(),
-                        "SERVICE_REQUEST",
-                        sr.getId(),
-                        Notification.Channel.BOTH,
-                        content));
-                notified.add(sr.getRequester().getId());
-            } catch (Exception e) {
-                logger.warn("Failed to notify requester {} of SR comment", sr.getRequester().getId(), e);
-            }
+            sendTo(sr, sr.getRequester().getId(), "SR_COMMENT", payload, notified);
         }
 
         // 2. Approver (who approved/is handling the request) is always notified.
         if (sr.getApprover() != null && !notified.contains(sr.getApprover().getId())) {
-            try {
-                notificationService.send(new NotificationRequest(
-                        sr.getOrgId(),
-                        sr.getApprover().getId(),
-                        "SR_COMMENT",
-                        content.inAppSubject(),
-                        content.inAppBody(),
-                        "SERVICE_REQUEST",
-                        sr.getId(),
-                        Notification.Channel.BOTH,
-                        content));
-                notified.add(sr.getApprover().getId());
-            } catch (Exception e) {
-                logger.warn("Failed to notify approver {} of SR comment", sr.getApprover().getId(), e);
-            }
+            sendTo(sr, sr.getApprover().getId(), "SR_COMMENT", payload, notified);
         }
 
         // 3. Currently assigned fulfiller(s) on non-completed tasks.
@@ -160,17 +151,7 @@ public class ServiceRequestCommentService {
                 if (task.getAssignee() != null
                         && task.getStatus() != FulfillmentTask.Status.COMPLETED
                         && !notified.contains(task.getAssignee().getId())) {
-                    notificationService.send(new NotificationRequest(
-                            sr.getOrgId(),
-                            task.getAssignee().getId(),
-                            "SR_COMMENT",
-                            content.inAppSubject(),
-                            content.inAppBody(),
-                            "SERVICE_REQUEST",
-                            sr.getId(),
-                            Notification.Channel.BOTH,
-                            content));
-                    notified.add(task.getAssignee().getId());
+                    sendTo(sr, task.getAssignee().getId(), "SR_COMMENT", payload, notified);
                 }
             }
         } catch (Exception e) {
@@ -182,21 +163,33 @@ public class ServiceRequestCommentService {
             List<AppUser> admins = appUserRepository.findByOrgIdAndRoleNames(sr.getOrgId(), List.of("ADMIN", "SUPER_ADMIN"));
             for (AppUser admin : admins) {
                 if (!notified.contains(admin.getId())) {
-                    notificationService.send(new NotificationRequest(
-                            sr.getOrgId(),
-                            admin.getId(),
-                            "SR_COMMENT",
-                            content.inAppSubject(),
-                            content.inAppBody(),
-                            "SERVICE_REQUEST",
-                            sr.getId(),
-                            Notification.Channel.BOTH,
-                            content));
-                    notified.add(admin.getId());
+                    sendTo(sr, admin.getId(), "SR_COMMENT", payload, notified);
                 }
             }
         } catch (Exception e) {
             logger.warn("Failed to notify admins of SR comment for {}", sr.getId(), e);
+        }
+    }
+
+    private void sendTo(ServiceRequest sr, UUID userId, String type, Map<String, Object> payload, Set<UUID> notified) {
+        try {
+            Map<String, Object> userPayload = new HashMap<>(payload);
+            AppUser user = appUserRepository.findById(userId).orElse(null);
+            userPayload.put("recipientFirstName", firstName(user != null ? user.getDisplayName() : null));
+            var content = notificationTemplateBuilder.forEvent(type, userPayload);
+            notificationService.send(new NotificationRequest(
+                    sr.getOrgId(),
+                    userId,
+                    type,
+                    content.inAppSubject(),
+                    content.inAppBody(),
+                    "SERVICE_REQUEST",
+                    sr.getId(),
+                    Notification.Channel.BOTH,
+                    content));
+            notified.add(userId);
+        } catch (Exception e) {
+            logger.warn("Failed to send {} notification to {}", type, userId, e);
         }
     }
 

@@ -6,6 +6,8 @@ public record IncidentLinkResponse(
         UUID id,
         UUID toIncidentId,
         String linkType,
-        Long toIncidentNumber
+        Long toIncidentNumber,
+        String toIncidentTitle,
+        String toIncidentStatus
 ) {
 }

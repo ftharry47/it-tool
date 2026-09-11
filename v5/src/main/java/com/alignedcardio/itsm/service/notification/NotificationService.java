@@ -9,6 +9,7 @@ import com.alignedcardio.itsm.repository.NotificationRepository;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -33,9 +34,10 @@ public class NotificationService {
      * remain digestible.
      */
     private static final java.util.Set<String> DIGEST_BYPASS_TYPES = java.util.Set.of(
-            "INCIDENT_ASSIGNED", "PROBLEM_ASSIGNED", "CHANGE_ASSIGNED", "FULFILLMENT_TASK_ASSIGNED",
-            "SLA_BREACH", "SLA_ESCALATION", "MENTION",
-            "REJECTED", "PENDING_APPROVAL");
+            "INCIDENT_ASSIGNED", "INCIDENT_TIER_ESCALATED", "PROBLEM_ASSIGNED", "CHANGE_ASSIGNED",
+            "FULFILLMENT_TASK_ASSIGNED", "TASK_ASSIGNED",
+            "SLA_BREACH", "SLA_AT_RISK", "SLA_ESCALATION", "MENTION",
+            "REJECTED", "PENDING_APPROVAL", "SR_SENT_TO_APPROVAL");
 
     private final NotificationRepository notificationRepository;
     private final NotificationPreferenceRepository preferenceRepository;
@@ -212,11 +214,13 @@ public class NotificationService {
 
         String subject = content != null ? content.emailSubject() : notification.getSubject();
         String body = content != null ? content.emailBody() : notification.getBody();
+        String htmlBody = content != null ? content.emailHtmlBody() : null;
+        boolean isHtml = htmlBody != null && !htmlBody.isBlank();
 
         if (graphMailClient.isPresent()) {
             logger.info("Sending Graph email to {} for notification {}", address, notification.getId());
             try {
-                graphMailClient.get().sendEmail(address, subject, body);
+                graphMailClient.get().sendEmail(address, subject, isHtml ? htmlBody : body, isHtml);
                 notification.setEmailStatus(Notification.DeliveryStatus.SENT);
                 logger.info("Graph email SENT for notification {}", notification.getId());
             } catch (Exception e) {
@@ -233,6 +237,23 @@ public class NotificationService {
         }
 
         logger.info("Sending SMTP email to {} for notification {}", address, notification.getId());
+        if (isHtml) {
+            try {
+                jakarta.mail.internet.MimeMessage message = mailSender.get().createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                helper.setTo(address);
+                helper.setSubject(subject);
+                helper.setText(body, htmlBody);
+                mailSender.get().send(message);
+                notification.setEmailStatus(Notification.DeliveryStatus.SENT);
+                logger.info("SMTP HTML email SENT for notification {}", notification.getId());
+            } catch (Exception e) {
+                logger.error("SMTP HTML email FAILED for notification {}", notification.getId(), e);
+                notification.setEmailStatus(Notification.DeliveryStatus.FAILED);
+            }
+            return;
+        }
+
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(address);
         message.setSubject(subject);
@@ -299,8 +320,8 @@ public class NotificationService {
             return preference.isNotifyAssignment();
         }
         return switch (t) {
-            case "INCIDENT_UPDATE", "INCIDENT_PRIORITY_CHANGED" -> preference.isNotifyStatusChange();
-            case "INCIDENT_COMMENT" -> preference.isNotifyComment();
+            case "INCIDENT_UPDATE", "INCIDENT_PRIORITY_CHANGED", "INCIDENT_TIER_ESCALATED" -> preference.isNotifyStatusChange();
+            case "INCIDENT_COMMENT", "SR_COMMENT" -> preference.isNotifyComment();
             case "MENTION" -> preference.isNotifyMention();
             default -> true;
         };

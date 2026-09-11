@@ -269,7 +269,7 @@ public class IncidentV1Controller {
                                         @PathVariable UUID id,
                                         @Valid @RequestBody LinkCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
-        return incidentService.addLink(user.getOrgId(), id, request);
+        return incidentService.addLink(user.getOrgId(), id, request, user.getId());
     }
 
     @GetMapping("/{id}/activity")

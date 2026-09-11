@@ -227,6 +227,9 @@ public class SlaBreachMonitorJob implements Job {
             beforeState.put("assignmentTeamName", incident.getAssignmentTeam() != null ? incident.getAssignmentTeam().getName() : null);
 
             incident.setAssignmentTeam(team);
+            // Move ownership to the new tier; the old agent no longer owns the ticket.
+            incident.setAssignee(null);
+            incident.setUpdatedAt(OffsetDateTime.now());
             incidentRepository.save(incident);
 
             Map<String, Object> afterState = new java.util.HashMap<>();

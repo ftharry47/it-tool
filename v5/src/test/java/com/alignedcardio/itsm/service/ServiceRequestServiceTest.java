@@ -848,7 +848,7 @@ class ServiceRequestServiceTest {
         assertEquals(ServiceRequest.Status.REJECTED_NEEDS_REVIEW, response.status());
         assertEquals(ServiceRequest.Status.IN_FULFILLMENT, sr.getPreviousStatus());
         assertEquals(ServiceRequest.ApprovalDecision.REJECTED, sr.getApprovalDecision());
-        verify(notificationService).send(any());
+        verify(notificationService, times(2)).send(any());
     }
 
     @Test

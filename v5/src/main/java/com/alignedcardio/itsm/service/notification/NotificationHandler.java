@@ -2,9 +2,11 @@ package com.alignedcardio.itsm.service.notification;
 
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.Notification;
+import com.alignedcardio.itsm.entity.NotificationPreference;
 import com.alignedcardio.itsm.entity.TeamMember;
 import com.alignedcardio.itsm.event.DomainEvent;
 import com.alignedcardio.itsm.repository.AppUserRepository;
+import com.alignedcardio.itsm.repository.NotificationPreferenceRepository;
 import com.alignedcardio.itsm.repository.TeamMemberRepository;
 import com.alignedcardio.itsm.repository.TeamRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,42 +26,51 @@ public class NotificationHandler {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final NotificationTemplateBuilder templateBuilder;
+    private final NotificationPreferenceRepository preferenceRepository;
 
     public NotificationHandler(NotificationService notificationService,
                                AppUserRepository appUserRepository,
                                TeamRepository teamRepository,
                                TeamMemberRepository teamMemberRepository,
-                               NotificationTemplateBuilder templateBuilder) {
+                               NotificationTemplateBuilder templateBuilder,
+                               NotificationPreferenceRepository preferenceRepository) {
         this.notificationService = notificationService;
         this.appUserRepository = appUserRepository;
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.templateBuilder = templateBuilder;
+        this.preferenceRepository = preferenceRepository;
     }
 
     public void handle(DomainEvent event, JsonNode action, UUID actingUserId) {
-        NotificationContent content = templateBuilder.fromRule(action, event);
         String channel = action.hasNonNull("channel") ? action.get("channel").asText().toUpperCase() : "BOTH";
 
         if (action.hasNonNull("role")) {
             for (UUID userId : resolveRoleUserIds(action.get("role").asText(), event)) {
-                send(event, userId, content, channel);
+                if (shouldSkip(event, userId)) continue;
+                send(event, userId, channel, action);
             }
             return;
         }
 
         if (action.hasNonNull("teamId")) {
             for (UUID userId : resolveTeamUserIds(action.get("teamId").asText(), event)) {
-                send(event, userId, content, channel);
+                if (shouldSkip(event, userId)) continue;
+                send(event, userId, channel, action);
             }
             return;
         }
 
         String userIdText = action.get("userId").asText();
-        send(event, resolveUserId(userIdText, event), content, channel);
+        UUID userId = resolveUserId(userIdText, event);
+        if (userId == null || shouldSkip(event, userId)) {
+            return;
+        }
+        send(event, userId, channel, action);
     }
 
-    private void send(DomainEvent event, UUID userId, NotificationContent content, String channel) {
+    private void send(DomainEvent event, UUID userId, String channel, JsonNode action) {
+        NotificationContent content = templateBuilder.fromRule(action, event);
         NotificationRequest request = new NotificationRequest(
                 event.orgId(),
                 userId,
@@ -72,6 +83,36 @@ public class NotificationHandler {
                 content);
 
         notificationService.send(request);
+    }
+
+    private boolean shouldSkip(DomainEvent event, UUID userId) {
+        if (userId == null) {
+            return true;
+        }
+        String entity = event.triggerEntity();
+        String type = event.triggerType();
+        if ("INCIDENT".equals(entity) && ("STATUS_CHANGED".equals(type) || "PRIORITY_CHANGED".equals(type))) {
+            Object requester = event.payload().get("requesterId");
+            if (requester != null && userId.equals(toUuid(requester))) {
+                NotificationPreference preference = preferenceRepository.findByUserId(userId)
+                        .orElse(null);
+                if (preference != null && !preference.isNotifyStatusChange()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private UUID toUuid(Object value) {
+        if (value instanceof UUID uuid) return uuid;
+        if (value instanceof String str) {
+            try {
+                return UUID.fromString(str);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     private List<UUID> resolveRoleUserIds(String roleName, DomainEvent event) {
@@ -101,6 +142,9 @@ public class NotificationHandler {
         String placeholder = unwrapPlaceholder(userIdText);
         if (placeholder != null) {
             Object value = event.payload().get(placeholder);
+            if (value == null) {
+                return null;
+            }
             if (value instanceof UUID uuid) {
                 return uuid;
             }

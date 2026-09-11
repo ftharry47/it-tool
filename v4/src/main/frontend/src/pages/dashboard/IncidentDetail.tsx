@@ -6,7 +6,7 @@ import { ArrowLeft, Link2, Paperclip, MessageCircle, Loader2, History, Clock } f
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
-import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
+import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription, parseState } from '../../components/ui/ActivityTimeline'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
@@ -47,9 +47,11 @@ interface Comment {
 
 interface LinkedIncident {
   id: string
-  number: number
-  title: string
-  status: string
+  toIncidentId: string
+  toIncidentNumber: number
+  toIncidentTitle: string
+  toIncidentStatus: string
+  linkType: string
 }
 
 interface User {
@@ -273,6 +275,7 @@ const [confirmBack, setConfirmBack] = useState(false)
       setSelectedStatus('')
       setClosingNotes('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => {
@@ -303,6 +306,8 @@ const [confirmBack, setConfirmBack] = useState(false)
       setSelectedAssignee('')
       setSelectedAssigneePriority('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-activity', id] })
+      queryClient.invalidateQueries({ queryKey: ['teams'] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => {
@@ -325,7 +330,9 @@ const [confirmBack, setConfirmBack] = useState(false)
       setSelectedEscalationPriority('')
       setEscalationReason('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['incident-comments', id] })
+      queryClient.invalidateQueries({ queryKey: ['teams'] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => {
@@ -347,7 +354,9 @@ const [confirmBack, setConfirmBack] = useState(false)
       setTierEscalateOpen(false)
       setTierEscalationReason('')
       queryClient.invalidateQueries({ queryKey: ['incident', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-activity', id] })
       queryClient.invalidateQueries({ queryKey: ['incident-comments', id] })
+      queryClient.invalidateQueries({ queryKey: ['teams'] })
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
     },
     onError: (error) => {
@@ -414,7 +423,7 @@ const [confirmBack, setConfirmBack] = useState(false)
     mutationFn: async (linkedIncidentId) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/incidents/${id}/links`, {
         method: 'POST',
-        body: JSON.stringify({ linkedIncidentId, linkType: 'RELATED' }),
+        body: JSON.stringify({ toIncidentId: linkedIncidentId, linkType: 'RELATED' }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
@@ -477,6 +486,7 @@ const [confirmBack, setConfirmBack] = useState(false)
       id: `${incident.id}-created`,
       title: 'Incident created',
       description: `Incident #${incident.number} opened by ${incident.requester || 'Unknown'}`,
+      actorName: incident.requester || undefined,
       createdAt: incident.createdAt,
       icon: <History className="h-4 w-4" />,
     })
@@ -492,6 +502,7 @@ const [confirmBack, setConfirmBack] = useState(false)
       list.push({
         id: `${incident.id}-assigned`,
         title: `Assigned to ${incident.assignee}`,
+        actorName: incident.assignee,
         createdAt: incident.updatedAt,
         icon: <Link2 className="h-4 w-4" />,
       })
@@ -502,16 +513,24 @@ const [confirmBack, setConfirmBack] = useState(false)
         id: `comment-${comment.id}`,
         title: `${comment.isInternal ? 'Internal' : 'Public'} comment by ${comment.author}`,
         description: comment.body,
+        actorName: comment.author,
         createdAt: comment.createdAt,
         icon: <MessageCircle className="h-4 w-4" />,
       })
     })
 
     ;(activityQuery.data ?? []).forEach((entry) => {
+      const after = parseState(entry.afterState)
+      const actionTeam = typeof after.assignmentTeamName === 'string' && after.assignmentTeamName
+        ? after.assignmentTeamName
+        : undefined
+      const showTeamBadge = ['ASSIGN', 'REASSIGN', 'ESCALATE_TIER', 'AUTO_ESCALATE_TIER'].includes(entry.action)
       list.push({
         id: `audit-${entry.id}`,
         title: auditTitle(entry),
         description: auditDescription(entry),
+        actorName: entry.actorName ?? 'System',
+        actorBadge: showTeamBadge ? (actionTeam ?? entry.actorRole ?? undefined) : (entry.actorRole ?? undefined),
         createdAt: entry.createdAt,
         icon: <History className="h-4 w-4" />,
       })
@@ -548,7 +567,9 @@ const [confirmBack, setConfirmBack] = useState(false)
   const canEscalate = isAdminOrSuperAdmin || isAssignedToMe
   // Once tier-escalated, Status Transition is ADMIN/SUPER_ADMIN-only — the
   // assignee is cleared on escalation, so this also freezes the old agent out.
-  const hasBeenTierEscalated = (activityQuery.data ?? []).some((e) => e.action === 'ESCALATE_TIER')
+  const hasBeenTierEscalated = (activityQuery.data ?? []).some(
+    (e) => e.action === 'ESCALATE_TIER' || e.action === 'AUTO_ESCALATE_TIER'
+  )
   const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !hasBeenTierEscalated)
   const legalNextStatuses = (statusTransitions[incident.status] ?? [])
     .filter((s) => s !== 'REOPENED' || isAdminOrSuperAdmin)
@@ -568,7 +589,7 @@ const [confirmBack, setConfirmBack] = useState(false)
     : (commentsQuery.data ?? [])
 
   const linkOptions = (allIncidentsQuery.data ?? [])
-    .filter((inc) => inc.id !== id && !(linkedQuery.data ?? []).some((linked) => linked.id === inc.id))
+    .filter((inc) => inc.id !== id && !(linkedQuery.data ?? []).some((linked) => linked.toIncidentId === inc.id))
     .map((inc) => ({ value: inc.id, label: `#${inc.number} — ${inc.title}` }))
 
   return (
@@ -1203,8 +1224,8 @@ const [confirmBack, setConfirmBack] = useState(false)
                     {linkedQuery.data!.map((linked) => (
                       <div key={linked.id} className="flex items-center justify-between rounded-lg border border-border/50 bg-background p-3">
                         <div className="text-sm">
-                          <p className="font-medium">#{linked.number} — {linked.title}</p>
-                          <p className="text-xs text-muted-foreground">{linked.status}</p>
+                          <p className="font-medium">#{linked.toIncidentNumber} — {linked.toIncidentTitle}</p>
+                          <p className="text-xs text-muted-foreground">{linked.toIncidentStatus}</p>
                         </div>
                       </div>
                     ))}

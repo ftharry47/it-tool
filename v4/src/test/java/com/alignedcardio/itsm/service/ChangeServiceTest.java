@@ -60,6 +60,9 @@ class ChangeServiceTest {
     @Mock
     private ObjectMapper objectMapper;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private ChangeService changeService;
 

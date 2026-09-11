@@ -299,6 +299,7 @@ export function ChangeDetail() {
       id: `${change.id}-created`,
       title: 'Change request created',
       description: `Change #${change.number} opened by ${change.requestedByName || 'Unknown'}`,
+      actorName: change.requestedByName || undefined,
       createdAt: change.createdAt,
       icon: <History className="h-4 w-4" />,
     })
@@ -313,6 +314,8 @@ export function ChangeDetail() {
         id: `audit-${entry.id}`,
         title: auditTitle(entry),
         description: auditDescription(entry),
+        actorName: entry.actorName ?? 'System',
+        actorBadge: entry.actorRole ?? undefined,
         createdAt: entry.createdAt,
         icon: <History className="h-4 w-4" />,
       })
