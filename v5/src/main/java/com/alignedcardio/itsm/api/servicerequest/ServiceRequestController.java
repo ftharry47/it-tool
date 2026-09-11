@@ -124,6 +124,15 @@ public class ServiceRequestController {
         return serviceRequestService.sendReminder(user, user.getOrgId(), id, body.get("message"));
     }
 
+    @PostMapping("/{id}/send-to-approval")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ServiceRequestResponse sendToApproval(@AuthenticationPrincipal Jwt jwt,
+                                                 @PathVariable UUID id,
+                                                 @RequestBody Map<String, String> body) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.sendToApproval(user, user.getOrgId(), id, body.getOrDefault("reason", ""));
+    }
+
     @GetMapping("/{id}/activity")
     @PreAuthorize("isAuthenticated()")
     public List<ServiceRequestActivityResponse> activity(@AuthenticationPrincipal Jwt jwt,

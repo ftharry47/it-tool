@@ -13,7 +13,7 @@ import java.time.OffsetDateTime;
 public class ServiceRequest extends BaseEntity {
 
     public enum Status {
-        SUBMITTED, PENDING_APPROVAL, APPROVED, REJECTED, IN_FULFILLMENT, FULFILLED, CANCELLED
+        SUBMITTED, PENDING_APPROVAL, APPROVED, REJECTED, REJECTED_NEEDS_REVIEW, IN_FULFILLMENT, FULFILLED, CANCELLED
     }
 
     public enum ApprovalDecision {
@@ -59,6 +59,10 @@ public class ServiceRequest extends BaseEntity {
 
     @Column(name = "decided_at")
     private OffsetDateTime decidedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 32)
+    private Status previousStatus;
 
     @Column(name = "needed_by")
     private OffsetDateTime neededBy;
@@ -156,6 +160,14 @@ public class ServiceRequest extends BaseEntity {
 
     public void setDecidedAt(OffsetDateTime decidedAt) {
         this.decidedAt = decidedAt;
+    }
+
+    public Status getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public void setPreviousStatus(Status previousStatus) {
+        this.previousStatus = previousStatus;
     }
 
     public OffsetDateTime getNeededBy() {

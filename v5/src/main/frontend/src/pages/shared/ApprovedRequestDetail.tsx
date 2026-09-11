@@ -45,6 +45,7 @@ interface ServiceRequestDetail {
 const ACTION_LABELS: Record<string, string> = {
   SUBMITTED: 'Submitted',
   ROUTED_TO_APPROVER: 'Sent for approval',
+  SENT_TO_APPROVAL: 'Sent to approval',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   IN_FULFILLMENT: 'Being fulfilled',
@@ -64,6 +65,7 @@ function describeAfter(afterState: string | null): string | null {
   if (!afterState) return null
   try {
     const s = JSON.parse(afterState)
+    if (s.reason) return `Reason: ${s.reason}`
     if (s.approverName) return `Approver: ${s.approverName}`
     if (s.assigneeName) return `Assigned to: ${s.assigneeName}`
     if (s.expectedDeliveryDate) return `Expected delivery: ${s.expectedDeliveryDate}`

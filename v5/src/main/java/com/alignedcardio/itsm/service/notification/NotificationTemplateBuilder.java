@@ -164,6 +164,24 @@ public class NotificationTemplateBuilder {
                     "\"" + str(p, "message") + "\"",
                     str(p, "number") + " – Reminder",
                     "Reminder: please review " + str(p, "number"));
+            case "SR_SENT_TO_APPROVAL" -> content(
+                    str(p, "number") + " – " + str(p, "catalogItemName") + " – Approval requested",
+                    str(p, "actorName") + " has sent service request " + str(p, "number")
+                            + " (\"" + str(p, "catalogItemName") + "\") to you for approval. Reason: "
+                            + str(p, "reason") + "." + link(p),
+                    "Approval requested for " + str(p, "number"),
+                    "Reason: " + str(p, "reason"),
+                    str(p, "number") + " – Approval requested",
+                    str(p, "actorName") + " needs your approval");
+            case "SR_RETROACTIVE_APPROVAL_REJECTED" -> content(
+                    str(p, "number") + " – " + str(p, "catalogItemName") + " – Rejected approval needs review",
+                    str(p, "approverName") + " rejected the retroactive approval for " + str(p, "number")
+                            + " (\"" + str(p, "catalogItemName") + "\"). Comment: "
+                            + str(p, "comment") + "." + link(p),
+                    "Rejected approval: " + str(p, "number"),
+                    str(p, "comment"),
+                    str(p, "number") + " – Review needed",
+                    "Approval was rejected");
             default -> content(
                     str(p, "subject"), str(p, "body"),
                     str(p, "subject"), str(p, "body"),

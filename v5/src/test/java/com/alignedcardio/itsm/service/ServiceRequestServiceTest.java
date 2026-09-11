@@ -755,4 +755,122 @@ class ServiceRequestServiceTest {
         ServiceRequestResponse noApprovalResponse = service.create(requester, ORG_ID, noApprovalReq);
         assertEquals(ServiceRequest.Status.IN_FULFILLMENT, noApprovalResponse.status());
     }
+
+    @Test
+    void sendToApprovalMidFulfillmentPreservesTaskState() {
+        AppUser admin = superAdmin();
+        AppUser approver = user("Approver");
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Laptop", false, approver);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setApprovalRequired(false);
+
+        FulfillmentTask task = new FulfillmentTask();
+        task.setId(UUID.randomUUID());
+        task.setServiceRequest(sr);
+        task.setDescription("Order laptop");
+        task.setStatus(FulfillmentTask.Status.ORDERED);
+
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+        when(fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(sr.getId()))
+                .thenReturn(List.of(task));
+
+        ServiceRequestResponse response = service.sendToApproval(admin, ORG_ID, sr.getId(), "Budget needs sign-off");
+
+        assertEquals(ServiceRequest.Status.PENDING_APPROVAL, response.status());
+        assertEquals(ServiceRequest.Status.IN_FULFILLMENT, sr.getPreviousStatus());
+        assertTrue(sr.isApprovalRequired());
+        assertEquals(ServiceRequest.ApprovalDecision.PENDING, sr.getApprovalDecision());
+        assertEquals(approver.getId(), sr.getApprover().getId());
+        assertEquals(FulfillmentTask.Status.ORDERED, task.getStatus());
+        assertEquals("Order laptop", task.getDescription());
+    }
+
+    @Test
+    void approveResumesWithoutDuplicateTasks() {
+        AppUser approver = user("Approver");
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Laptop", false, approver);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprovalRequired(true);
+        sr.setPreviousStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setApprover(approver);
+
+        FulfillmentTask task = new FulfillmentTask();
+        task.setId(UUID.randomUUID());
+        task.setServiceRequest(sr);
+        task.setDescription("Order laptop");
+        task.setStatus(FulfillmentTask.Status.ORDERED);
+
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+        when(fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(sr.getId()))
+                .thenReturn(List.of(task));
+
+        ServiceRequestResponse response = service.decide(approver, ORG_ID, sr.getId(),
+                new ApprovalRequest("Approved after review", true));
+
+        assertEquals(ServiceRequest.Status.APPROVED, response.status());
+        assertNull(sr.getPreviousStatus());
+        assertEquals(FulfillmentTask.Status.ORDERED, task.getStatus());
+        assertEquals("Order laptop", task.getDescription());
+        verify(fulfillmentTaskRepository, never()).save(any(FulfillmentTask.class));
+    }
+
+    @Test
+    void rejectionFromRetroactiveApprovalNeedsReviewAndNotifiesAdmins() {
+        AppUser approver = user("Approver");
+        AppUser admin = superAdmin();
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Laptop", false, approver);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprovalRequired(true);
+        sr.setPreviousStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setApprover(approver);
+
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+        when(appUserRepository.findByOrgIdAndRoleNames(ORG_ID, List.of("ADMIN", "SUPER_ADMIN")))
+                .thenReturn(List.of(admin));
+        com.alignedcardio.itsm.service.notification.NotificationContent content =
+                new com.alignedcardio.itsm.service.notification.NotificationContent(
+                        "subject", "body", "subject", "body", "push", "push");
+        when(notificationTemplateBuilder.forEvent(eq("SR_RETROACTIVE_APPROVAL_REJECTED"), anyMap()))
+                .thenReturn(content);
+
+        ServiceRequestResponse response = service.decide(approver, ORG_ID, sr.getId(),
+                new ApprovalRequest("Too expensive", false));
+
+        assertEquals(ServiceRequest.Status.REJECTED_NEEDS_REVIEW, response.status());
+        assertEquals(ServiceRequest.Status.IN_FULFILLMENT, sr.getPreviousStatus());
+        assertEquals(ServiceRequest.ApprovalDecision.REJECTED, sr.getApprovalDecision());
+        verify(notificationService).send(any());
+    }
+
+    @Test
+    void sendToApprovalActivityEntryContainsReason() {
+        AppUser admin = superAdmin();
+        AppUser approver = user("Approver");
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Laptop", false, approver);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+
+        service.sendToApproval(admin, ORG_ID, sr.getId(), "Manager must review vendor");
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog log = captor.getValue();
+        assertEquals("SENT_TO_APPROVAL", log.getAction());
+        assertNotNull(log.getAfterState());
+        assertTrue(log.getAfterState().contains("Manager must review vendor"));
+        assertTrue(log.getAfterState().contains(approver.getId().toString()));
+    }
 }

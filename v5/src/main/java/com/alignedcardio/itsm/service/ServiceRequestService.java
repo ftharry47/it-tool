@@ -245,6 +245,52 @@ public class ServiceRequestService {
         return toResponse(saved);
     }
 
+    @Transactional
+    public ServiceRequestResponse sendToApproval(AppUser user, UUID orgId, UUID id, String reason) {
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+
+        if (sr.getStatus() == ServiceRequest.Status.PENDING_APPROVAL) {
+            throw new IllegalStateException("Request is already pending approval");
+        }
+
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalStateException("A reason is required when sending a request to approval");
+        }
+
+        AppUser approver = resolveApprover(sr);
+
+        sr.setPreviousStatus(sr.getStatus());
+        sr.setApprovalRequired(true);
+        sr.setApprovalDecision(ServiceRequest.ApprovalDecision.PENDING);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprover(approver);
+        sr.setApprovalComment(null);
+        sr.setDecidedAt(null);
+        sr.setUpdatedBy(user.getId());
+        sr.setUpdatedAt(OffsetDateTime.now());
+
+        recordActivity(sr, user.getId(), "SENT_TO_APPROVAL",
+                Map.of("status", sr.getPreviousStatus().name(),
+                        "approverId", approver.getId(),
+                        "approverName", approver.getDisplayName()),
+                Map.of("status", sr.getStatus().name(),
+                        "approverId", approver.getId(),
+                        "approverName", approver.getDisplayName(),
+                        "reason", reason,
+                        "sentBy", user.getDisplayName()));
+
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+
+        // Pause the SLA clock while pending the new approval.
+        slaEngine.onServiceRequestStatusChanged(saved);
+
+        notifyApproverOfRetroactiveApproval(user, saved, reason);
+
+        publishEvent(saved, "PENDING_APPROVAL");
+        return toResponse(saved);
+    }
+
     private boolean computeApprovalRequired(CatalogItem item, JsonNode formData) {
         if (item.getFormSchema() == null || !item.getFormSchema().isArray()) {
             return false;
@@ -333,12 +379,14 @@ public class ServiceRequestService {
         sr.setUpdatedBy(user.getId());
         sr.setUpdatedAt(OffsetDateTime.now());
 
+        boolean retroactive = sr.getPreviousStatus() != null;
         if (request.approve()) {
             sr.setApprovalDecision(ServiceRequest.ApprovalDecision.APPROVED);
             sr.setStatus(ServiceRequest.Status.APPROVED);
+            sr.setPreviousStatus(null);
         } else {
             sr.setApprovalDecision(ServiceRequest.ApprovalDecision.REJECTED);
-            sr.setStatus(ServiceRequest.Status.REJECTED);
+            sr.setStatus(retroactive ? ServiceRequest.Status.REJECTED_NEEDS_REVIEW : ServiceRequest.Status.REJECTED);
         }
 
         recordActivity(sr, user.getId(), sr.getApprovalDecision().name(),
@@ -353,7 +401,7 @@ public class ServiceRequestService {
 
         ServiceRequest saved = serviceRequestRepository.save(sr);
 
-        // Resume (APPROVED) or stop (REJECTED) the SLA clock.
+        // Resume (APPROVED) or stop (REJECTED/REJECTED_NEEDS_REVIEW) the SLA clock.
         slaEngine.onServiceRequestStatusChanged(saved);
 
         publishEvent(saved, sr.getApprovalDecision().name());
@@ -363,6 +411,11 @@ public class ServiceRequestService {
             // This is a broadcast-at-scale tradeoff for small orgs; revisit if org size grows.
             notifyAdminsForFulfillerAssignment(saved);
         }
+
+        if (retroactive && !request.approve()) {
+            notifyAdminsOfRetroactiveRejection(saved, user, request.comment());
+        }
+
         return toResponse(saved);
     }
 
@@ -464,6 +517,61 @@ public class ServiceRequestService {
                         content));
             } catch (Exception e) {
                 logger.warn("Failed to send SERVICE_REQUEST_APPROVED_NEEDS_ASSIGNMENT to {}", admin.getId(), e);
+            }
+        }
+    }
+
+    private void notifyApproverOfRetroactiveApproval(AppUser sender, ServiceRequest sr, String reason) {
+        if (sr.getApprover() == null) return;
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("entityType", "SERVICE_REQUEST");
+        payload.put("entityId", sr.getId());
+        payload.put("actorName", sender.getDisplayName());
+        payload.put("reason", reason);
+        try {
+            var content = notificationTemplateBuilder.forEvent("SR_SENT_TO_APPROVAL", payload);
+            notificationService.send(new NotificationRequest(
+                    sr.getOrgId(),
+                    sr.getApprover().getId(),
+                    "SR_SENT_TO_APPROVAL",
+                    content.inAppSubject(),
+                    content.inAppBody(),
+                    "SERVICE_REQUEST",
+                    sr.getId(),
+                    null,
+                    content));
+        } catch (Exception e) {
+            logger.warn("Failed to send SR_SENT_TO_APPROVAL to {}", sr.getApprover().getId(), e);
+        }
+    }
+
+    private void notifyAdminsOfRetroactiveRejection(ServiceRequest sr, AppUser approver, String comment) {
+        List<AppUser> admins = appUserRepository.findByOrgIdAndRoleNames(
+                sr.getOrgId(), List.of("ADMIN", "SUPER_ADMIN"));
+        for (AppUser admin : admins) {
+            Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("number", sr.getNumber());
+            payload.put("catalogItemName", sr.getCatalogItem().getName());
+            payload.put("entityType", "SERVICE_REQUEST");
+            payload.put("entityId", sr.getId());
+            payload.put("approverName", approver.getDisplayName());
+            payload.put("comment", comment != null ? comment : "");
+            try {
+                var content = notificationTemplateBuilder.forEvent("SR_RETROACTIVE_APPROVAL_REJECTED", payload);
+                notificationService.send(new NotificationRequest(
+                        sr.getOrgId(),
+                        admin.getId(),
+                        "SR_RETROACTIVE_APPROVAL_REJECTED",
+                        content.inAppSubject(),
+                        content.inAppBody(),
+                        "SERVICE_REQUEST",
+                        sr.getId(),
+                        null,
+                        content));
+            } catch (Exception e) {
+                logger.warn("Failed to send SR_RETROACTIVE_APPROVAL_REJECTED to {}", admin.getId(), e);
             }
         }
     }
@@ -801,6 +909,9 @@ public class ServiceRequestService {
     }
 
     private void seedFulfillmentTasks(AppUser user, ServiceRequest sr) {
+        if (!fulfillmentTaskRepository.findByServiceRequestIdOrderBySequenceOrderAsc(sr.getId()).isEmpty()) {
+            return;
+        }
         CatalogItem item = sr.getCatalogItem();
         JsonNode template = item.getFulfillmentTasks();
         if (template == null || !template.isArray()) {

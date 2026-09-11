@@ -57,6 +57,7 @@ interface PendingTaskAction {
 const ACTION_LABELS: Record<string, string> = {
   SUBMITTED: 'Submitted',
   ROUTED_TO_APPROVER: 'Routed to approver',
+  SENT_TO_APPROVAL: 'Sent to approval',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   IN_FULFILLMENT: 'Moved to fulfillment',
@@ -77,6 +78,7 @@ function describeAfter(afterState: string | null): string | null {
   if (!afterState) return null
   try {
     const s = JSON.parse(afterState)
+    if (s.reason) return `Reason: ${s.reason}`
     if (s.approverName) return `Approver: ${s.approverName}`
     if (s.assigneeName) return `Assigned to: ${s.assigneeName}`
     if (s.expectedDeliveryDate) return `Expected delivery: ${s.expectedDeliveryDate}`
@@ -127,6 +129,8 @@ export function ServiceRequestDetail() {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [approveForm, setApproveForm] = useState({ comment: '' })
   const [rejectForm, setRejectForm] = useState({ comment: '' })
+  const [sendToApprovalReason, setSendToApprovalReason] = useState('')
+  const [sendToApprovalOpen, setSendToApprovalOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingTaskAction, setPendingTaskAction] = useState<PendingTaskAction | null>(null)
 
@@ -204,6 +208,27 @@ export function ServiceRequestDetail() {
       return res.json()
     },
     onSuccess: () => {
+      setActionError(null)
+      queryClient.invalidateQueries({ queryKey: ['service-request', id] })
+      queryClient.invalidateQueries({ queryKey: ['service-request-activity', id] })
+      queryClient.invalidateQueries({ queryKey: ['service-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    onError: (error) => setActionError(error.message),
+  })
+
+  const sendToApprovalMutation = useMutation<ServiceRequestDetail, Error, string>({
+    mutationFn: async (reason) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/send-to-approval`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      setSendToApprovalOpen(false)
+      setSendToApprovalReason('')
       setActionError(null)
       queryClient.invalidateQueries({ queryKey: ['service-request', id] })
       queryClient.invalidateQueries({ queryKey: ['service-request-activity', id] })
@@ -605,6 +630,19 @@ export function ServiceRequestDetail() {
               </div>
             )}
 
+            {request.status !== 'PENDING_APPROVAL' && isAdminOrSuperAdmin && (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="mb-4 text-lg font-semibold">Approval</h2>
+                <p className="mb-3 text-sm text-muted-foreground">Send this request to the location's approval manager retroactively.</p>
+                <button
+                  onClick={() => setSendToApprovalOpen(true)}
+                  className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                >
+                  Send to Approval
+                </button>
+              </div>
+            )}
+
             {request.status === 'PENDING_APPROVAL' && isAdminOrSuperAdmin && (
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Send Reminder</h2>
@@ -662,6 +700,25 @@ export function ServiceRequestDetail() {
           }}
           submitLabel="Reject"
           pending={rejectMutation.isPending}
+        />
+        {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
+      </FormDrawer>
+
+      <FormDrawer open={sendToApprovalOpen} title="Send to Approval" dirty={sendToApprovalReason.trim() !== ''} onClose={() => { setSendToApprovalOpen(false); setSendToApprovalReason(''); setActionError(null) }}>
+        <EntityForm
+          fields={[{ name: 'reason', label: 'Reason approval is now required', type: 'textarea', required: true }]}
+          values={{ reason: sendToApprovalReason }}
+          onChange={(_, value) => setSendToApprovalReason(value)}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!sendToApprovalReason.trim()) {
+              setActionError('A reason is required when sending to approval')
+              return
+            }
+            sendToApprovalMutation.mutate(sendToApprovalReason)
+          }}
+          submitLabel="Confirm"
+          pending={sendToApprovalMutation.isPending}
         />
         {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
       </FormDrawer>
