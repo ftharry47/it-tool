@@ -75,3 +75,32 @@ public ResponseEntity<Map<String, String>> handleServiceNotFound(com.alignedcard
 - Prefer minimal upstream fixes over downstream workarounds.
 - Identify the root cause before implementing changes.
 - Add regression tests when fixing bugs, but keep the implementation minimal.
+
+## v5 Azure deployment configuration
+
+Build command (run from `C:\Users\SriHariThangavel\Documents\Dev-IT\v5`):
+
+```powershell
+.\package.ps1 `
+  -AzureClientId "<AZURE_GRAPH_CLIENT_ID / Entra app registration Client ID>" `
+  -AzureTenantId "<AZURE_AD_TENANT_ID / Entra tenant ID>" `
+  -AppBaseUrl "https://itsm-alignedcardio.azurewebsites.net"
+```
+
+- `VITE_AZURE_CLIENT_ID` / `VITE_AZURE_TENANT_ID` are build-time values only. They are baked into the JS by Vite during `npm run build`, so they must be passed to `package.ps1` (or set as local env vars). Adding them to Azure App Service app settings does not help.
+- The frontend MSAL Client ID is usually the same as the `AZURE_GRAPH_CLIENT_ID` app setting.
+- The tenant ID is usually the same as the `AZURE_AD_TENANT_ID` app setting.
+- `AppBaseUrl` should match the `APP_BASE_URL` app setting.
+
+Deploy command / Kudu steps:
+
+1. Open `https://itsm-alignedcardio.scm.azurewebsites.net/ZipDeployUI`
+2. Upload `target/app.zip`
+3. In Azure App Service Configuration:
+   - **Startup Command:** `java -jar /home/site/wwwroot/app.jar`
+   - **WEBSITES_PORT:** must be empty / unset
+   - Do **not** use `startup.sh`
+
+Build-time note:
+
+- `pom.xml` runs `npm run build` in the `generate-resources` phase so Vite injects the env vars into `src/main/resources/static` before Maven copies it to `target/classes/static` and packages `app.jar`.

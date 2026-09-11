@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, CheckSquare, XSquare } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useAuth } from '../../auth/AuthProvider'
 import { DataTable } from '../../components/ui/DataTable'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
@@ -31,8 +32,11 @@ export function ServiceRequestList() {
   const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
+  const { currentUser } = useAuth()
+  const isAdmin = currentUser?.roles.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r)) ?? false
 
-  const [showDeleted, setShowDeleted] = useState(false)
+  const [view, setView] = useState<'active' | 'deleted'>('active')
+  const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [confirm, setConfirm] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
@@ -44,10 +48,15 @@ export function ServiceRequestList() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
   const query = useQuery<ServiceRequest[]>({
-    queryKey: ['service-requests', showDeleted],
+    queryKey: ['service-requests', view],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests?showDeleted=${showDeleted}`)
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests?showDeleted=${view === 'deleted'}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -67,7 +76,7 @@ export function ServiceRequestList() {
       return { action }
     },
     onSuccess: ({ action }) => {
-      setSelectedIds(new Set())
+      exitSelection()
       queryClient.invalidateQueries({ queryKey: ['service-requests'] })
       pushToast('success', action === 'delete' ? 'Selected requests deleted.' : 'Selected requests restored.')
       setConfirm(null)
@@ -99,6 +108,11 @@ export function ServiceRequestList() {
   if (query.isLoading) return <Loading />
   if (query.error) return <ErrorFallback error={query.error} message="Could not load service requests." onRetry={() => query.refetch()} />
 
+  const title = view === 'deleted' ? 'Deleted Service Requests' : 'Service Requests'
+  const emptyText = view === 'deleted'
+    ? 'No deleted service requests found.'
+    : (requests.length === 0 ? 'No service requests found.' : 'No requests match the selected filters.')
+
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
@@ -107,7 +121,7 @@ export function ServiceRequestList() {
         title={confirm?.action === 'delete' ? 'Delete selected requests?' : 'Restore selected requests?'}
         description={
           confirm?.action === 'delete'
-            ? `Delete ${selectedIds.size} requests? This can be undone via Restore.`
+            ? `Delete ${selectedIds.size} requests? They will be soft-deleted and can be restored later.`
             : `Restore ${selectedIds.size} requests? They will be visible again in all views and reports.`
         }
         confirmLabel={confirm?.action === 'delete' ? 'Delete' : 'Restore'}
@@ -117,15 +131,50 @@ export function ServiceRequestList() {
       />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Service Requests</h1>
-          <Link
-            to="/dashboard/service-requests/new"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Plus className="h-4 w-4" />
-            New Request
-          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <div className="flex items-center gap-2">
+            {view === 'active' && (
+              <Link
+                to="/dashboard/service-requests/new"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Plus className="h-4 w-4" />
+                New Request
+              </Link>
+            )}
+            {isAdmin && view === 'active' && (
+              <button
+                onClick={() => setView('deleted')}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
+              >
+                <Trash2 className="h-4 w-4" />
+                View Deleted Items
+              </button>
+            )}
+            {isAdmin && view === 'deleted' && (
+              <button
+                onClick={() => { setView('active'); exitSelection() }}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Back to Active
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => setSelectionMode((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
+              >
+                {selectionMode ? (
+                  <><XSquare className="h-4 w-4" /> Cancel</>
+                ) : (
+                  <><CheckSquare className="h-4 w-4" /> Select</>
+                )}
+              </button>
+            )}
+          </div>
         </div>
+
         <FilterBar activeCount={activeCount} onClear={clearFilters}>
           <FilterSelect
             label="Status"
@@ -152,15 +201,19 @@ export function ServiceRequestList() {
             onChange={(v) => setFilter('approval', v)}
           />
         </FilterBar>
-        <BulkActionToolbar
-          selectedCount={selectedIds.size}
-          showDeleted={showDeleted}
-          onToggleShowDeleted={() => { setShowDeleted((v) => !v); setSelectedIds(new Set()) }}
-          onDelete={() => setConfirm({ open: true, action: 'delete' })}
-          onRestore={() => setConfirm({ open: true, action: 'restore' })}
-        />
+
+        {selectionMode && isAdmin && (
+          <BulkActionToolbar
+            selectedCount={selectedIds.size}
+            view={view}
+            onCancel={exitSelection}
+            onDelete={() => setConfirm({ open: true, action: 'delete' })}
+            onRestore={() => setConfirm({ open: true, action: 'restore' })}
+          />
+        )}
+
         <DataTable<ServiceRequest>
-          caption="List of service requests"
+          caption={view === 'deleted' ? 'Deleted service requests' : 'List of service requests'}
           columns={[
             { key: 'number', header: 'Number' },
             { key: 'catalogItemName', header: 'Catalog Item' },
@@ -171,11 +224,11 @@ export function ServiceRequestList() {
           ]}
           data={filtered}
           getRowKey={(row) => row.id}
-          onRowClick={(row) => navigate(`/dashboard/service-requests/${row.id}`)}
-          selectable
+          onRowClick={!selectionMode ? (row) => navigate(`/dashboard/service-requests/${row.id}`) : undefined}
+          selectable={selectionMode}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          emptyText={requests.length === 0 ? 'No service requests found.' : 'No requests match the selected filters.'}
+          emptyText={emptyText}
         />
       </div>
     </div>
