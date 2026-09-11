@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/ui/StatusBadge'
 import { DataTable } from '../../components/ui/DataTable'
 import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 import { FilterBar, FilterSelect, useSessionFilters, enumLabel } from '../../components/ui/FilterBar'
 import { isValidPhone, PHONE_ERROR } from '../../lib/phone'
@@ -63,6 +64,15 @@ export function Incidents() {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
+  const [narrativeOpen, setNarrativeOpen] = useState(false)
+  const [narrativeStep, setNarrativeStep] = useState(0)
+  const [narrativeSuccess, setNarrativeSuccess] = useState({ title: '', subtitle: '' })
+  const incidentSteps: SubmissionNarrativeStep[] = [
+    { id: 'validate', label: 'Validating request...' },
+    { id: 'connect', label: 'Connecting to server...' },
+    { id: 'submit', label: 'Submitting to IT team...' },
+    { id: 'notify', label: 'Notifying the team...' },
+  ]
 
   const exitSelection = () => {
     setSelectionMode(false)
@@ -178,11 +188,23 @@ export function Incidents() {
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
       setForm({ title: '', description: '', impact: 3, urgency: 3, priorityId: '', categoryId: '', locationId: '', phone: '', severity: 'medium' })
       setShowForm(false)
-      pushToast('success', `Incident #${newIncident.number} created successfully`)
-      if (selectedFile) {
-        handleAttachmentUpload(newIncident.id)
-      }
-      setSelectedFile(null)
+      setNarrativeStep(3)
+      setTimeout(() => {
+        setNarrativeStep(4)
+        setNarrativeSuccess({
+          title: `Incident #${newIncident.number} submitted successfully`,
+          subtitle: 'A team member will be assigned shortly.',
+        })
+        if (selectedFile) {
+          handleAttachmentUpload(newIncident.id)
+        }
+        setSelectedFile(null)
+        setTimeout(() => {
+          setNarrativeOpen(false)
+          setNarrativeStep(0)
+          navigate(isEndUser ? `/home/incidents/${newIncident.id}` : `/dashboard/incidents/${newIncident.id}`)
+        }, 1200)
+      }, 500)
     },
     onError: (error) => {
       console.error('Incident creation failed:', error)
@@ -215,7 +237,15 @@ export function Incidents() {
       pushToast('error', PHONE_ERROR)
       return
     }
-    createMutation.mutate(form)
+    setNarrativeOpen(true)
+    setNarrativeStep(0)
+    setTimeout(() => {
+      setNarrativeStep(1)
+      setTimeout(() => {
+        setNarrativeStep(2)
+        createMutation.mutate(form)
+      }, 400)
+    }, 400)
   }
 
   const isLoading = listQuery.isLoading || prioritiesQuery.isLoading || categoriesQuery.isLoading || locationsQuery.isLoading
@@ -237,6 +267,13 @@ export function Incidents() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <SubmissionNarrative
+        open={narrativeOpen}
+        steps={incidentSteps}
+        current={narrativeStep}
+        successTitle={narrativeSuccess.title}
+        successSubtitle={narrativeSuccess.subtitle}
+      />
       <ConfirmDialog
         open={!!confirmBulk}
         title={confirmBulk?.action === 'delete' ? 'Delete selected incidents?' : 'Restore selected incidents?'}

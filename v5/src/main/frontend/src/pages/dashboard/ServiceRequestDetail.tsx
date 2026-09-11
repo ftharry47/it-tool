@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
 import { CommentThread } from '../../components/ui/CommentThread'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { CopyButton } from '../../components/ui/CopyButton'
 import { DataTable } from '../../components/ui/DataTable'
 import { DateInput } from '../../components/ui/DateInput'
 import { EntityForm } from '../../components/ui/EntityForm'
@@ -50,6 +51,7 @@ interface ActivityEntry {
 interface PendingTaskAction {
   type: 'assign' | 'ordered' | 'installed' | 'complete'
   taskId: string
+  workflow: 'FULL' | 'SOFTWARE' | 'INSTANT'
   description: string
   assigneeId?: string
 }
@@ -106,6 +108,7 @@ interface ServiceRequestDetail {
   neededBy: string | null
   locationId: string | null
   locationName: string | null
+  createdAt: string
   tasks: FulfillmentTask[]
 }
 
@@ -368,20 +371,24 @@ export function ServiceRequestDetail() {
     }
   })()
 
-  const confirmTaskTitle = (type: PendingTaskAction['type']) => {
-    switch (type) {
+  const requestUrl = `${window.location.origin}/dashboard/service-requests/${request.id}`
+  const requestCopyPlain = `Request #${request.number}: ${request.catalogItemName}\nStatus: ${formatStatusLabel(request.status)}\nApproval: ${formatStatusLabel(request.approvalDecision)}\nRequester: ${request.requesterName}\nLocation: ${request.locationName ?? '—'}\nSubmitted: ${formatDateTime(request.createdAt)}\n\nView: ${requestUrl}`
+  const requestCopyHtml = `<b>Request #${request.number}:</b> ${request.catalogItemName}<br><b>Status:</b> ${formatStatusLabel(request.status)}<br><b>Approval:</b> ${formatStatusLabel(request.approvalDecision)}<br><b>Requester:</b> ${request.requesterName}<br><b>Location:</b> ${request.locationName ?? '—'}<br><b>Submitted:</b> ${formatDateTime(request.createdAt)}<br><br><b>View:</b> <a href="${requestUrl}">Open request</a>`
+
+  const confirmTaskTitle = (action: PendingTaskAction) => {
+    switch (action.type) {
       case 'assign': return 'Assign task?'
-      case 'ordered': return 'Mark ordered?'
-      case 'installed': return 'Mark installed?'
+      case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark provisioned?' : 'Mark ordered?'
+      case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark granted?' : 'Mark installed?'
       case 'complete': return 'Complete task?'
     }
   }
 
-  const confirmTaskLabel = (type: PendingTaskAction['type']) => {
-    switch (type) {
+  const confirmTaskLabel = (action: PendingTaskAction) => {
+    switch (action.type) {
       case 'assign': return 'Assign'
-      case 'ordered': return 'Mark Ordered'
-      case 'installed': return 'Mark Installed'
+      case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark Provisioned' : 'Mark Ordered'
+      case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark Granted' : 'Mark Installed'
       case 'complete': return 'Complete'
     }
   }
@@ -390,10 +397,15 @@ export function ServiceRequestDetail() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <ConfirmDialog
         open={pendingTaskAction !== null}
-        title={pendingTaskAction ? confirmTaskTitle(pendingTaskAction.type) : ''}
+        title={pendingTaskAction ? confirmTaskTitle(pendingTaskAction) : ''}
         description={pendingTaskAction?.description}
-        confirmLabel={pendingTaskAction ? confirmTaskLabel(pendingTaskAction.type) : 'Confirm'}
+        confirmLabel={pendingTaskAction ? confirmTaskLabel(pendingTaskAction) : 'Confirm'}
         destructive={pendingTaskAction?.type === 'complete'}
+        pending={pendingTaskAction ?
+          (pendingTaskAction.type === 'assign' ? assignMutation.isPending :
+            pendingTaskAction.type === 'ordered' ? orderedMutation.isPending :
+              pendingTaskAction.type === 'installed' ? deliverMutation.isPending : false)
+          : false}
         onConfirm={() => {
           if (pendingTaskAction) {
             const { type, taskId, assigneeId } = pendingTaskAction
@@ -411,7 +423,7 @@ export function ServiceRequestDetail() {
         onCancel={() => setPendingTaskAction(null)}
       />
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={() => navigate(pathname.startsWith('/home') ? '/home/approvals' : '/dashboard/service-requests')}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -422,6 +434,9 @@ export function ServiceRequestDetail() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Request #{request.number} — {request.catalogItemName}
           </h1>
+          <div className="ml-auto">
+            <CopyButton html={requestCopyHtml} plain={requestCopyPlain} />
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -489,6 +504,7 @@ export function ServiceRequestDetail() {
                               setPendingTaskAction({
                                 type: 'assign',
                                 taskId: row.id,
+                                workflow: (row.workflow ?? 'FULL') as 'FULL' | 'SOFTWARE' | 'INSTANT',
                                 description: `Assign task "${row.description}" to ${member?.displayName ?? 'selected fulfiller'}?`,
                                 assigneeId,
                               })
@@ -532,7 +548,12 @@ export function ServiceRequestDetail() {
                                 setOrderTask(row.id)
                                 setOrderForm({ orderId: '', vendor: '' })
                               } else {
-                                setPendingTaskAction({ type: 'ordered', taskId: row.id, description: `Mark task "${row.description}" as provisioned?` })
+                                setPendingTaskAction({
+                                  type: 'ordered',
+                                  taskId: row.id,
+                                  workflow,
+                                  description: `Mark task "${row.description}" as ${workflow === 'SOFTWARE' ? 'provisioned' : 'ordered'}?`,
+                                })
                               }
                             }}
                             disabled={orderedMutation.isPending}
@@ -553,7 +574,7 @@ export function ServiceRequestDetail() {
                       }
                       if (row.status === 'DELIVERY_DATE_SET') {
                         return (
-                          <button onClick={() => setPendingTaskAction({ type: 'installed', taskId: row.id, description: `Mark task "${row.description}" as ${workflow === 'SOFTWARE' ? 'granted' : 'installed'}?` })} disabled={deliverMutation.isPending} className={btn}>
+                          <button onClick={() => setPendingTaskAction({ type: 'installed', taskId: row.id, workflow, description: `Mark task "${row.description}" as ${workflow === 'SOFTWARE' ? 'granted' : 'installed'}?` })} disabled={deliverMutation.isPending} className={btn}>
                             {workflow === 'SOFTWARE' ? 'Mark Granted' : 'Mark Installed'}
                           </button>
                         )

@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
 import { CommentThread } from '../../components/ui/CommentThread'
+import { CopyButton } from '../../components/ui/CopyButton'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
@@ -111,10 +112,14 @@ export function MyRequestDetail() {
   const request = requestQuery.data
   const sortedTasks = [...request.tasks].sort((a, b) => a.sequenceOrder - b.sequenceOrder)
 
+  const requestUrl = `${window.location.origin}/home/service-requests/${request.id}`
+  const requestCopyPlain = `Request #${request.number}: ${request.catalogItemName}\nStatus: ${formatStatusLabel(request.status)}\nApproval: ${formatStatusLabel(request.approvalDecision)}\nLocation: ${request.locationName ?? '—'}\nSubmitted: ${formatDateTime(request.createdAt)}\n\nView: ${requestUrl}`
+  const requestCopyHtml = `<b>Request #${request.number}:</b> ${request.catalogItemName}<br><b>Status:</b> ${formatStatusLabel(request.status)}<br><b>Approval:</b> ${formatStatusLabel(request.approvalDecision)}<br><b>Location:</b> ${request.locationName ?? '—'}<br><b>Submitted:</b> ${formatDateTime(request.createdAt)}<br><br><b>View:</b> <a href="${requestUrl}">Open request</a>`
+
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={() => navigate('/home/service-requests')}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -125,6 +130,9 @@ export function MyRequestDetail() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Request #{request.number} — {request.catalogItemName}
           </h1>
+          <div className="ml-auto">
+            <CopyButton html={requestCopyHtml} plain={requestCopyPlain} />
+          </div>
         </div>
 
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">

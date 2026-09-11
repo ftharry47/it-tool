@@ -12,6 +12,7 @@ import { Loading } from '../../components/ui/Loading'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { IncidentEditForm } from './IncidentEditForm'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { CopyButton } from '../../components/ui/CopyButton'
 import { formatDateTime } from '../../lib/date'
 
 interface IncidentDetail {
@@ -581,10 +582,14 @@ const [confirmBack, setConfirmBack] = useState(false)
     .filter((inc) => inc.id !== id && !(linkedQuery.data ?? []).some((linked) => linked.toIncidentId === inc.id))
     .map((inc) => ({ value: inc.id, label: `#${inc.number} — ${inc.title}` }))
 
+  const incidentUrl = `${window.location.origin}/dashboard/incidents/${incident.id}`
+  const incidentCopyPlain = `Incident #${incident.number}: ${incident.title}\nStatus: ${formatStatusLabel(incident.status)}\nPriority: ${incident.priority ?? '—'}\nCategory: ${incident.category ?? '—'}\nLocation: ${incident.location ?? '—'}\nRequester: ${incident.requester ?? '—'}\nAssignee: ${incident.assignee ?? 'Unassigned'}\nPhone: ${incident.phone ?? '—'}\nSubmitted: ${formatDateTime(incident.createdAt)}\n\nDescription:\n${incident.description}\n\nView: ${incidentUrl}`
+  const incidentCopyHtml = `<b>Incident #${incident.number}:</b> ${incident.title}<br><b>Status:</b> ${formatStatusLabel(incident.status)}<br><b>Priority:</b> ${incident.priority ?? '—'}<br><b>Category:</b> ${incident.category ?? '—'}<br><b>Location:</b> ${incident.location ?? '—'}<br><b>Requester:</b> ${incident.requester ?? '—'}<br><b>Assignee:</b> ${incident.assignee ?? 'Unassigned'}<br><b>Phone:</b> ${incident.phone ?? '—'}<br><b>Submitted:</b> ${formatDateTime(incident.createdAt)}<br><br><b>Description:</b><br>${incident.description.replace(/\n/g, '<br>') || '—'}<br><br><b>View:</b> <a href="${incidentUrl}">Open incident</a>`
+
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={handleBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -595,6 +600,9 @@ const [confirmBack, setConfirmBack] = useState(false)
           <h1 className="text-2xl font-semibold tracking-tight">
             Incident #{incident.number} — {incident.title}
           </h1>
+          <div className="ml-auto">
+            <CopyButton html={incidentCopyHtml} plain={incidentCopyPlain} />
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">

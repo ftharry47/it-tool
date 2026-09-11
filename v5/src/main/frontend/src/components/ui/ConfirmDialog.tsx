@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Loader2 } from 'lucide-react'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -7,6 +8,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   destructive?: boolean
+  pending?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -18,6 +20,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   destructive = false,
+  pending = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -53,18 +56,21 @@ export function ConfirmDialog({
           <button
             ref={cancelRef}
             onClick={onCancel}
-            className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            disabled={pending}
+            className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
+            disabled={pending}
             className={
               destructive
-                ? 'rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-                : 'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                ? 'inline-flex items-center justify-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground transition hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+                : 'inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
             }
           >
+            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {confirmLabel}
           </button>
         </div>

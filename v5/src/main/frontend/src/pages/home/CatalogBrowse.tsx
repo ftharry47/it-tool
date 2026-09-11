@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { fetchWithToken } from '../../api/client'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { SchemaForm, type SchemaField } from '../../components/ui/SchemaForm'
-import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
 import { isValidPhone, PHONE_ERROR } from '../../lib/phone'
 
 interface CatalogItem {
@@ -25,11 +25,20 @@ interface Location {
   name: string
 }
 
+interface CreatedServiceRequest {
+  id: string
+  number: number
+  status: string
+  approvalDecision: string
+}
+
 export function CatalogBrowse() {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const location = useLocation()
+  const navigate = useNavigate()
   const incidentPath = location.pathname.startsWith('/home') ? '/home/incidents' : '/dashboard/incidents'
+  const isHome = location.pathname.startsWith('/home')
 
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
@@ -37,14 +46,10 @@ export function CatalogBrowse() {
   const [phone, setPhone] = useState('')
   const [serverError, setServerError] = useState<string | null>(null)
   const [schemaError, setSchemaError] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<ToastItem[]>([])
-
-  const pushToast = (type: ToastItem['type'], message: string) => {
-    setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
-  }
-  const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }
+  const [narrativeOpen, setNarrativeOpen] = useState(false)
+  const [narrativeStep, setNarrativeStep] = useState(0)
+  const [narrativeSteps, setNarrativeSteps] = useState<SubmissionNarrativeStep[]>([])
+  const [narrativeSuccess, setNarrativeSuccess] = useState({ title: '', subtitle: '' })
 
   const catalogQuery = useQuery<CatalogItem[]>({
     queryKey: ['catalog-items'],
@@ -94,7 +99,7 @@ export function CatalogBrowse() {
     }
   }, [selectedItem])
 
-  const createMutation = useMutation<{ id: string; number: number }, Error, { catalogItemId: string; formData: string; locationId: string | null; phone: string | null }>({
+  const createMutation = useMutation<CreatedServiceRequest, Error, { catalogItemId: string; formData: string; locationId: string | null; phone: string | null }>({
     mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, '/api/v1/service-requests', {
         method: 'POST',
@@ -111,7 +116,32 @@ export function CatalogBrowse() {
       setFormValues({})
       setLocationId('')
       setServerError(null)
-      pushToast('success', `Request #${created.number} submitted successfully`)
+      const needsApproval = created.status === 'PENDING_APPROVAL'
+      const steps: SubmissionNarrativeStep[] = [
+        { id: 'validate', label: 'Validating request...' },
+        { id: 'connect', label: 'Connecting to server...' },
+        { id: 'route', label: needsApproval ? 'Routing for approval...' : 'Submitting to IT team...' },
+      ]
+      if (!needsApproval) {
+        steps.push({ id: 'notify', label: 'Notifying the team...' })
+      }
+      setNarrativeSteps(steps)
+      setNarrativeStep(steps.length - (needsApproval ? 1 : 2))
+      setTimeout(() => {
+        setNarrativeStep(steps.length - 1)
+        setTimeout(() => {
+          setNarrativeStep(steps.length)
+          setNarrativeSuccess({
+            title: `Request #${created.number} submitted successfully`,
+            subtitle: needsApproval ? 'Awaiting manager approval.' : 'IT team will process your request shortly.',
+          })
+          setTimeout(() => {
+            setNarrativeOpen(false)
+            setNarrativeStep(0)
+            navigate(isHome ? `/home/service-requests/${created.id}` : `/dashboard/service-requests/${created.id}`)
+          }, 1200)
+        }, 400)
+      }, 400)
     },
     onError: (error) => {
       console.error('Service request submission failed:', error)
@@ -124,7 +154,13 @@ export function CatalogBrowse() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <SubmissionNarrative
+        open={narrativeOpen}
+        steps={narrativeSteps}
+        current={narrativeStep}
+        successTitle={narrativeSuccess.title}
+        successSubtitle={narrativeSuccess.subtitle}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Service Catalog</h1>
         <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -226,12 +262,25 @@ export function CatalogBrowse() {
                 setServerError(PHONE_ERROR)
                 return
               }
-              createMutation.mutate({
-                catalogItemId: selectedItem.id,
-                formData: JSON.stringify(values),
-                locationId,
-                phone: phone || null,
-              })
+              setNarrativeOpen(true)
+              setNarrativeStep(0)
+              setNarrativeSteps([
+                { id: 'validate', label: 'Validating request...' },
+                { id: 'connect', label: 'Connecting to server...' },
+                { id: 'route', label: 'Submitting request...' },
+              ])
+              setTimeout(() => {
+                setNarrativeStep(1)
+                setTimeout(() => {
+                  setNarrativeStep(2)
+                  createMutation.mutate({
+                    catalogItemId: selectedItem.id,
+                    formData: JSON.stringify(values),
+                    locationId,
+                    phone: phone || null,
+                  })
+                }, 400)
+              }, 400)
             }}
             submitLabel="Submit Request"
             pending={createMutation.isPending}
