@@ -14,11 +14,13 @@ public record IncidentSummary(
         String phone,
         String requester,
         String assignee,
+        UUID assigneeId,
         OffsetDateTime createdAt,
         String slaBreachStatus,
         OffsetDateTime responseDueAt,
         OffsetDateTime resolutionDueAt,
         OffsetDateTime responseMetAt,
-        OffsetDateTime resolutionMetAt
+        OffsetDateTime resolutionMetAt,
+        boolean hasBeenTierEscalated
 ) {
 }

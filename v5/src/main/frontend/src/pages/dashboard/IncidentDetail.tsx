@@ -36,6 +36,7 @@ interface IncidentDetail {
   totalLoggedMinutes: number | null
   createdAt: string
   updatedAt: string
+  hasBeenTierEscalated: boolean
 }
 
 interface Comment {
@@ -555,12 +556,9 @@ const [confirmBack, setConfirmBack] = useState(false)
   const incident = incidentQuery.data
   const isAssignedToMe = !!currentUser?.id && incident.assigneeId === currentUser.id
   const canEscalate = isAdminOrSuperAdmin || isAssignedToMe
-  // Once tier-escalated, Status Transition is ADMIN/SUPER_ADMIN-only — the
-  // assignee is cleared on escalation, so this also freezes the old agent out.
-  const hasBeenTierEscalated = (activityQuery.data ?? []).some(
-    (e) => e.action === 'ESCALATE_TIER' || e.action === 'AUTO_ESCALATE_TIER'
-  )
-  const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !hasBeenTierEscalated)
+  // Server-side flag derived from ESCALATE_TIER / AUTO_ESCALATE_TIER audit rows;
+  // do not depend on a separate activity feed call for access decisions.
+  const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !incident.hasBeenTierEscalated)
   const legalNextStatuses = (statusTransitions[incident.status] ?? [])
     .filter((s) => s !== 'REOPENED' || isAdminOrSuperAdmin)
   const isFirstAssignment = !incident.assignee

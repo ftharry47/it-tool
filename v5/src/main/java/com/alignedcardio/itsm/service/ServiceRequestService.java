@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -129,6 +130,26 @@ public class ServiceRequestService {
         return serviceRequestRepository
                 .findByOrgIdAndRequester_IdOrderByCreatedAtDesc(user.getOrgId(), user.getId())
                 .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // Service requests the agent was previously assigned to fulfill (audit
+    // TASK_ASSIGNED history), even if the task is now completed/reassigned.
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> recentlyWorkedOn(AppUser user) {
+        Set<UUID> ids = auditLogRepository
+                .findServiceRequestAssigneeHistory(user.getOrgId(), user.getId().toString())
+                .stream()
+                .map(AuditLog::getEntityId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return serviceRequestRepository
+                .findByOrgIdAndIdInOrderByCreatedAtDesc(user.getOrgId(), ids)
+                .stream()
+                .filter(sr -> sr.getDeletedAt() == null)
                 .map(this::toResponse)
                 .toList();
     }

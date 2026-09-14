@@ -102,6 +102,13 @@ public class IncidentV1Controller {
         return incidentService.listByReporter(user.getOrgId(), user.getId());
     }
 
+    @GetMapping("/recently-worked")
+    @PreAuthorize("isAuthenticated()")
+    public List<IncidentSummary> recentlyWorked(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return incidentService.recentlyWorkedOn(user);
+    }
+
     @GetMapping("/priorities")
     @PreAuthorize("isAuthenticated()")
     public List<PriorityOption> priorities(@AuthenticationPrincipal Jwt jwt) {

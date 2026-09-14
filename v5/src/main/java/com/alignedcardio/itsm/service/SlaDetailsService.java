@@ -3,10 +3,12 @@ package com.alignedcardio.itsm.service;
 import com.alignedcardio.itsm.api.sla.SlaInstanceDetailResponse;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.CatalogItem;
+import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Incident;
 import com.alignedcardio.itsm.entity.Priority;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.entity.SlaInstance;
+import com.alignedcardio.itsm.repository.FulfillmentTaskRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.Subgraph;
@@ -27,9 +29,11 @@ import java.util.UUID;
 public class SlaDetailsService {
 
     private final EntityManager entityManager;
+    private final FulfillmentTaskRepository fulfillmentTaskRepository;
 
-    public SlaDetailsService(EntityManager entityManager) {
+    public SlaDetailsService(EntityManager entityManager, FulfillmentTaskRepository fulfillmentTaskRepository) {
         this.entityManager = entityManager;
+        this.fulfillmentTaskRepository = fulfillmentTaskRepository;
     }
 
     @Transactional(readOnly = true)
@@ -47,11 +51,31 @@ public class SlaDetailsService {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
 
+        // Exclude SLA rows whose backing ticket has been soft-deleted.
+        Predicate incidentNotDeleted = cb.and(
+                cb.isNotNull(root.get("incident")),
+                cb.isNull(root.get("incident").get("deletedAt")));
+        Predicate requestNotDeleted = cb.and(
+                cb.isNotNull(root.get("serviceRequest")),
+                cb.isNull(root.get("serviceRequest").get("deletedAt")));
+        predicates.add(cb.or(incidentNotDeleted, requestNotDeleted));
+
         if (mine && user != null) {
             UUID userId = user.getId();
             Predicate incidentAssignedToMe = cb.equal(root.get("incident").get("assignee").get("id"), userId);
             Predicate requestRequestedByMe = cb.equal(root.get("serviceRequest").get("requester").get("id"), userId);
-            predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe));
+            List<UUID> assignedRequestIds = fulfillmentTaskRepository
+                    .findByAssignee_IdAndDeletedAtIsNull(userId)
+                    .stream()
+                    .map(ft -> ft.getServiceRequest() == null ? null : ft.getServiceRequest().getId())
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            if (!assignedRequestIds.isEmpty()) {
+                Predicate requestAssignedToMe = root.get("serviceRequest").get("id").in(assignedRequestIds);
+                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe, requestAssignedToMe));
+            } else {
+                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe));
+            }
         }
 
         if (breachStatus != null && !breachStatus.isEmpty()) {
@@ -90,9 +114,30 @@ public class SlaDetailsService {
         graph.addSubgraph("policy").addAttributeNodes("name");
         query.setHint("jakarta.persistence.fetchgraph", graph);
 
+        // The Criteria predicate excludes deleted tickets, but a lazy
+        // soft-deleted association can still materialize as a null join row or
+        // throw EntityNotFoundException — post-filter defensively.
         return query.getResultList().stream()
+                .filter(this::isLinkedTicketNotDeleted)
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private boolean isLinkedTicketNotDeleted(SlaInstance si) {
+        try {
+            Incident incident = si.getIncident();
+            if (incident != null && incident.getDeletedAt() != null) {
+                return false;
+            }
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return false;
+        }
+        try {
+            ServiceRequest sr = si.getServiceRequest();
+            return sr == null || sr.getDeletedAt() == null;
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return false;
+        }
     }
 
     private SlaInstanceDetailResponse toResponse(SlaInstance si) {

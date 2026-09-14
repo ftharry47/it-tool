@@ -21,4 +21,6 @@ public interface FulfillmentTaskRepository extends JpaRepository<FulfillmentTask
 
     List<FulfillmentTask> findByAssignee_IdAndAssignedAtBetween(
             UUID assigneeId, java.time.OffsetDateTime from, java.time.OffsetDateTime to);
+
+    List<FulfillmentTask> findByAssignee_IdAndDeletedAtIsNull(UUID assigneeId);
 }

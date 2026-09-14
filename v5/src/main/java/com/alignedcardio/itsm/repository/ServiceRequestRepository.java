@@ -15,6 +15,8 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     List<ServiceRequest> findByOrgIdAndRequester_IdOrderByCreatedAtDesc(UUID orgId, UUID requesterId);
 
+    List<ServiceRequest> findByOrgIdAndIdInOrderByCreatedAtDesc(UUID orgId, java.util.Collection<UUID> ids);
+
     Optional<ServiceRequest> findByOrgIdAndId(UUID orgId, UUID id);
 
     Optional<ServiceRequest> findByNumberAndOrgId(String number, UUID orgId);

@@ -3,6 +3,7 @@ package com.alignedcardio.itsm.service;
 import com.alignedcardio.itsm.api.incident.IncidentCreateRequest;
 import com.alignedcardio.itsm.api.incident.IncidentLinkResponse;
 import com.alignedcardio.itsm.api.incident.IncidentResponse;
+import com.alignedcardio.itsm.api.incident.IncidentSummary;
 import com.alignedcardio.itsm.api.incident.LinkCreateRequest;
 import com.alignedcardio.itsm.api.auth.AuditLogResponse;
 import com.alignedcardio.itsm.entity.AppUser;
@@ -54,6 +55,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -442,12 +444,16 @@ class IncidentServiceTest {
         when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, TIER_L2))
                 .thenReturn(Optional.of(tierTeam(TIER_L2, "L2 Support")));
         when(teamMemberRepository.findByTeamId(TIER_L2)).thenReturn(List.of());
+        when(auditLogRepository.existsByOrgIdAndEntityTypeAndEntityIdAndActionIn(
+                eq(ORG_ID), eq("INCIDENT"), eq(incident.getId()), any()))
+                .thenReturn(true);
 
         IncidentResponse response = incidentService.escalateTier(admin, ORG_ID, incident.getId(), "needs L2");
 
         // Assignee cleared — ticket visibly needs a new owner in the new tier.
         assertNull(response.assigneeId());
         assertNull(incident.getAssignee());
+        assertTrue(response.hasBeenTierEscalated());
 
         // Regression: the audit action must be exactly ESCALATE_TIER so the detail
         // page can derive hasBeenTierEscalated from the activity feed.
@@ -779,6 +785,51 @@ class IncidentServiceTest {
         // Admin can transition regardless of assignment.
         IncidentResponse responseAdmin = incidentService.updateStatus(admin, ORG_ID, assignedToA.getId(), Incident.Status.RESOLVED, null);
         assertEquals(Incident.Status.RESOLVED.name(), responseAdmin.status());
+    }
+
+    @Test
+    void detailResponseIncludesEscalationFlag() {
+        AppUser agent = userWithRole("AGENT");
+        Incident incident = incident(agent, priority("Medium", 3));
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(auditLogRepository.existsByOrgIdAndEntityTypeAndEntityIdAndActionIn(
+                ORG_ID, "INCIDENT", incident.getId(), List.of("ESCALATE_TIER", "AUTO_ESCALATE_TIER")))
+                .thenReturn(true);
+        when(appUserRepository.findById(agent.getId())).thenReturn(Optional.of(agent));
+
+        IncidentResponse response = incidentService.get(agent, ORG_ID, incident.getId());
+
+        assertEquals(agent.getId(), response.assigneeId());
+        assertTrue(response.hasBeenTierEscalated());
+    }
+
+    @Test
+    void listSummaryIncludesAssigneeIdAndEscalationFlag() {
+        AppUser agent = userWithRole("AGENT");
+        Incident incident = incident(agent, priority("Medium", 3));
+        AuditLog escalation = new AuditLog();
+        escalation.setOrgId(ORG_ID);
+        escalation.setEntityType("INCIDENT");
+        escalation.setEntityId(incident.getId());
+        escalation.setAction("AUTO_ESCALATE_TIER");
+        escalation.setBeforeState("{\"assigneeId\":\"" + agent.getId() + "\"}");
+        escalation.setAfterState("{}");
+
+        when(incidentRepository.findByOrgIdOrderByCreatedAtDesc(ORG_ID)).thenReturn(List.of(incident));
+        when(slaInstanceRepository.findByIncidentIdIn(any())).thenReturn(List.of());
+        when(auditLogRepository.findByOrgIdAndEntityTypeAndEntityIdInAndActionIn(
+                eq(ORG_ID), eq("INCIDENT"), any(), eq(List.of("ESCALATE_TIER", "AUTO_ESCALATE_TIER"))))
+                .thenReturn(List.of(escalation));
+        when(appUserRepository.findById(agent.getId())).thenReturn(Optional.of(agent));
+
+        List<IncidentSummary> list = incidentService.list(ORG_ID, false);
+
+        assertEquals(1, list.size());
+        IncidentSummary summary = list.get(0);
+        assertEquals(agent.getId(), summary.assigneeId());
+        assertEquals(agent.getDisplayName(), summary.assignee());
+        assertTrue(summary.hasBeenTierEscalated());
     }
 
     @Test

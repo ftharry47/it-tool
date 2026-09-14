@@ -61,6 +61,13 @@ public class ServiceRequestController {
         return serviceRequestService.myTasks(user);
     }
 
+    @GetMapping("/recently-worked")
+    @PreAuthorize("isAuthenticated()")
+    public List<ServiceRequestResponse> recentlyWorked(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.recentlyWorkedOn(user);
+    }
+
     @GetMapping("/approvals/mine")
     @PreAuthorize("isAuthenticated()")
     public List<ServiceRequestResponse> myApprovals(@AuthenticationPrincipal Jwt jwt) {

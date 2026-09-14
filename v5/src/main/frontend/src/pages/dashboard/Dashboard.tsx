@@ -70,6 +70,7 @@ interface IncidentSummary {
   category: string | null
   requester: string | null
   assignee: string | null
+  assigneeId: string | null
   location: string | null
   phone: string | null
   createdAt: string
@@ -78,6 +79,16 @@ interface IncidentSummary {
   resolutionDueAt: string | null
   responseMetAt: string | null
   resolutionMetAt: string | null
+  hasBeenTierEscalated: boolean
+}
+
+interface ServiceRequestResponse {
+  id: string
+  number: string
+  catalogItemName: string | null
+  requesterName: string | null
+  status: string
+  createdAt: string
 }
 
 interface ProblemSummary {
@@ -603,6 +614,80 @@ function FulfillmentTasks({ data, isLoading }: { data: MyTask[] | undefined; isL
   )
 }
 
+type RecentlyWorkedItem = {
+  key: string
+  kind: 'Incident' | 'Request'
+  id: string
+  number: string
+  title: string
+  status: string
+  assignee: string | null
+  createdAt: string
+}
+
+function RecentlyWorked({ incidents, requests, isLoading }: {
+  incidents: IncidentSummary[] | undefined
+  requests: ServiceRequestResponse[] | undefined
+  isLoading: boolean
+}) {
+  if (isLoading) return <Loading compact />
+  const items: RecentlyWorkedItem[] = [
+    ...(incidents ?? []).map((i) => ({
+      key: `i-${i.id}`,
+      kind: 'Incident' as const,
+      id: i.id,
+      number: `INC-${i.number}`,
+      title: i.title,
+      status: i.status,
+      assignee: i.assignee,
+      createdAt: i.createdAt,
+    })),
+    ...(requests ?? []).map((r) => ({
+      key: `r-${r.id}`,
+      kind: 'Request' as const,
+      id: r.id,
+      number: r.number,
+      title: r.catalogItemName ?? 'Service request',
+      status: r.status,
+      assignee: r.requesterName,
+      createdAt: r.createdAt,
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10)
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Recently Worked</h3>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No previously assigned incidents or service requests.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((item) => (
+            <li key={item.key} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <span className="mr-2 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {item.kind}
+                </span>
+                <Link
+                  to={item.kind === 'Incident' ? `/dashboard/incidents/${item.id}` : `/dashboard/service-requests/${item.id}`}
+                  className="font-medium hover:underline"
+                >
+                  {item.number}
+                </Link>
+                <span className="text-muted-foreground"> · {item.title}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge status={item.status} />
+                <span className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function IncidentSection({ title, caption, data, isLoading, emptyText }: {
   title: string
   caption: string
@@ -892,6 +977,30 @@ export function Dashboard() {
     staleTime: 0,
   })
 
+  const recentIncidentsQuery = useQuery<IncidentSummary[]>({
+    queryKey: ['dashboard', 'recently-worked-incidents', currentUser?.id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account, '/api/v1/incidents/recently-worked')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!currentUser && isStaff,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const recentRequestsQuery = useQuery<ServiceRequestResponse[]>({
+    queryKey: ['dashboard', 'recently-worked-requests', currentUser?.id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account, '/api/v1/service-requests/recently-worked')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!currentUser && isStaff,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
   const ticketsByLocationQuery = useQuery<TicketsByLocationRow[]>({
     queryKey: ['dashboard', 'tickets-by-location', locationStatus, locationFrom, locationTo],
     queryFn: async () => {
@@ -997,6 +1106,14 @@ export function Dashboard() {
               isLoading={myTicketsQuery.isLoading}
               emptyText="No incidents assigned to you."
             />
+
+            {isStaff && (
+              <RecentlyWorked
+                incidents={recentIncidentsQuery.data}
+                requests={recentRequestsQuery.data}
+                isLoading={recentIncidentsQuery.isLoading || recentRequestsQuery.isLoading}
+              />
+            )}
 
             {isStaff && (
               <>

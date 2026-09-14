@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -117,6 +118,26 @@ public class IncidentService {
                 .filter(i -> showDeleted ? i.getDeletedAt() != null : i.getDeletedAt() == null)
                 .toList();
         return toSummaries(incidents);
+    }
+
+    // Tickets the agent previously owned (audit ASSIGN/REASSIGN/AUTO_ESCALATE_TIER
+    // history), even if now reassigned, resolved, or closed. Deleted tickets are
+    // excluded from the dashboard history.
+    @Transactional(readOnly = true)
+    public List<IncidentSummary> recentlyWorkedOn(AppUser user) {
+        Set<UUID> ids = auditLogRepository
+                .findIncidentAssigneeHistory(user.getOrgId(), user.getId().toString())
+                .stream()
+                .map(AuditLog::getEntityId)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return toSummaries(incidentRepository
+                .findByOrgIdAndIdInOrderByCreatedAtDesc(user.getOrgId(), ids)
+                .stream()
+                .filter(i -> i.getDeletedAt() == null)
+                .toList());
     }
 
     @Transactional(readOnly = true)
@@ -1037,9 +1058,7 @@ public class IncidentService {
         List<Incident> incidents = requesterId == null
                 ? incidentRepository.searchByText(orgId, query, limit)
                 : incidentRepository.searchByTextForRequester(orgId, requesterId, query, limit);
-        return incidents.stream()
-                .map(this::toSummary)
-                .toList();
+        return toSummaries(incidents);
     }
 
     @Transactional(readOnly = true)
@@ -1193,18 +1212,31 @@ public class IncidentService {
     }
 
     private List<IncidentSummary> toSummaries(List<Incident> incidents) {
+        if (incidents.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = incidents.stream().map(Incident::getId).toList();
         Map<UUID, SlaInstance> slaByIncident = slaInstanceRepository
-                .findByIncidentIdIn(incidents.stream().map(Incident::getId).toList())
+                .findByIncidentIdIn(ids)
                 .stream()
                 .collect(Collectors.toMap(si -> si.getIncident().getId(), si -> si, (a, b) -> a));
-        return incidents.stream().map(i -> toSummary(i, slaByIncident.get(i.getId()))).toList();
+        Set<UUID> escalatedIds = ids.isEmpty()
+                ? Set.of()
+                : auditLogRepository
+                        .findByOrgIdAndEntityTypeAndEntityIdInAndActionIn(
+                                incidents.get(0).getOrgId(),
+                                "INCIDENT",
+                                ids,
+                                List.of("ESCALATE_TIER", "AUTO_ESCALATE_TIER"))
+                        .stream()
+                        .map(AuditLog::getEntityId)
+                        .collect(Collectors.toSet());
+        return incidents.stream()
+                .map(i -> toSummary(i, slaByIncident.get(i.getId()), escalatedIds.contains(i.getId())))
+                .toList();
     }
 
-    private IncidentSummary toSummary(Incident incident) {
-        return toSummary(incident, null);
-    }
-
-    private IncidentSummary toSummary(Incident incident, SlaInstance sla) {
+    private IncidentSummary toSummary(Incident incident, SlaInstance sla, boolean hasBeenTierEscalated) {
         UUID priorityId = incident.getPriority() == null ? null : incident.getPriority().getId();
         UUID categoryId = incident.getCategory() == null ? null : incident.getCategory().getId();
         UUID locationId = incident.getLocation() == null ? null : incident.getLocation().getId();
@@ -1228,12 +1260,14 @@ public class IncidentService {
                 incident.getPhone(),
                 requester == null ? null : requester.getDisplayName(),
                 assignee == null ? null : assignee.getDisplayName(),
+                assigneeId,
                 incident.getCreatedAt(),
                 sla != null && sla.getBreachStatus() != null ? sla.getBreachStatus().name() : null,
                 sla != null ? sla.getResponseDueAt() : null,
                 sla != null ? sla.getResolutionDueAt() : null,
                 sla != null ? sla.getResponseMetAt() : null,
-                sla != null ? sla.getResolutionMetAt() : null
+                sla != null ? sla.getResolutionMetAt() : null,
+                hasBeenTierEscalated
         );
     }
 
@@ -1263,6 +1297,11 @@ public class IncidentService {
                 .stream()
                 .mapToInt(TimeEntry::getTimeSpentMinutes)
                 .sum();
+        boolean hasBeenTierEscalated = auditLogRepository.existsByOrgIdAndEntityTypeAndEntityIdAndActionIn(
+                incident.getOrgId(),
+                "INCIDENT",
+                incident.getId(),
+                List.of("ESCALATE_TIER", "AUTO_ESCALATE_TIER"));
         return new IncidentResponse(
                 incident.getId(),
                 incident.getNumber(),
@@ -1283,7 +1322,8 @@ public class IncidentService {
                 incident.getEstimatedMinutes(),
                 totalLogged,
                 incident.getCreatedAt(),
-                incident.getUpdatedAt()
+                incident.getUpdatedAt(),
+                hasBeenTierEscalated
         );
     }
 

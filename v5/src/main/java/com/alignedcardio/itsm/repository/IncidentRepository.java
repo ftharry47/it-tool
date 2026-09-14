@@ -20,6 +20,8 @@ public interface IncidentRepository extends JpaRepository<Incident, UUID> {
 
     List<Incident> findByOrgIdAndRequesterIdOrderByCreatedAtDesc(UUID orgId, UUID requesterId);
 
+    List<Incident> findByOrgIdAndIdInOrderByCreatedAtDesc(UUID orgId, Collection<UUID> ids);
+
     @Query(value = "SELECT * FROM incident WHERE org_id = ?1 AND deleted_at IS NULL " +
             "AND (CAST(number AS text) ILIKE '%' || ?2 || '%' " +
             "OR title ILIKE '%' || ?2 || '%' " +

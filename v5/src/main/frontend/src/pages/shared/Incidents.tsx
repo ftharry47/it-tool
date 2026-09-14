@@ -30,9 +30,11 @@ interface Incident {
   category: string | null
   requester: string | null
   assignee: string | null
+  assigneeId: string | null
   location: string | null
   phone: string | null
   createdAt: string
+  hasBeenTierEscalated: boolean
 }
 
 export function Incidents() {
