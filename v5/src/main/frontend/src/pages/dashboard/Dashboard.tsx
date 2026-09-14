@@ -157,6 +157,7 @@ interface AgentPerformanceReport {
   avgResolutionMinutes: number
   autoEscalationsAway: number
   manualSelfEscalations: number
+  escalatedAwayPct: number
   score: number
   grade: string
 }
@@ -263,7 +264,7 @@ function MyPerformanceCard({ data, isLoading }: { data: MyPerformanceResponse | 
         <h3 className="text-sm font-medium text-muted-foreground">This Month — Your Performance</h3>
         <GradeChip grade={r.grade} />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div>
           <p className="text-2xl font-bold">{r.ticketsHandled}</p>
           <p className="text-xs text-muted-foreground">Handled</p>
@@ -277,9 +278,85 @@ function MyPerformanceCard({ data, isLoading }: { data: MyPerformanceResponse | 
           <p className="text-xs text-muted-foreground">SLA (all-time)</p>
         </div>
         <div>
+          <p className="text-2xl font-bold">{r.escalatedAwayPct}%</p>
+          <p className="text-xs text-muted-foreground">Escalated away</p>
+        </div>
+        <div>
           <p className="text-2xl font-bold">{r.score}</p>
           <p className="text-xs text-muted-foreground">Score / 100</p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+interface SlaTarget {
+  id: string
+  name: string
+  appliesTo: string | null
+  priorityFilter: string | null
+  responseTargetMinutes: number
+  resolutionTargetMinutes: number
+  calendar: { id: string; name: string; timezone: string; workingHours: string; holidays: string } | null
+  escalationTiers: {
+    level: number
+    triggerType: string | null
+    stuckStatus: string | null
+    stuckMinutes: number | null
+    notifyRole: string | null
+    reassignToTeamId: string | null
+  }[]
+}
+
+const APPLIES_TO_LABEL: Record<string, string> = {
+  INCIDENT: 'Incidents',
+  REQUEST: 'Requests',
+  PROBLEM: 'Problems',
+  CHANGE: 'Changes',
+}
+
+const TRIGGER_LABEL: Record<string, string> = {
+  ON_RESPONSE_BREACH: 'response breach',
+  ON_RESOLUTION_BREACH: 'resolution breach',
+  ON_STUCK_STATUS: 'stuck status',
+}
+
+function fmtTargetMinutes(minutes: number): string {
+  if (minutes % 60 === 0) return `${minutes / 60}h`
+  return `${minutes}m`
+}
+
+/** Part B2: the SLA policies that govern the signed-in agent's work. */
+function YourSlaTargets({ data, isLoading }: { data: SlaTarget[] | undefined; isLoading: boolean }) {
+  if (isLoading || !data || data.length === 0) return null
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Your SLA Targets</h3>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {data.map((p) => (
+          <div key={p.id} className="rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{p.name}</p>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                {p.appliesTo ? (APPLIES_TO_LABEL[p.appliesTo] ?? p.appliesTo) : '—'}
+                {p.priorityFilter ? ` · ${p.priorityFilter}` : ''}
+              </span>
+            </div>
+            <p className="mt-1 text-sm">
+              Response <span className="font-medium">{fmtTargetMinutes(p.responseTargetMinutes)}</span>
+              <span className="text-muted-foreground"> · </span>
+              Resolution <span className="font-medium">{fmtTargetMinutes(p.resolutionTargetMinutes)}</span>
+            </p>
+            {p.calendar && (
+              <p className="mt-1 text-xs text-muted-foreground">Business hours: {p.calendar.name} ({p.calendar.timezone})</p>
+            )}
+            {p.escalationTiers.length > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Escalates on {p.escalationTiers.map((t) => TRIGGER_LABEL[t.triggerType ?? ''] ?? t.triggerType).join(', ')}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -363,6 +440,7 @@ function AgentPerformanceTable({ reports, isLoading }: { reports: AgentPerforman
               <th className="pb-2 pr-4 font-medium">Breaches</th>
               <th className="pb-2 pr-4 font-medium">Reopens</th>
               <th className="pb-2 pr-4 font-medium">Auto-Esc.</th>
+              <th className="pb-2 pr-4 font-medium">Esc. %</th>
               <th className="pb-2 pr-4 font-medium">Score</th>
               <th className="pb-2 font-medium">Grade</th>
             </tr>
@@ -377,6 +455,7 @@ function AgentPerformanceTable({ reports, isLoading }: { reports: AgentPerforman
                 <td className="py-2 pr-4">{r.breachCount}</td>
                 <td className="py-2 pr-4">{r.reopenedCount}</td>
                 <td className="py-2 pr-4">{r.autoEscalationsAway}</td>
+                <td className="py-2 pr-4">{r.escalatedAwayPct}%</td>
                 <td className="py-2 pr-4 font-semibold">{r.score}</td>
                 <td className="py-2"><GradeChip grade={r.grade} /></td>
               </tr>
@@ -527,7 +606,7 @@ function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined;
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <h3 className="mb-2 text-sm font-medium text-muted-foreground">Workload per Agent</h3>
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No open assigned incidents.</p>
+        <p className="text-sm text-muted-foreground">No open assigned tickets.</p>
       ) : (
         <div style={{ height: Math.max(160, rows.length * 44) }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -623,6 +702,7 @@ type RecentlyWorkedItem = {
   status: string
   assignee: string | null
   createdAt: string
+  escalated: boolean
 }
 
 function RecentlyWorked({ incidents, requests, isLoading }: {
@@ -641,6 +721,7 @@ function RecentlyWorked({ incidents, requests, isLoading }: {
       status: i.status,
       assignee: i.assignee,
       createdAt: i.createdAt,
+      escalated: i.hasBeenTierEscalated,
     })),
     ...(requests ?? []).map((r) => ({
       key: `r-${r.id}`,
@@ -651,6 +732,7 @@ function RecentlyWorked({ incidents, requests, isLoading }: {
       status: r.status,
       assignee: r.requesterName,
       createdAt: r.createdAt,
+      escalated: false,
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 10)
@@ -677,6 +759,11 @@ function RecentlyWorked({ incidents, requests, isLoading }: {
                 <span className="text-muted-foreground"> · {item.title}</span>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {item.escalated && (
+                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                    Escalated
+                  </span>
+                )}
                 <StatusBadge status={item.status} />
                 <span className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
               </div>
@@ -1001,6 +1088,19 @@ export function Dashboard() {
     staleTime: 0,
   })
 
+  // Part B2: SLA policies governing the caller's own work.
+  const mySlaTargetsQuery = useQuery<SlaTarget[]>({
+    queryKey: ['dashboard', 'my-sla-targets', currentUser?.id],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account, '/api/v1/reports/my-sla-targets')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!currentUser && isStaff,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
   const ticketsByLocationQuery = useQuery<TicketsByLocationRow[]>({
     queryKey: ['dashboard', 'tickets-by-location', locationStatus, locationFrom, locationTo],
     queryFn: async () => {
@@ -1098,6 +1198,8 @@ export function Dashboard() {
             )}
 
             <MyPerformanceCard data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
+
+            <YourSlaTargets data={mySlaTargetsQuery.data} isLoading={mySlaTargetsQuery.isLoading} />
 
             <IncidentSection
               title="My Tickets"

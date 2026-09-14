@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record SlaInstanceDetailResponse(
         UUID id,
+        String entityKind,
         UUID incidentId,
         Long incidentNumber,
         String incidentPriority,
@@ -14,6 +15,12 @@ public record SlaInstanceDetailResponse(
         UUID serviceRequestId,
         String serviceRequestNumber,
         String serviceRequestTitle,
+        UUID problemId,
+        String problemNumber,
+        String problemTitle,
+        UUID changeId,
+        String changeNumber,
+        String changeTitle,
         String policyName,
         OffsetDateTime responseDueAt,
         OffsetDateTime resolutionDueAt,

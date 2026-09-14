@@ -13,6 +13,8 @@ import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -104,6 +107,28 @@ class SlaDetailsServiceTest {
 
         assertEquals(1, rows.size());
         assertEquals("Active incident", rows.get(0).incidentTitle());
+    }
+
+    /**
+     * Regression: the linked-ticket filter must use LEFT joins. The previous
+     * implicit-inner-join dereferences silently dropped every SLA instance whose
+     * incident FK was null — i.e. all service-request-backed rows.
+     */
+    @Test
+    void listUsesLeftJoinsSoServiceRequestBackedRowsSurvive() {
+        AppUser agent = user();
+        when(query.getResultList()).thenReturn(List.of(sla(null, serviceRequest("SR-9"))));
+
+        List<SlaInstanceDetailResponse> rows =
+                service.list(ORG, null, null, null, null, agent, false);
+
+        assertEquals(1, rows.size());
+        assertEquals("SR-9", rows.get(0).serviceRequestNumber());
+
+        Root<SlaInstance> root = entityManager.getCriteriaBuilder()
+                .createQuery(SlaInstance.class).from(SlaInstance.class);
+        verify(root).join("incident", JoinType.LEFT);
+        verify(root).join("serviceRequest", JoinType.LEFT);
     }
 
     private AppUser user() {

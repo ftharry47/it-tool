@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.api.reporting;
 
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.SavedReport;
+import com.alignedcardio.itsm.service.SlaAdminService;
 import com.alignedcardio.itsm.service.UserService;
 import com.alignedcardio.itsm.service.reporting.AdHocQueryRequest;
 import com.alignedcardio.itsm.service.reporting.AdHocQueryResponse;
@@ -10,6 +11,8 @@ import com.alignedcardio.itsm.service.reporting.ReportingService;
 import com.alignedcardio.itsm.service.reporting.SavedReportService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -28,18 +31,37 @@ public class ReportingController {
     private final SavedReportService savedReportService;
     private final AgentPerformanceService agentPerformanceService;
     private final UserService userService;
+    private final SlaAdminService slaAdminService;
 
     public ReportingController(ReportingService reportingService,
                                SavedReportService savedReportService,
                                AgentPerformanceService agentPerformanceService,
-                               UserService userService) {
+                               UserService userService,
+                               SlaAdminService slaAdminService) {
         this.reportingService = reportingService;
         this.savedReportService = savedReportService;
         this.agentPerformanceService = agentPerformanceService;
         this.userService = userService;
+        this.slaAdminService = slaAdminService;
+    }
+
+    private boolean isAdmin(Authentication auth) {
+        return auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_SUPER_ADMIN"));
+    }
+
+    /**
+     * Broken-access-control guard: AGENT/TEAM_LEAD are always scoped to their own
+     * work — the client-supplied {@code mine} flag is advisory only for
+     * ADMIN/SUPER_ADMIN, who get org-wide data by default.
+     */
+    private UUID scopedUserId(Authentication auth, AppUser user, boolean mine) {
+        return isAdmin(auth) ? (mine ? user.getId() : null) : user.getId();
     }
 
     @GetMapping("/tickets-by-location")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<TicketsByLocationResponse> ticketsByLocation(@AuthenticationPrincipal Jwt jwt,
                                                               @RequestParam(required = false, defaultValue = "OPEN") String status,
                                                               @RequestParam(required = false) OffsetDateTime from,
@@ -55,98 +77,120 @@ public class ReportingController {
     }
 
     @GetMapping("/tickets-summary")
-    public Map<String, Object> ticketsSummary(@AuthenticationPrincipal Jwt jwt,
+    public Map<String, Object> ticketsSummary(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                               @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.ticketsSummary(user.getOrgId(), mine ? user.getId() : null);
+        return reportingService.ticketsSummary(user.getOrgId(), scopedUserId(auth, user, mine));
     }
 
     @GetMapping("/sla-compliance")
-    public Map<String, Object> slaCompliance(@AuthenticationPrincipal Jwt jwt,
+    public Map<String, Object> slaCompliance(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                              @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.slaCompliance(user.getOrgId(), mine ? user.getId() : null);
+        return reportingService.slaCompliance(user.getOrgId(), scopedUserId(auth, user, mine));
+    }
+
+    /** Admin view: org-wide compliance plus per-team and per-agent breakdowns. */
+    @GetMapping("/sla-compliance/breakdown")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public Map<String, Object> slaComplianceBreakdown(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceBreakdown(user.getOrgId());
+    }
+
+    /** Agent view: SLA policies governing the caller's own work. */
+    @GetMapping("/my-sla-targets")
+    public List<Map<String, Object>> mySlaTargets(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return slaAdminService.mySlaTargets(user);
     }
 
     @GetMapping("/priority-breakdown")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public AdHocQueryResponse priorityBreakdown(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.priorityBreakdown(user.getOrgId());
     }
 
     @GetMapping("/tickets-trend")
-    public List<Map<String, Object>> ticketsTrend(@AuthenticationPrincipal Jwt jwt,
+    public List<Map<String, Object>> ticketsTrend(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                                     @RequestParam(defaultValue = "30") int days,
                                                     @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.ticketsTrend(user.getOrgId(), days, mine ? user.getId() : null);
+        return reportingService.ticketsTrend(user.getOrgId(), days, scopedUserId(auth, user, mine));
     }
 
     @GetMapping("/sla-trend")
-    public List<Map<String, Object>> slaTrend(@AuthenticationPrincipal Jwt jwt,
+    public List<Map<String, Object>> slaTrend(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                               @RequestParam(defaultValue = "30") int days,
                                               @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.slaComplianceTrend(user.getOrgId(), days, mine ? user.getId() : null);
+        return reportingService.slaComplianceTrend(user.getOrgId(), days, scopedUserId(auth, user, mine));
     }
 
     @GetMapping("/sla-trend/monthly")
-    public List<Map<String, Object>> slaTrendMonthly(@AuthenticationPrincipal Jwt jwt,
+    public List<Map<String, Object>> slaTrendMonthly(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                                      @RequestParam(defaultValue = "12") int months,
                                                      @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.slaComplianceMonthly(user.getOrgId(), months, mine ? user.getId() : null);
+        return reportingService.slaComplianceMonthly(user.getOrgId(), months, scopedUserId(auth, user, mine));
     }
 
     @GetMapping("/sla-trend/overall")
-    public Map<String, Object> slaTrendOverall(@AuthenticationPrincipal Jwt jwt,
+    public Map<String, Object> slaTrendOverall(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                                @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.slaComplianceOverall(user.getOrgId(), mine ? user.getId() : null);
+        return reportingService.slaComplianceOverall(user.getOrgId(), scopedUserId(auth, user, mine));
     }
 
     @GetMapping("/agent-workload")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> agentWorkload(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.agentWorkload(user.getOrgId());
     }
 
     @GetMapping("/sprint-velocity")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> sprintVelocity(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.sprintVelocity(user.getOrgId());
     }
 
     @GetMapping("/incidents-by-category")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> incidentsByCategory(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.incidentsByCategory(user.getOrgId());
     }
 
     @GetMapping("/requests-by-catalog")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> requestsByCatalog(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.requestsByCatalogItem(user.getOrgId());
     }
 
     @GetMapping("/sla-by-priority")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> slaByPriority(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.slaComplianceByPriority(user.getOrgId());
     }
 
     @GetMapping("/pending-approvals-backlog")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> pendingApprovalsBacklog(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return reportingService.pendingApprovalsBacklog(user.getOrgId());
     }
 
     @PostMapping("/query")
-    public AdHocQueryResponse adHocQuery(@AuthenticationPrincipal Jwt jwt,
+    public AdHocQueryResponse adHocQuery(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                          @RequestBody AdHocQueryRequest request,
                                          @RequestParam(required = false, defaultValue = "false") boolean mine) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.adHocQuery(user.getOrgId(), request, mine ? user.getId() : null);
+        return reportingService.adHocQuery(user.getOrgId(), request, scopedUserId(auth, user, mine));
     }
 
     /** Live current-month performance metrics for the calling agent. */

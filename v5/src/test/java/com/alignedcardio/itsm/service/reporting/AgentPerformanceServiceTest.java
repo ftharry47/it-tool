@@ -37,14 +37,21 @@ class AgentPerformanceServiceTest {
     @Mock private SlaInstanceRepository slaInstanceRepository;
     @Mock private AuditLogRepository auditLogRepository;
     @Mock private AppUserRepository appUserRepository;
+    @Mock private com.alignedcardio.itsm.repository.ProblemRepository problemRepository;
+    @Mock private com.alignedcardio.itsm.repository.ChangeRequestRepository changeRequestRepository;
 
     private AgentPerformanceService service;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setup() {
+        lenient().when(problemRepository.findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        lenient().when(changeRequestRepository.findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
         service = new AgentPerformanceService(incidentRepository, fulfillmentTaskRepository,
-                slaInstanceRepository, auditLogRepository, appUserRepository, objectMapper);
+                slaInstanceRepository, auditLogRepository, appUserRepository,
+                problemRepository, changeRequestRepository, objectMapper);
     }
 
     private AppUser agent() {

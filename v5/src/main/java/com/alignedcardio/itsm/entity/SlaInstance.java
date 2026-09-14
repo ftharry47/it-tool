@@ -24,6 +24,14 @@ public class SlaInstance extends BaseEntity {
     @JoinColumn(name = "service_request_id", unique = true)
     private ServiceRequest serviceRequest;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "problem_id", unique = true)
+    private Problem problem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "change_request_id", unique = true)
+    private ChangeRequest changeRequest;
+
     @Column(name = "response_due_at")
     private OffsetDateTime responseDueAt;
 
@@ -72,6 +80,22 @@ public class SlaInstance extends BaseEntity {
 
     public void setServiceRequest(ServiceRequest serviceRequest) {
         this.serviceRequest = serviceRequest;
+    }
+
+    public Problem getProblem() {
+        return problem;
+    }
+
+    public void setProblem(Problem problem) {
+        this.problem = problem;
+    }
+
+    public ChangeRequest getChangeRequest() {
+        return changeRequest;
+    }
+
+    public void setChangeRequest(ChangeRequest changeRequest) {
+        this.changeRequest = changeRequest;
     }
 
     public OffsetDateTime getResponseDueAt() {

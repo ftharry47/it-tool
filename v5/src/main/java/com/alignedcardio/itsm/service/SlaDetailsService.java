@@ -3,9 +3,11 @@ package com.alignedcardio.itsm.service;
 import com.alignedcardio.itsm.api.sla.SlaInstanceDetailResponse;
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.CatalogItem;
+import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Incident;
 import com.alignedcardio.itsm.entity.Priority;
+import com.alignedcardio.itsm.entity.Problem;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import com.alignedcardio.itsm.repository.FulfillmentTaskRepository;
@@ -51,19 +53,30 @@ public class SlaDetailsService {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
 
-        // Exclude SLA rows whose backing ticket has been soft-deleted.
-        Predicate incidentNotDeleted = cb.and(
-                cb.isNotNull(root.get("incident")),
-                cb.isNull(root.get("incident").get("deletedAt")));
-        Predicate requestNotDeleted = cb.and(
-                cb.isNotNull(root.get("serviceRequest")),
-                cb.isNull(root.get("serviceRequest").get("deletedAt")));
-        predicates.add(cb.or(incidentNotDeleted, requestNotDeleted));
+        // Explicit LEFT joins honour each entity's @Where deletedAt filter, so a
+        // non-null join id means "linked to a live, non-deleted ticket". The old
+        // implicit-join dereferences were INNER joins and silently dropped every
+        // SLA instance whose other FK was null — i.e. all SR-backed rows.
+        jakarta.persistence.criteria.Join<SlaInstance, Incident> incident =
+                root.join("incident", jakarta.persistence.criteria.JoinType.LEFT);
+        jakarta.persistence.criteria.Join<SlaInstance, ServiceRequest> serviceRequest =
+                root.join("serviceRequest", jakarta.persistence.criteria.JoinType.LEFT);
+        jakarta.persistence.criteria.Join<SlaInstance, Problem> problem =
+                root.join("problem", jakarta.persistence.criteria.JoinType.LEFT);
+        jakarta.persistence.criteria.Join<SlaInstance, ChangeRequest> change =
+                root.join("changeRequest", jakarta.persistence.criteria.JoinType.LEFT);
+        predicates.add(cb.or(
+                cb.isNotNull(incident.get("id")),
+                cb.isNotNull(serviceRequest.get("id")),
+                cb.isNotNull(problem.get("id")),
+                cb.isNotNull(change.get("id"))));
 
         if (mine && user != null) {
             UUID userId = user.getId();
-            Predicate incidentAssignedToMe = cb.equal(root.get("incident").get("assignee").get("id"), userId);
-            Predicate requestRequestedByMe = cb.equal(root.get("serviceRequest").get("requester").get("id"), userId);
+            Predicate incidentAssignedToMe = cb.equal(incident.get("assignee").get("id"), userId);
+            Predicate requestRequestedByMe = cb.equal(serviceRequest.get("requester").get("id"), userId);
+            Predicate problemAssignedToMe = cb.equal(problem.get("assignee").get("id"), userId);
+            Predicate changeAssignedToMe = cb.equal(change.get("assignee").get("id"), userId);
             List<UUID> assignedRequestIds = fulfillmentTaskRepository
                     .findByAssignee_IdAndDeletedAtIsNull(userId)
                     .stream()
@@ -71,10 +84,12 @@ public class SlaDetailsService {
                     .filter(java.util.Objects::nonNull)
                     .toList();
             if (!assignedRequestIds.isEmpty()) {
-                Predicate requestAssignedToMe = root.get("serviceRequest").get("id").in(assignedRequestIds);
-                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe, requestAssignedToMe));
+                Predicate requestAssignedToMe = serviceRequest.get("id").in(assignedRequestIds);
+                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe, requestAssignedToMe,
+                        problemAssignedToMe, changeAssignedToMe));
             } else {
-                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe));
+                predicates.add(cb.or(incidentAssignedToMe, requestRequestedByMe,
+                        problemAssignedToMe, changeAssignedToMe));
             }
         }
 
@@ -87,7 +102,7 @@ public class SlaDetailsService {
         }
 
         if (priority != null && !priority.isBlank()) {
-            predicates.add(cb.equal(root.get("incident").get("priority").get("name"), priority));
+            predicates.add(cb.equal(incident.get("priority").get("name"), priority));
         }
 
         if (dateFrom != null) {
@@ -111,6 +126,8 @@ public class SlaDetailsService {
         serviceRequestGraph.addAttributeNodes("number");
         Subgraph<CatalogItem> catalogItemGraph = serviceRequestGraph.addSubgraph("catalogItem", CatalogItem.class);
         catalogItemGraph.addAttributeNodes("name");
+        graph.addSubgraph("problem", Problem.class).addAttributeNodes("number", "title");
+        graph.addSubgraph("changeRequest", ChangeRequest.class).addAttributeNodes("number", "title");
         graph.addSubgraph("policy").addAttributeNodes("name");
         query.setHint("jakarta.persistence.fetchgraph", graph);
 
@@ -134,7 +151,23 @@ public class SlaDetailsService {
         }
         try {
             ServiceRequest sr = si.getServiceRequest();
-            return sr == null || sr.getDeletedAt() == null;
+            if (sr != null && sr.getDeletedAt() != null) {
+                return false;
+            }
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return false;
+        }
+        try {
+            Problem problem = si.getProblem();
+            if (problem != null && problem.getDeletedAt() != null) {
+                return false;
+            }
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return false;
+        }
+        try {
+            ChangeRequest change = si.getChangeRequest();
+            return change == null || change.getDeletedAt() == null;
         } catch (jakarta.persistence.EntityNotFoundException e) {
             return false;
         }
@@ -154,10 +187,20 @@ public class SlaDetailsService {
                 ? serviceRequest.getCatalogItem().getName()
                 : null;
 
+        Problem problem = si.getProblem();
+        ChangeRequest change = si.getChangeRequest();
+
+        String entityKind = incident != null ? "INCIDENT"
+                : serviceRequest != null ? "SERVICE_REQUEST"
+                : problem != null ? "PROBLEM"
+                : change != null ? "CHANGE"
+                : null;
+
         String policyName = si.getPolicy() != null ? si.getPolicy().getName() : null;
 
         return new SlaInstanceDetailResponse(
                 si.getId(),
+                entityKind,
                 incidentId,
                 incidentNumber,
                 incidentPriority,
@@ -165,6 +208,12 @@ public class SlaDetailsService {
                 serviceRequestId,
                 serviceRequestNumber,
                 serviceRequestTitle,
+                problem != null ? problem.getId() : null,
+                problem != null ? problem.getNumber() : null,
+                problem != null ? problem.getTitle() : null,
+                change != null ? change.getId() : null,
+                change != null ? change.getNumber() : null,
+                change != null ? change.getTitle() : null,
                 policyName,
                 si.getResponseDueAt(),
                 si.getResolutionDueAt(),

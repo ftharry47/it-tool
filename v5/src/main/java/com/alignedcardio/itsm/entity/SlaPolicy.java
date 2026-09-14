@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 @Table(name = "sla_policy")
 public class SlaPolicy extends BaseEntity {
 
-    public enum AppliesTo { INCIDENT, REQUEST }
+    public enum AppliesTo { INCIDENT, REQUEST, PROBLEM, CHANGE }
 
     @NotNull
     @Column(name = "name", length = 255, nullable = false)

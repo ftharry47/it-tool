@@ -51,7 +51,7 @@ public class SlaAdminController {
     public void deletePolicy(@AuthenticationPrincipal Jwt jwt,
                              @PathVariable UUID id) {
         var user = userService.syncFromJwt(jwt);
-        slaAdminService.deletePolicy(user.getOrgId(), id);
+        slaAdminService.deletePolicy(user.getOrgId(), id, user.getId());
     }
 
     @GetMapping("/business-calendars")

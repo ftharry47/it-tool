@@ -72,6 +72,9 @@ class ChangeServiceTest {
     @Mock
     private NotificationTemplateBuilder notificationTemplateBuilder;
 
+    @Mock
+    private SlaEngine slaEngine;
+
     @InjectMocks
     private ChangeService changeService;
 

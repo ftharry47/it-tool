@@ -33,7 +33,7 @@ export function CreateSlaPolicyForm({
 }: CreateSlaPolicyFormProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
-  const [appliesTo, setAppliesTo] = useState<'INCIDENT' | 'REQUEST'>('INCIDENT')
+  const [appliesTo, setAppliesTo] = useState<'INCIDENT' | 'REQUEST' | 'PROBLEM' | 'CHANGE'>('INCIDENT')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [responseTargetMinutes, setResponseTargetMinutes] = useState('')
   const [resolutionTargetMinutes, setResolutionTargetMinutes] = useState('')
@@ -116,11 +116,13 @@ export function CreateSlaPolicyForm({
           <label className="text-xs font-medium text-muted-foreground">Applies To</label>
           <select
             value={appliesTo}
-            onChange={(e) => setAppliesTo(e.target.value as 'INCIDENT' | 'REQUEST')}
+            onChange={(e) => setAppliesTo(e.target.value as 'INCIDENT' | 'REQUEST' | 'PROBLEM' | 'CHANGE')}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           >
             <option value="INCIDENT">Incident</option>
             <option value="REQUEST">Request</option>
+            <option value="PROBLEM">Problem</option>
+            <option value="CHANGE">Change</option>
           </select>
         </div>
         <div className="space-y-1">

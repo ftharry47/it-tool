@@ -3,6 +3,7 @@ import { useMsal } from '@azure/msal-react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useAuth } from '../../auth/AuthProvider'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 
@@ -17,7 +18,7 @@ interface ReportRow {
   oldestDays?: number
 }
 
-function useReport(endpoint: string, key: string) {
+function useReport(endpoint: string, key: string, enabled = true) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   return useQuery<ReportRow[]>({
@@ -27,7 +28,7 @@ function useReport(endpoint: string, key: string) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!account,
+    enabled: !!account && enabled,
     refetchInterval: 60_000,
     staleTime: 0,
   })
@@ -74,10 +75,12 @@ function ReportTable({ title, query, columns }: {
 }
 
 export function StandardReports() {
-  const byCategory = useReport('/incidents-by-category', 'reports-incidents-by-category')
-  const byCatalog = useReport('/requests-by-catalog', 'reports-requests-by-catalog')
-  const slaByPriority = useReport('/sla-by-priority', 'reports-sla-by-priority')
-  const pendingApprovals = useReport('/pending-approvals-backlog', 'reports-pending-approvals')
+  const { currentUser } = useAuth()
+  const isAdmin = currentUser?.roles.some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN') ?? false
+  const byCategory = useReport('/incidents-by-category', 'reports-incidents-by-category', isAdmin)
+  const byCatalog = useReport('/requests-by-catalog', 'reports-requests-by-catalog', isAdmin)
+  const slaByPriority = useReport('/sla-by-priority', 'reports-sla-by-priority', isAdmin)
+  const pendingApprovals = useReport('/pending-approvals-backlog', 'reports-pending-approvals', isAdmin)
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
@@ -89,7 +92,16 @@ export function StandardReports() {
           </Link>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        {!isAdmin && (
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <p className="text-sm text-muted-foreground">
+              Standard reports show organisation-wide aggregates and are available to administrators only.
+              Your own metrics are on <Link to="/dashboard/reports" className="text-primary hover:underline">My Reporting</Link>.
+            </p>
+          </div>
+        )}
+
+        {isAdmin && <div className="grid gap-4 lg:grid-cols-2">
           <ReportTable title="Incidents by Category" query={byCategory} columns={[
             { key: 'group', label: 'Category' },
             { key: 'count', label: 'Count' },
@@ -109,7 +121,7 @@ export function StandardReports() {
             { key: 'count', label: 'Count' },
             { key: 'oldestDays', label: 'Oldest (days)' },
           ]} />
-        </div>
+        </div>}
       </div>
     </div>
   )

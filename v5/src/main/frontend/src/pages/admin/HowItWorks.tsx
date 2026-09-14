@@ -57,10 +57,14 @@ export function HowItWorks() {
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-lg font-semibold">SLA & Escalation Tiers</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            <li>SLA policies define response and resolution targets per business hours calendar.</li>
-            <li>SLA clocks pause in ON_HOLD, WAITING_ON_CUSTOMER, and PENDING_APPROVAL.</li>
-            <li>Escalation tiers fire on response breach, resolution breach, or stuck status and can reassign to a higher tier (L1 → L2 → L3).</li>
-            <li>Soft-deleted tickets are excluded from current SLA and reporting calculations.</li>
+            <li>SLA policies define response and resolution targets counted in business minutes on a business hours calendar, and apply to Incidents, Requests, Problems, or Changes. An optional priority filter scopes which tickets a policy governs — for changes it matches the risk level (LOW/MEDIUM/HIGH); problems carry no priority filter.</li>
+            <li><strong>Response met</strong> when the ticket is first worked on: an incident leaves NEW, a problem enters INVESTIGATING, a change is APPROVED, a request starts fulfillment.</li>
+            <li><strong>Resolution met</strong> at a terminal state: RESOLVED/CLOSED for incidents and problems, COMPLETED/CLOSED for changes (FAILED/ROLLED_BACK/CANCELLED/REJECTED also stop the clock), FULFILLED for requests.</li>
+            <li>Incident/request SLA clocks pause in ON_HOLD, WAITING_ON_CUSTOMER, and PENDING_APPROVAL; paused minutes are added back to due times on resume.</li>
+            <li>Breach status moves ON_TRACK → AT_RISK at 75% of the resolution clock → BREACHED past the due time. AT_RISK notifies the assignee; BREACHED notifies the requester (or the assignee when there is no requester).</li>
+            <li>Escalation tiers fire on response breach, resolution breach, or stuck status. Every tier notifies its configured role plus ADMIN/SUPER_ADMIN; on incidents a tier can also reassign the ticket to a higher support tier (L1 → L2 → L3). Problems/changes/requests escalate by notification only.</li>
+            <li>Creating, updating, or deleting a policy notifies the agents currently holding open tickets under it and members of teams referenced by its escalation tiers.</li>
+            <li>Soft-deleted tickets are excluded from all SLA lists and reporting calculations; agents always see only their own SLA rows, admins see the org-wide view plus per-team/per-agent compliance breakdowns.</li>
           </ul>
         </section>
 

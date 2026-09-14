@@ -50,6 +50,7 @@ public class ChangeService {
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
     private final NotificationTemplateBuilder notificationTemplateBuilder;
+    private final SlaEngine slaEngine;
 
     public ChangeService(ChangeRequestRepository changeRequestRepository,
                          ChangeApprovalRepository changeApprovalRepository,
@@ -61,7 +62,8 @@ public class ChangeService {
                          ObjectMapper objectMapper,
                          AuditLogService auditLogService,
                          NotificationService notificationService,
-                         NotificationTemplateBuilder notificationTemplateBuilder) {
+                         NotificationTemplateBuilder notificationTemplateBuilder,
+                         SlaEngine slaEngine) {
         this.changeRequestRepository = changeRequestRepository;
         this.changeApprovalRepository = changeApprovalRepository;
         this.appUserRepository = appUserRepository;
@@ -73,6 +75,7 @@ public class ChangeService {
         this.auditLogService = auditLogService;
         this.notificationService = notificationService;
         this.notificationTemplateBuilder = notificationTemplateBuilder;
+        this.slaEngine = slaEngine;
     }
 
     @Transactional(readOnly = true)
@@ -144,6 +147,8 @@ public class ChangeService {
         ChangeRequest saved = changeRequestRepository.save(change);
         entityManager.flush();
         entityManager.refresh(saved);
+
+        slaEngine.onChangeCreated(saved);
 
         if (saved.getAssignee() != null) {
             publishAssignment(saved, user, saved.getAssignee());
@@ -236,6 +241,7 @@ public class ChangeService {
         writeChangeAudit(saved, user.getId(), "STATUS",
                 Map.of("status", oldStatus.name()),
                 Map.of("status", saved.getStatus().name()));
+        slaEngine.onChangeStatusChanged(saved);
 
         return toResponse(saved);
     }
@@ -267,6 +273,7 @@ public class ChangeService {
         writeChangeAudit(saved, user.getId(), "SUBMIT_FOR_APPROVAL",
                 Map.of("status", oldStatus.name()),
                 Map.of("status", saved.getStatus().name()));
+        slaEngine.onChangeStatusChanged(saved);
 
         return toResponse(saved);
     }
@@ -367,6 +374,7 @@ public class ChangeService {
         writeChangeAudit(saved, user.getId(), "APPROVED",
                 Map.of("status", oldStatus.name()),
                 afterApproved);
+        slaEngine.onChangeStatusChanged(saved);
 
         return toResponse(saved);
     }
@@ -408,6 +416,7 @@ public class ChangeService {
         writeChangeAudit(saved, user.getId(), "REJECTED",
                 Map.of("status", oldStatus.name()),
                 afterRejected);
+        slaEngine.onChangeStatusChanged(saved);
 
         return toResponse(saved);
     }

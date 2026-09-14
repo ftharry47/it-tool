@@ -34,8 +34,8 @@ public class ReportingService {
     private static final Map<String, Set<String>> FIELDS_BY_ENTITY = Map.of(
             "incident", Set.of("orgId", "status", "priority", "category", "assignee", "requester", "createdAt", "resolvedAt", "closedAt", "impact", "urgency", "location"),
             "issue", Set.of("orgId", "status", "priority", "createdAt", "assignee", "reporter", "type"),
-            "problem", Set.of("orgId", "status", "createdAt"),
-            "change", Set.of("orgId", "status", "createdAt", "requester"),
+            "problem", Set.of("orgId", "status", "assignee", "createdAt"),
+            "change", Set.of("orgId", "status", "assignee", "requestedBy", "changeType", "risk", "createdAt"),
             "service_request", Set.of("orgId", "status", "createdAt", "requester", "catalogItem", "location"));
 
     private static final Map<String, String> DATE_FIELD_BY_ENTITY = Map.of(
@@ -109,9 +109,9 @@ public class ReportingService {
 
         if (mineUserId != null) {
             String mineField = switch (request.entity()) {
-                case "incident" -> "assignee";
+                case "incident", "issue", "problem" -> "assignee";
                 case "service_request" -> "requester";
-                case "issue" -> "assignee";
+                case "change" -> "assignee";
                 default -> null;
             };
             if (mineField != null) {
@@ -270,17 +270,26 @@ public class ReportingService {
     private Predicate[] baseSlaInstancePredicates(CriteriaBuilder cb, Root<SlaInstance> root, UUID orgId, UUID mineUserId) {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
-        Predicate incidentNotDeleted = cb.and(
-                cb.isNotNull(root.get("incident")),
-                cb.isNull(root.get("incident").get("deletedAt")));
-        Predicate requestNotDeleted = cb.and(
-                cb.isNotNull(root.get("serviceRequest")),
-                cb.isNull(root.get("serviceRequest").get("deletedAt")));
-        predicates.add(cb.or(incidentNotDeleted, requestNotDeleted));
+        // Explicit LEFT joins honour each entity's @Where deletedAt filter, so a
+        // non-null join id means "linked to a live, non-deleted ticket". The old
+        // implicit-join dereferences (root.get("incident").get("deletedAt")) were
+        // INNER joins and silently dropped every SLA instance whose other FK was
+        // null — i.e. all service-request-backed rows.
+        Join<SlaInstance, Incident> incident = root.join("incident", JoinType.LEFT);
+        Join<SlaInstance, ServiceRequest> serviceRequest = root.join("serviceRequest", JoinType.LEFT);
+        Join<SlaInstance, Problem> problem = root.join("problem", JoinType.LEFT);
+        Join<SlaInstance, ChangeRequest> change = root.join("changeRequest", JoinType.LEFT);
+        predicates.add(cb.or(
+                cb.isNotNull(incident.get("id")),
+                cb.isNotNull(serviceRequest.get("id")),
+                cb.isNotNull(problem.get("id")),
+                cb.isNotNull(change.get("id"))));
         if (mineUserId != null) {
-            Predicate incidentAssigned = cb.equal(root.get("incident").get("assignee").get("id"), mineUserId);
-            Predicate requestRequested = cb.equal(root.get("serviceRequest").get("requester").get("id"), mineUserId);
-            predicates.add(cb.or(incidentAssigned, requestRequested));
+            predicates.add(cb.or(
+                    cb.equal(incident.get("assignee").get("id"), mineUserId),
+                    cb.equal(serviceRequest.get("requester").get("id"), mineUserId),
+                    cb.equal(problem.get("assignee").get("id"), mineUserId),
+                    cb.equal(change.get("assignee").get("id"), mineUserId)));
         }
         return predicates.toArray(new Predicate[0]);
     }
@@ -293,6 +302,151 @@ public class ReportingService {
             return now.isAfter(resolutionDueAt);
         }
         return resolutionMetAt.isAfter(resolutionDueAt);
+    }
+
+    /**
+     * Admin view: current-month SLA compliance overall, plus breakdowns by
+     * team and by individual agent. Ownership attribution: incident → assignee
+     * (team = assignmentTeam), problem/change → assignee (team = their first
+     * team membership), service request → agents holding its fulfillment tasks
+     * (falls back to the requester when unworked). Deleted-ticket rows are
+     * skipped.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> slaComplianceBreakdown(UUID orgId) {
+        OffsetDateTime now = OffsetDateTime.now();
+        YearMonth month = YearMonth.now();
+        OffsetDateTime from = month.atDay(1).atStartOfDay().atOffset(now.getOffset());
+
+        List<SlaInstance> instances = entityManager.createQuery(
+                "SELECT si FROM SlaInstance si WHERE si.orgId = :org AND si.createdAt >= :from",
+                SlaInstance.class)
+                .setParameter("org", orgId)
+                .setParameter("from", from)
+                .getResultList();
+
+        // Service-request ownership: agents holding a non-deleted fulfillment task.
+        List<UUID> requestIds = instances.stream()
+                .map(SlaInstance::getServiceRequest)
+                .filter(Objects::nonNull)
+                .map(sr -> {
+                    try { return sr.getId(); } catch (jakarta.persistence.EntityNotFoundException e) { return null; }
+                })
+                .filter(Objects::nonNull)
+                .toList();
+        Map<UUID, List<AppUser>> taskOwnersByRequest = new HashMap<>();
+        if (!requestIds.isEmpty()) {
+            for (Tuple t : entityManager.createQuery(
+                    "SELECT ft.serviceRequest.id, a.id, a.displayName FROM FulfillmentTask ft " +
+                            "JOIN ft.assignee a WHERE ft.serviceRequest.id IN :ids AND ft.deletedAt IS NULL",
+                    Tuple.class)
+                    .setParameter("ids", requestIds)
+                    .getResultList()) {
+                AppUser owner = new AppUser();
+                owner.setId(t.get(1, UUID.class));
+                owner.setDisplayName(t.get(2, String.class));
+                taskOwnersByRequest.computeIfAbsent(t.get(0, UUID.class), k -> new ArrayList<>())
+                        .add(owner);
+            }
+        }
+
+        // user -> first team (for non-incident tickets which carry no team field).
+        Map<UUID, String> teamByUser = new HashMap<>();
+        for (Tuple t : entityManager.createQuery(
+                "SELECT tm.userId, t.name FROM TeamMember tm JOIN tm.team t WHERE t.orgId = :org",
+                Tuple.class)
+                .setParameter("org", orgId)
+                .getResultList()) {
+            teamByUser.putIfAbsent(t.get(0, UUID.class), t.get(1, String.class));
+        }
+
+        Map<UUID, long[]> byAgent = new LinkedHashMap<>();
+        Map<UUID, String> agentNames = new HashMap<>();
+        Map<String, long[]> byTeam = new LinkedHashMap<>();
+        long[] overall = new long[2]; // [total, breached]
+
+        for (SlaInstance si : instances) {
+            boolean breached = isBreachedAtDue(si.getResolutionDueAt(), si.getResolutionMetAt(), now);
+            try {
+                if (si.getIncident() != null) {
+                    Incident i = si.getIncident();
+                    if (i.getDeletedAt() != null) continue;
+                    recordBreakdown(byAgent, agentNames, byTeam, overall, breached,
+                            i.getAssignee(),
+                            i.getAssignmentTeam() != null ? i.getAssignmentTeam().getName()
+                                    : teamByUser.get(i.getAssignee() != null ? i.getAssignee().getId() : null));
+                } else if (si.getServiceRequest() != null) {
+                    ServiceRequest sr = si.getServiceRequest();
+                    if (sr.getDeletedAt() != null) continue;
+                    List<AppUser> owners = taskOwnersByRequest.getOrDefault(sr.getId(), List.of());
+                    if (owners.isEmpty() && sr.getRequester() != null) {
+                        owners = List.of(sr.getRequester());
+                    }
+                    if (owners.isEmpty()) {
+                        recordBreakdown(byAgent, agentNames, byTeam, overall, breached, null, null);
+                    }
+                    for (AppUser owner : owners) {
+                        recordBreakdown(byAgent, agentNames, byTeam, overall, breached,
+                                owner, teamByUser.get(owner.getId()));
+                    }
+                } else if (si.getProblem() != null) {
+                    Problem p = si.getProblem();
+                    if (p.getDeletedAt() != null) continue;
+                    recordBreakdown(byAgent, agentNames, byTeam, overall, breached,
+                            p.getAssignee(),
+                            teamByUser.get(p.getAssignee() != null ? p.getAssignee().getId() : null));
+                } else if (si.getChangeRequest() != null) {
+                    ChangeRequest c = si.getChangeRequest();
+                    if (c.getDeletedAt() != null) continue;
+                    recordBreakdown(byAgent, agentNames, byTeam, overall, breached,
+                            c.getAssignee(),
+                            teamByUser.get(c.getAssignee() != null ? c.getAssignee().getId() : null));
+                }
+            } catch (jakarta.persistence.EntityNotFoundException e) {
+                // Lazy association backed by a soft-deleted row — skip.
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("period", month.toString());
+        result.put("overall", complianceMap(overall[0], overall[1]));
+        result.put("byAgent", byAgent.entrySet().stream()
+                .map(e -> {
+                    Map<String, Object> row = new LinkedHashMap<>(complianceMap(e.getValue()[0], e.getValue()[1]));
+                    row.put("agentId", e.getKey());
+                    row.put("agentName", e.getKey() != null ? agentNames.getOrDefault(e.getKey(), "Unknown") : "Unassigned");
+                    return row;
+                })
+                .toList());
+        result.put("byTeam", byTeam.entrySet().stream()
+                .map(e -> {
+                    Map<String, Object> row = new LinkedHashMap<>(complianceMap(e.getValue()[0], e.getValue()[1]));
+                    row.put("teamName", e.getKey());
+                    return row;
+                })
+                .toList());
+        return result;
+    }
+
+    private void recordBreakdown(Map<UUID, long[]> byAgent, Map<UUID, String> agentNames,
+                                 Map<String, long[]> byTeam, long[] overall,
+                                 boolean breached, AppUser owner, String teamName) {
+        overall[0]++;
+        if (breached) overall[1]++;
+        UUID agentKey = owner != null ? owner.getId() : null;
+        byAgent.computeIfAbsent(agentKey, k -> new long[2])[0]++;
+        if (breached) byAgent.get(agentKey)[1]++;
+        if (owner != null && owner.getDisplayName() != null) {
+            agentNames.putIfAbsent(owner.getId(), owner.getDisplayName());
+        }
+        String teamKey = teamName != null ? teamName : "Unassigned";
+        byTeam.computeIfAbsent(teamKey, k -> new long[2])[0]++;
+        if (breached) byTeam.get(teamKey)[1]++;
+    }
+
+    private Map<String, Object> complianceMap(long total, long breached) {
+        double pct = total == 0 ? 100.0 : Math.round((total - breached) * 10000.0 / total) / 100.0;
+        return Map.of("total", total, "breached", breached, "compliancePercent", pct);
     }
 
     public Map<String, Object> slaCompliance(UUID orgId, UUID mineUserId) {
@@ -408,64 +562,140 @@ public class ReportingService {
         return result;
     }
 
+    private static final List<Incident.Status> WORKLOAD_INCIDENT_STATUSES = List.of(
+            Incident.Status.NEW, Incident.Status.IN_PROGRESS, Incident.Status.ON_HOLD,
+            Incident.Status.WAITING_ON_CUSTOMER, Incident.Status.REOPENED);
+    private static final List<Problem.Status> WORKLOAD_PROBLEM_STATUSES = List.of(
+            Problem.Status.NEW, Problem.Status.INVESTIGATING, Problem.Status.KNOWN_ERROR);
+    private static final List<ChangeRequest.Status> WORKLOAD_CHANGE_STATUSES = List.of(
+            ChangeRequest.Status.DRAFT, ChangeRequest.Status.PENDING_APPROVAL,
+            ChangeRequest.Status.APPROVED, ChangeRequest.Status.SCHEDULED, ChangeRequest.Status.IN_PROGRESS);
+    private static final List<FulfillmentTask.Status> WORKLOAD_TASK_STATUSES = List.of(
+            FulfillmentTask.Status.PENDING, FulfillmentTask.Status.ORDERED,
+            FulfillmentTask.Status.DELIVERY_DATE_SET);
+    private static final List<ServiceRequest.Status> TERMINAL_REQUEST_STATUSES = List.of(
+            ServiceRequest.Status.FULFILLED, ServiceRequest.Status.REJECTED, ServiceRequest.Status.CANCELLED);
+
+    /**
+     * ServiceNow-style work queue: open assigned items per agent across all
+     * four ITSM ticket types. Incidents/problems/changes attribute by direct
+     * assignee; service requests attribute to the agent holding an open
+     * fulfillment task on them. Deleted tickets are excluded everywhere.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> agentWorkload(UUID orgId) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
-        Root<Incident> root = cq.from(Incident.class);
-        Join<Incident, AppUser> assignee = root.join("assignee");
-        Expression<String> agentName = cb.coalesce(assignee.get("displayName"), assignee.get("email"));
+        Map<UUID, Map<String, Object>> byAgent = new LinkedHashMap<>();
+        Map<UUID, UUID> incidentOwner = new HashMap<>();
+        Map<UUID, UUID> requestOwner = new HashMap<>();
 
-        cq.multiselect(root.get("id"), agentName);
-        cq.where(
-                cb.equal(root.get("orgId"), orgId),
-                cb.isNull(root.get("deletedAt")),
-                root.get("status").in(
-                        Incident.Status.NEW,
-                        Incident.Status.IN_PROGRESS,
-                        Incident.Status.ON_HOLD,
-                        Incident.Status.WAITING_ON_CUSTOMER,
-                        Incident.Status.REOPENED));
+        collectWorkload(orgId, byAgent,
+                "SELECT a.id, COALESCE(a.displayName, a.email), i.id FROM Incident i JOIN i.assignee a " +
+                        "WHERE i.orgId = :org AND i.deletedAt IS NULL AND i.status IN :statuses",
+                WORKLOAD_INCIDENT_STATUSES, "incidents", incidentOwner);
+        collectWorkload(orgId, byAgent,
+                "SELECT a.id, COALESCE(a.displayName, a.email), p.id FROM Problem p JOIN p.assignee a " +
+                        "WHERE p.orgId = :org AND p.deletedAt IS NULL AND p.status IN :statuses",
+                WORKLOAD_PROBLEM_STATUSES, "problems", null);
+        collectWorkload(orgId, byAgent,
+                "SELECT a.id, COALESCE(a.displayName, a.email), c.id FROM ChangeRequest c JOIN c.assignee a " +
+                        "WHERE c.orgId = :org AND c.deletedAt IS NULL AND c.status IN :statuses",
+                WORKLOAD_CHANGE_STATUSES, "changes", null);
 
-        List<Tuple> rows = entityManager.createQuery(cq).getResultList();
-        List<UUID> incidentIds = rows.stream()
-                .map(t -> t.get(0, UUID.class))
-                .toList();
-
-        // Batch-load SLA instances for all listed incidents — one query, no N+1.
-        Map<UUID, SlaInstance.BreachStatus> slaByIncident = incidentIds.isEmpty()
-                ? Map.of()
-                : entityManager.createQuery(
-                        "SELECT si FROM SlaInstance si WHERE si.incident.id IN :ids", SlaInstance.class)
-                        .setParameter("ids", incidentIds)
-                        .getResultList()
-                        .stream()
-                        .collect(Collectors.toMap(si -> si.getIncident().getId(), SlaInstance::getBreachStatus, (a, b) -> a));
-
-        Map<String, Map<String, Object>> byAgent = new LinkedHashMap<>();
-        for (Tuple t : rows) {
-            UUID incidentId = t.get(0, UUID.class);
-            String name = t.get(1, String.class);
-            SlaInstance.BreachStatus status = slaByIncident.get(incidentId);
-            Map<String, Object> row = byAgent.computeIfAbsent(name, k -> {
-                Map<String, Object> r = new HashMap<>();
-                r.put("agentName", k);
-                r.put("openCount", 0L);
-                r.put("onTrack", 0L);
-                r.put("atRisk", 0L);
-                r.put("breached", 0L);
-                r.put("noSla", 0L);
-                return r;
-            });
-            row.put("openCount", ((Long) row.get("openCount")) + 1);
-            String key = status == null ? "noSla"
-                    : switch (status) {
-                        case ON_TRACK -> "onTrack";
-                        case AT_RISK -> "atRisk";
-                        case BREACHED -> "breached";
-                    };
-            row.put(key, ((Long) row.get(key)) + 1);
+        List<Tuple> requestRows = entityManager.createQuery(
+                "SELECT DISTINCT a.id, COALESCE(a.displayName, a.email), sr.id FROM FulfillmentTask ft " +
+                        "JOIN ft.assignee a JOIN ft.serviceRequest sr " +
+                        "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                        "AND ft.status IN :statuses AND sr.status NOT IN :terminal",
+                Tuple.class)
+                .setParameter("org", orgId)
+                .setParameter("statuses", WORKLOAD_TASK_STATUSES)
+                .setParameter("terminal", TERMINAL_REQUEST_STATUSES)
+                .getResultList();
+        for (Tuple t : requestRows) {
+            addWorkloadItem(byAgent, t, "serviceRequests", requestOwner);
         }
-        return new ArrayList<>(byAgent.values());
+
+        // SLA health segments for the tickets that have SLA instances.
+        Map<UUID, SlaInstance.BreachStatus> slaByIncident = slaStatusIndex("incident", incidentOwner.keySet());
+        Map<UUID, SlaInstance.BreachStatus> slaByRequest = slaStatusIndex("serviceRequest", requestOwner.keySet());
+        for (Map.Entry<UUID, UUID> e : incidentOwner.entrySet()) {
+            addSlaSegment(byAgent.get(e.getValue()), slaByIncident.get(e.getKey()));
+        }
+        for (Map.Entry<UUID, UUID> e : requestOwner.entrySet()) {
+            addSlaSegment(byAgent.get(e.getValue()), slaByRequest.get(e.getKey()));
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>(byAgent.values());
+        result.sort((a, b) -> Long.compare((Long) b.get("openCount"), (Long) a.get("openCount")));
+        return result;
+    }
+
+    private void collectWorkload(UUID orgId, Map<UUID, Map<String, Object>> byAgent,
+                                 String jpql, List<? extends Enum<?>> statuses,
+                                 String field, Map<UUID, UUID> ownerIndex) {
+        List<Tuple> rows = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("org", orgId)
+                .setParameter("statuses", statuses)
+                .getResultList();
+        for (Tuple t : rows) {
+            addWorkloadItem(byAgent, t, field, ownerIndex);
+        }
+    }
+
+    private void addWorkloadItem(Map<UUID, Map<String, Object>> byAgent, Tuple t,
+                                 String field, Map<UUID, UUID> ownerIndex) {
+        UUID agentId = t.get(0, UUID.class);
+        String name = t.get(1, String.class);
+        UUID ticketId = t.get(2, UUID.class);
+        Map<String, Object> row = byAgent.computeIfAbsent(agentId, k -> {
+            Map<String, Object> r = new HashMap<>();
+            r.put("agentId", agentId);
+            r.put("agentName", name);
+            r.put("openCount", 0L);
+            r.put("incidents", 0L);
+            r.put("serviceRequests", 0L);
+            r.put("problems", 0L);
+            r.put("changes", 0L);
+            r.put("onTrack", 0L);
+            r.put("atRisk", 0L);
+            r.put("breached", 0L);
+            r.put("noSla", 0L);
+            return r;
+        });
+        row.put(field, ((Long) row.get(field)) + 1);
+        row.put("openCount", ((Long) row.get("openCount")) + 1);
+        if (ownerIndex != null) {
+            ownerIndex.put(ticketId, agentId);
+        }
+    }
+
+    private void addSlaSegment(Map<String, Object> row, SlaInstance.BreachStatus status) {
+        if (row == null) {
+            return;
+        }
+        String key = status == null ? "noSla"
+                : switch (status) {
+                    case ON_TRACK -> "onTrack";
+                    case AT_RISK -> "atRisk";
+                    case BREACHED -> "breached";
+                };
+        row.put(key, ((Long) row.get(key)) + 1);
+    }
+
+    private Map<UUID, SlaInstance.BreachStatus> slaStatusIndex(String association, Collection<UUID> ticketIds) {
+        if (ticketIds.isEmpty()) {
+            return Map.of();
+        }
+        return entityManager.createQuery(
+                "SELECT si." + association + ".id, si.breachStatus FROM SlaInstance si " +
+                        "WHERE si." + association + ".id IN :ids", Tuple.class)
+                .setParameter("ids", ticketIds)
+                .getResultList()
+                .stream()
+                .collect(Collectors.toMap(
+                        t -> t.get(0, UUID.class),
+                        t -> t.get(1, SlaInstance.BreachStatus.class),
+                        (a, b) -> a));
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -759,6 +989,12 @@ public class ReportingService {
         }
     }
 
+    /**
+     * Jira-style sprint velocity: story points committed vs completed per
+     * sprint (issue counts kept alongside for context). Only ACTIVE and
+     * COMPLETED sprints are included — PLANNING sprints have no committed work
+     * yet and would only produce empty bars. Ordered most recent first.
+     */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> sprintVelocity(UUID orgId) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
@@ -767,18 +1003,27 @@ public class ReportingService {
         Join<Issue, Sprint> sprint = root.join("sprint");
         Join<Issue, WorkflowStatus> workflowStatus = root.join("workflowStatus");
 
-        Expression<Long> committed = cb.count(root);
-        Expression<Long> completed = cb.sum(
-                cb.<Long>selectCase()
-                        .when(cb.equal(workflowStatus.get("category"), WorkflowStatus.Category.DONE), 1L)
-                        .otherwise(0L));
+        Expression<Integer> points = cb.coalesce(root.get("storyPoints"), 0);
+        Predicate done = cb.equal(workflowStatus.get("category"), WorkflowStatus.Category.DONE);
 
-        cq.multiselect(sprint.get("name"), committed, completed);
+        cq.multiselect(
+                sprint.get("name"),
+                sprint.get("status"),
+                sprint.get("endDate"),
+                sprint.get("project").get("name"),
+                cb.count(root),
+                cb.sum(cb.<Long>selectCase().when(done, 1L).otherwise(0L)),
+                cb.sum(points),
+                cb.sum(cb.<Integer>selectCase().when(done, points).otherwise(0)));
+
         cq.where(
                 cb.equal(root.get("orgId"), orgId),
                 cb.isNull(root.get("deletedAt")),
-                cb.isNull(sprint.get("deletedAt")));
-        cq.groupBy(sprint.get("id"), sprint.get("name"));
+                cb.isNull(sprint.get("deletedAt")),
+                sprint.get("status").in(Sprint.Status.ACTIVE, Sprint.Status.COMPLETED));
+        cq.groupBy(sprint.get("id"), sprint.get("name"), sprint.get("status"),
+                sprint.get("endDate"), sprint.get("project").get("name"));
+        cq.orderBy(cb.desc(sprint.get("startDate")));
 
         return entityManager.createQuery(cq)
                 .getResultList()
@@ -786,8 +1031,13 @@ public class ReportingService {
                 .map(t -> {
                     Map<String, Object> row = new HashMap<>();
                     row.put("sprintName", t.get(0, String.class));
-                    row.put("committed", t.get(1, Long.class));
-                    row.put("completed", t.get(2, Long.class));
+                    row.put("sprintStatus", t.get(1, Sprint.Status.class).name());
+                    row.put("endDate", t.get(2, OffsetDateTime.class));
+                    row.put("projectName", t.get(3, String.class));
+                    row.put("committed", t.get(4, Long.class));
+                    row.put("completed", t.get(5, Long.class));
+                    row.put("committedPoints", t.get(6, Long.class));
+                    row.put("completedPoints", t.get(7, Long.class));
                     return row;
                 })
                 .collect(Collectors.toList());

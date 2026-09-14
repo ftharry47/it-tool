@@ -1,6 +1,9 @@
 package com.alignedcardio.itsm.service.reporting;
 
+import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.Incident;
+import com.alignedcardio.itsm.entity.Problem;
+import com.alignedcardio.itsm.entity.SlaInstance;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
@@ -19,6 +22,8 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
+import org.mockito.Mockito;
 
 @ExtendWith(MockitoExtension.class)
 class ReportingServiceTest {
@@ -146,6 +151,63 @@ class ReportingServiceTest {
         verify(criteriaBuilder).isNull(path);
         verify(criteriaQuery).groupBy(any(Expression[].class));
         verify(typedQuery).setMaxResults(1000);
+    }
+
+    /**
+     * Regression: mine=true must scope problem/change queries by assignee —
+     * previously only incident/service_request/issue had a mineField, so an
+     * agent's "mine" query on problem/change silently returned org-wide rows.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void mineScopeAppliesToProblemAndChangeAssignee() {
+        Root rawRoot = mock(Root.class);
+        when(entityManager.getCriteriaBuilder()).thenReturn(criteriaBuilder);
+        when(criteriaBuilder.createTupleQuery()).thenReturn(criteriaQuery);
+        doReturn(rawRoot).when(criteriaQuery).from(any(Class.class));
+        when(rawRoot.get(anyString())).thenReturn(path);
+        when(path.get(anyString())).thenReturn(path);
+        lenient().when(criteriaBuilder.equal(any(Expression.class), any(Object.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNull(any(Expression.class))).thenReturn(predicate);
+        when(criteriaQuery.where(any(Predicate[].class))).thenReturn(criteriaQuery);
+        when(criteriaQuery.multiselect(any(Selection.class))).thenReturn(criteriaQuery);
+        when(criteriaBuilder.count(rawRoot)).thenReturn(countExpr);
+        when(entityManager.createQuery(criteriaQuery)).thenReturn(typedQuery);
+        when(typedQuery.getResultList()).thenReturn(List.of());
+
+        ReportingService service = new ReportingService(entityManager);
+        UUID orgId = UUID.randomUUID();
+        UUID agentId = UUID.randomUUID();
+
+        service.adHocQuery(orgId, new AdHocQueryRequest("problem", List.of(), null, null), agentId);
+        verify(criteriaBuilder).equal(path, agentId);
+        verify(criteriaQuery).from(Problem.class);
+
+        clearInvocations(criteriaBuilder, criteriaQuery);
+
+        service.adHocQuery(orgId, new AdHocQueryRequest("change", List.of(), null, null), agentId);
+        verify(criteriaBuilder).equal(path, agentId);
+        verify(criteriaQuery).from(ChangeRequest.class);
+    }
+
+    /**
+     * Regression: SLA instance filters must LEFT-join the linked tickets. The
+     * previous implicit inner joins dropped every row whose other FK was null —
+     * all SR-backed instances vanished from compliance numbers.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void slaComplianceUsesLeftJoinsForLinkedTickets() {
+        EntityManager em = mock(EntityManager.class, Mockito.RETURNS_DEEP_STUBS);
+        when(em.createQuery(any(CriteriaQuery.class)).getSingleResult()).thenReturn(0L);
+
+        ReportingService service = new ReportingService(em);
+        service.slaCompliance(UUID.randomUUID(), null);
+
+        CriteriaQuery<Long> q = em.getCriteriaBuilder().createQuery(Long.class);
+        Root<SlaInstance> root = q.from(SlaInstance.class);
+        verify(root, atLeastOnce()).join("incident", JoinType.LEFT);
+        verify(root, atLeastOnce()).join("serviceRequest", JoinType.LEFT);
     }
 
     @Test

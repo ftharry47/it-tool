@@ -5,6 +5,8 @@ import com.alignedcardio.itsm.service.SlaDetailsService;
 import com.alignedcardio.itsm.service.UserService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,8 +37,14 @@ public class SlaDetailsController {
             @RequestParam(required = false) String priority,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateTo,
-            @RequestParam(required = false, defaultValue = "false") boolean mine) {
+            @RequestParam(required = false, defaultValue = "false") boolean mine,
+            Authentication auth) {
         AppUser user = userService.syncFromJwt(jwt);
-        return slaDetailsService.list(user.getOrgId(), breachStatus, priority, dateFrom, dateTo, user, mine);
+        // Non-admin staff can only ever see their own SLA instances — the
+        // client-supplied mine flag is advisory for ADMIN/SUPER_ADMIN only.
+        boolean isAdmin = auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_SUPER_ADMIN"));
+        return slaDetailsService.list(user.getOrgId(), breachStatus, priority, dateFrom, dateTo, user, isAdmin ? mine : true);
     }
 }

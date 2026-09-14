@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
+import { AccountInfo, IPublicClientApplication } from '@azure/msal-browser'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fetchWithToken } from '../../api/client'
@@ -17,6 +18,7 @@ type BreachStatus = 'ON_TRACK' | 'AT_RISK' | 'BREACHED'
 
 interface SlaInstanceRow {
   id: string
+  entityKind: 'INCIDENT' | 'SERVICE_REQUEST' | 'PROBLEM' | 'CHANGE' | null
   incidentId: string | null
   incidentNumber: number | null
   incidentTitle: string | null
@@ -24,6 +26,12 @@ interface SlaInstanceRow {
   serviceRequestId: string | null
   serviceRequestNumber: string | null
   serviceRequestTitle: string | null
+  problemId: string | null
+  problemNumber: string | null
+  problemTitle: string | null
+  changeId: string | null
+  changeNumber: string | null
+  changeTitle: string | null
   policyName: string
   responseDueAt: string | null
   resolutionDueAt: string | null
@@ -47,7 +55,7 @@ interface CalendarOption {
 interface SlaPolicy {
   id: string
   name: string
-  appliesTo: 'INCIDENT' | 'REQUEST'
+  appliesTo: 'INCIDENT' | 'REQUEST' | 'PROBLEM' | 'CHANGE'
   priorityFilter: string | null
   responseTargetMinutes: number
   resolutionTargetMinutes: number
@@ -71,6 +79,125 @@ interface SlaOverall {
   total: number
   breached: number
   compliancePercent: number
+}
+
+interface SlaBreakdown {
+  period: string
+  overall: SlaOverall
+  byAgent: { agentId: string | null; agentName: string; total: number; breached: number; compliancePercent: number }[]
+  byTeam: { teamName: string; total: number; breached: number; compliancePercent: number }[]
+}
+
+/** Admin-only: current-month SLA compliance broken down by team and agent. */
+function SlaComplianceBreakdown({ instance, account }: { instance: IPublicClientApplication; account: AccountInfo | undefined }) {
+  const breakdownQuery = useQuery<SlaBreakdown>({
+    queryKey: ['reports', 'sla-compliance', 'breakdown'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/reports/sla-compliance/breakdown')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const complianceCell = (row: { total: number; breached: number; compliancePercent: number }) => (
+    <>
+      <td className="px-3 py-2 text-sm">{row.total}</td>
+      <td className={`px-3 py-2 text-sm ${row.breached > 0 ? 'font-medium text-red-700' : ''}`}>{row.breached}</td>
+      <td className="px-3 py-2 text-sm font-medium">{row.compliancePercent}%</td>
+    </>
+  )
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Compliance Breakdown</h2>
+          <p className="text-sm text-muted-foreground">
+            {breakdownQuery.data ? `Current month (${breakdownQuery.data.period})` : 'Current month'} — overall{' '}
+            {breakdownQuery.data ? `${breakdownQuery.data.overall.compliancePercent}%` : '…'}
+          </p>
+        </div>
+      </div>
+      {breakdownQuery.isLoading ? (
+        <Loading />
+      ) : breakdownQuery.error ? (
+        <ErrorFallback error={breakdownQuery.error} message="Could not load the SLA breakdown." onRetry={() => breakdownQuery.refetch()} />
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">By Team</h3>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-2">Team</th>
+                  <th className="px-3 py-2">SLAs</th>
+                  <th className="px-3 py-2">Breached</th>
+                  <th className="px-3 py-2">Compliance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(breakdownQuery.data?.byTeam ?? []).map((row) => (
+                  <tr key={row.teamName} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 text-sm font-medium">{row.teamName}</td>
+                    {complianceCell(row)}
+                  </tr>
+                ))}
+                {breakdownQuery.data?.byTeam.length === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-muted-foreground">No SLA instances this month.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-muted-foreground">By Agent</h3>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-2">Agent</th>
+                  <th className="px-3 py-2">SLAs</th>
+                  <th className="px-3 py-2">Breached</th>
+                  <th className="px-3 py-2">Compliance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(breakdownQuery.data?.byAgent ?? []).map((row) => (
+                  <tr key={row.agentId ?? 'unassigned'} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 text-sm font-medium">{row.agentName}</td>
+                    {complianceCell(row)}
+                  </tr>
+                ))}
+                {breakdownQuery.data?.byAgent.length === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-muted-foreground">No SLA instances this month.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Plain-language explainer of how the SLA engine works, for agents and admins. */
+function HowSlaWorks() {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+      <h2 className="text-lg font-semibold tracking-tight">How SLA Works</h2>
+      <div className="grid grid-cols-1 gap-4 text-sm text-muted-foreground md:grid-cols-2">
+        <div className="space-y-2">
+          <p><span className="font-medium text-foreground">Policies.</span> Each SLA policy applies to one ticket type — Incident, Request, Problem, or Change — with a response and a resolution target in business minutes, counted on the policy's business calendar. An optional priority filter (risk level for changes) limits which tickets it governs.</p>
+          <p><span className="font-medium text-foreground">Clocks.</span> Response starts when the ticket is created and is met when it is first worked on — an incident leaves NEW, a problem enters INVESTIGATING, a change is APPROVED. Resolution is met when the ticket reaches a closed state (Resolved/Closed for incidents and problems, Completed/Closed for changes, Fulfilled for requests).</p>
+        </div>
+        <div className="space-y-2">
+          <p><span className="font-medium text-foreground">Breach states.</span> ON_TRACK → AT_RISK at 75% of the resolution clock → BREACHED once the due time passes. Tickets paused on the customer hold their clock; deleted tickets disappear from all SLA views.</p>
+          <p><span className="font-medium text-foreground">Escalations.</span> Policies can carry escalation tiers that fire on a response breach, a resolution breach, or when a ticket is stuck in a status too long. Tiers notify a role (and always notify admins); for incidents they can also reassign the ticket to a different support tier. Changing a policy notifies everyone who currently owns tickets under it.</p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const SLA_COLORS = ['var(--chart-2)', 'var(--chart-1)']
@@ -352,24 +479,50 @@ export function SlaDetails() {
     })
   }
 
+  const ticketRef = (row: SlaInstanceRow): { to: string; label: string } | null =>
+    row.incidentId
+      ? { to: `/dashboard/incidents/${row.incidentId}`, label: `#${row.incidentNumber}` }
+      : row.serviceRequestId
+        ? { to: `/dashboard/service-requests/${row.serviceRequestId}`, label: row.serviceRequestNumber ?? '—' }
+        : row.problemId
+          ? { to: `/dashboard/problems/${row.problemId}`, label: row.problemNumber ?? '—' }
+          : row.changeId
+            ? { to: `/dashboard/changes/${row.changeId}`, label: row.changeNumber ?? '—' }
+            : null
+
+  const KIND_LABEL: Record<string, string> = {
+    INCIDENT: 'Incident',
+    SERVICE_REQUEST: 'Request',
+    PROBLEM: 'Problem',
+    CHANGE: 'Change',
+  }
+
   const columns = [
+    {
+      key: 'entityKind',
+      header: 'Type',
+      render: (row: SlaInstanceRow) => (row.entityKind ? KIND_LABEL[row.entityKind] ?? row.entityKind : '—'),
+    },
     {
       key: 'ticketNumber',
       header: '#',
-      render: (row: SlaInstanceRow) =>
-        row.incidentId ? (
-          <Link to={`/dashboard/incidents/${row.incidentId}`} className="font-medium hover:underline">
-            #{row.incidentNumber}
-          </Link>
-        ) : row.serviceRequestId ? (
-          <Link to={`/dashboard/service-requests/${row.serviceRequestId}`} className="font-medium hover:underline">
-            {row.serviceRequestNumber}
+      render: (row: SlaInstanceRow) => {
+        const ref = ticketRef(row)
+        return ref ? (
+          <Link to={ref.to} className="font-medium hover:underline">
+            {ref.label}
           </Link>
         ) : (
           '—'
-        ),
+        )
+      },
     },
-    { key: 'title', header: 'Title', render: (row: SlaInstanceRow) => row.incidentTitle ?? row.serviceRequestTitle ?? '—' },
+    {
+      key: 'title',
+      header: 'Title',
+      render: (row: SlaInstanceRow) =>
+        row.incidentTitle ?? row.serviceRequestTitle ?? row.problemTitle ?? row.changeTitle ?? '—',
+    },
     { key: 'incidentPriority', header: 'Priority', render: (row: SlaInstanceRow) => row.incidentPriority ?? '—' },
     { key: 'policyName', header: 'Policy' },
     {
@@ -498,6 +651,10 @@ export function SlaDetails() {
               : 'View the SLA status of incidents assigned to you and service requests you submitted.'}
           </p>
         </div>
+
+        <HowSlaWorks />
+
+        {canEdit && <SlaComplianceBreakdown instance={instance} account={account} />}
 
         {canEdit ? (
           <SlaTrendCharts />

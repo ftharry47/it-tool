@@ -27,12 +27,25 @@ interface SlaCompliance {
 interface AgentWorkload {
   agentName: string
   openCount: number
+  incidents: number
+  serviceRequests: number
+  problems: number
+  changes: number
+  onTrack: number
+  atRisk: number
+  breached: number
+  noSla: number
 }
 
 interface SprintVelocity {
   sprintName: string
+  sprintStatus: 'ACTIVE' | 'COMPLETED'
+  projectName: string | null
+  endDate: string | null
   committed: number
   completed: number
+  committedPoints: number
+  completedPoints: number
 }
 
 interface TrendPoint {
@@ -291,7 +304,7 @@ function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
   if (data.length === 0) {
     return (
       <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">No open incidents currently assigned to agents.</p>
+        <p className="text-sm text-muted-foreground">No open tickets currently assigned to agents.</p>
       </div>
     )
   }
@@ -303,7 +316,11 @@ function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
           <XAxis dataKey="agentName" tick={{ fontSize: 12 }} />
           <YAxis />
           <Tooltip />
-          <Bar dataKey="openCount" name="Open Incidents" fill={COLORS[0]} maxBarSize={80} radius={[4, 4, 0, 0]} />
+          <Legend />
+          <Bar dataKey="incidents" name="Incidents" stackId="work" fill={COLORS[0]} />
+          <Bar dataKey="serviceRequests" name="Requests" stackId="work" fill={COLORS[1]} />
+          <Bar dataKey="problems" name="Problems" stackId="work" fill={COLORS[4]} />
+          <Bar dataKey="changes" name="Changes" stackId="work" fill={COLORS[3]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -314,7 +331,7 @@ function SprintVelocityView({ data }: { data: SprintVelocity[] }) {
   if (data.length === 0) {
     return (
       <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">No sprint data available.</p>
+        <p className="text-sm text-muted-foreground">No active or completed sprints with issues yet.</p>
       </div>
     )
   }
@@ -327,8 +344,8 @@ function SprintVelocityView({ data }: { data: SprintVelocity[] }) {
           <YAxis />
           <Tooltip />
           <Legend />
-          <Bar dataKey="committed" fill={COLORS[0]} />
-          <Bar dataKey="completed" fill={COLORS[2]} />
+          <Bar dataKey="committedPoints" name="Committed (pts)" fill={COLORS[0]} />
+          <Bar dataKey="completedPoints" name="Completed (pts)" fill={COLORS[2]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

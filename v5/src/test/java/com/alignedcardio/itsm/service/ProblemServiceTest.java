@@ -63,6 +63,9 @@ class ProblemServiceTest {
     @Mock
     private NotificationTemplateBuilder notificationTemplateBuilder;
 
+    @Mock
+    private SlaEngine slaEngine;
+
     @InjectMocks
     private ProblemService problemService;
 

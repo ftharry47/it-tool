@@ -2,6 +2,7 @@ package com.alignedcardio.itsm.api.reporting;
 
 import com.alignedcardio.itsm.config.SecurityConfig;
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.service.SlaAdminService;
 import com.alignedcardio.itsm.service.UserService;
 import com.alignedcardio.itsm.service.reporting.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +47,9 @@ class ReportingControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private SlaAdminService slaAdminService;
 
     private AppUser testUser() {
         AppUser user = new AppUser();
@@ -95,5 +99,87 @@ class ReportingControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
+    }
+
+    // --- Broken-access-control regression: agents are scoped server-side ---
+
+    @Test
+    @WithMockUser(roles = "AGENT")
+    void agentIsScopedToOwnDataEvenWithoutMineParam() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        when(reportingService.ticketsSummary(eq(user.getOrgId()), eq(user.getId())))
+                .thenReturn(Map.of("total", 1L));
+
+        mockMvc.perform(get("/api/v1/reports/tickets-summary"))
+                .andExpect(status().isOk());
+
+        verify(reportingService).ticketsSummary(user.getOrgId(), user.getId());
+        verify(reportingService, never()).ticketsSummary(any(), isNull());
+    }
+
+    @Test
+    @WithMockUser(roles = "TEAM_LEAD")
+    void teamLeadIsScopedToOwnDataEvenWithoutMineParam() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        when(reportingService.slaCompliance(eq(user.getOrgId()), eq(user.getId())))
+                .thenReturn(Map.of("total", 0L));
+
+        mockMvc.perform(get("/api/v1/reports/sla-compliance"))
+                .andExpect(status().isOk());
+
+        verify(reportingService).slaCompliance(user.getOrgId(), user.getId());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminStillGetsOrgWideDataWithoutMineParam() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        when(reportingService.ticketsSummary(eq(user.getOrgId()), isNull()))
+                .thenReturn(Map.of("total", 5L));
+
+        mockMvc.perform(get("/api/v1/reports/tickets-summary"))
+                .andExpect(status().isOk());
+
+        verify(reportingService).ticketsSummary(user.getOrgId(), null);
+    }
+
+    @Test
+    @WithMockUser(roles = "AGENT")
+    void agentAdHocQueryIsScopedEvenWithoutMineParam() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        when(reportingService.adHocQuery(eq(user.getOrgId()), any(AdHocQueryRequest.class), eq(user.getId())))
+                .thenReturn(new AdHocQueryResponse(user.getOrgId(), "problem", null, List.of()));
+
+        AdHocQueryRequest request = new AdHocQueryRequest("problem", List.of(), null, null);
+
+        mockMvc.perform(post("/api/v1/reports/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(reportingService).adHocQuery(eq(user.getOrgId()), any(AdHocQueryRequest.class), eq(user.getId()));
+        verify(reportingService, never()).adHocQuery(any(), any(), isNull());
+    }
+
+    @Test
+    @WithMockUser(roles = "AGENT")
+    void agentCannotPullOrgWideAggregateReports() throws Exception {
+        for (String path : List.of(
+                "/api/v1/reports/agent-workload",
+                "/api/v1/reports/sprint-velocity",
+                "/api/v1/reports/incidents-by-category",
+                "/api/v1/reports/requests-by-catalog",
+                "/api/v1/reports/sla-by-priority",
+                "/api/v1/reports/pending-approvals-backlog",
+                "/api/v1/reports/tickets-by-location",
+                "/api/v1/reports/priority-breakdown",
+                "/api/v1/reports/sla-compliance/breakdown")) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isForbidden());
+        }
     }
 }

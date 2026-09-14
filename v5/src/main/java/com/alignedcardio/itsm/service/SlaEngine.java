@@ -1,7 +1,9 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.entity.BusinessCalendar;
+import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.Incident;
+import com.alignedcardio.itsm.entity.Problem;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import com.alignedcardio.itsm.entity.SlaPolicy;
@@ -16,6 +18,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class SlaEngine {
@@ -260,6 +263,164 @@ public class SlaEngine {
             recalcBreachStatus(instance, now);
             slaInstanceRepository.save(instance);
         });
+    }
+
+    // --- Problems ---------------------------------------------------------
+
+    private static final Set<Problem.Status> PROBLEM_RESPONSE_STATUSES = Set.of(
+            Problem.Status.INVESTIGATING, Problem.Status.KNOWN_ERROR,
+            Problem.Status.RESOLVED, Problem.Status.CLOSED);
+
+    private static final Set<Problem.Status> PROBLEM_TERMINAL_STATUSES = Set.of(
+            Problem.Status.RESOLVED, Problem.Status.CLOSED);
+
+    @Transactional
+    public void onProblemCreated(Problem problem) {
+        SlaPolicy policy = findBestProblemPolicy(problem).orElse(null);
+        if (policy == null || policy.getBusinessHoursCalendar() == null) {
+            return;
+        }
+        slaInstanceRepository.save(newInstance(
+                problem.getOrgId(), policy, problem.getCreatedAt(),
+                problem.getCreatedBy(), problem.getUpdatedBy(), i -> i.setProblem(problem)));
+    }
+
+    /** Response = time to first investigation; resolution = RESOLVED/CLOSED. */
+    @Transactional
+    public void onProblemStatusChanged(Problem problem) {
+        slaInstanceRepository.findByProblem_Id(problem.getId()).ifPresent(instance ->
+                applyStatusChange(instance, problem.getCreatedAt(), false,
+                        PROBLEM_RESPONSE_STATUSES.contains(problem.getStatus()),
+                        PROBLEM_TERMINAL_STATUSES.contains(problem.getStatus()),
+                        problem.getUpdatedBy(), OffsetDateTime.now()));
+    }
+
+    // --- Changes ----------------------------------------------------------
+
+    private static final Set<ChangeRequest.Status> CHANGE_RESPONSE_STATUSES = Set.of(
+            ChangeRequest.Status.APPROVED, ChangeRequest.Status.IN_PROGRESS,
+            ChangeRequest.Status.COMPLETED, ChangeRequest.Status.CLOSED);
+
+    private static final Set<ChangeRequest.Status> CHANGE_TERMINAL_STATUSES = Set.of(
+            ChangeRequest.Status.COMPLETED, ChangeRequest.Status.FAILED,
+            ChangeRequest.Status.ROLLED_BACK, ChangeRequest.Status.CANCELLED,
+            ChangeRequest.Status.CLOSED, ChangeRequest.Status.REJECTED);
+
+    @Transactional
+    public void onChangeCreated(ChangeRequest change) {
+        SlaPolicy policy = findBestChangePolicy(change).orElse(null);
+        if (policy == null || policy.getBusinessHoursCalendar() == null) {
+            return;
+        }
+        slaInstanceRepository.save(newInstance(
+                change.getOrgId(), policy, change.getCreatedAt(),
+                change.getCreatedBy(), change.getUpdatedBy(), i -> i.setChangeRequest(change)));
+    }
+
+    /** Response = time to approval; resolution = time to a terminal implementation state. */
+    @Transactional
+    public void onChangeStatusChanged(ChangeRequest change) {
+        slaInstanceRepository.findByChangeRequest_Id(change.getId()).ifPresent(instance ->
+                applyStatusChange(instance, change.getCreatedAt(), false,
+                        CHANGE_RESPONSE_STATUSES.contains(change.getStatus()),
+                        CHANGE_TERMINAL_STATUSES.contains(change.getStatus()),
+                        change.getUpdatedBy(), OffsetDateTime.now()));
+    }
+
+    // --- shared machinery -------------------------------------------------
+
+    private SlaInstance newInstance(UUID orgId, SlaPolicy policy, OffsetDateTime createdAt,
+                                    UUID createdBy, UUID updatedBy,
+                                    java.util.function.Consumer<SlaInstance> ticketLink) {
+        BusinessCalendar calendar = policy.getBusinessHoursCalendar();
+        ZonedDateTime start = Optional.ofNullable(createdAt)
+                .orElse(OffsetDateTime.now())
+                .atZoneSameInstant(ZoneId.of(calendar.getTimezone()));
+
+        SlaInstance instance = new SlaInstance();
+        instance.setOrgId(orgId);
+        instance.setPolicy(policy);
+        ticketLink.accept(instance);
+        instance.setResponseDueAt(businessHoursCalculator.addBusinessMinutes(
+                calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                start, policy.getResponseTargetMinutes()).toOffsetDateTime());
+        instance.setResolutionDueAt(businessHoursCalculator.addBusinessMinutes(
+                calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                start, policy.getResolutionTargetMinutes()).toOffsetDateTime());
+        instance.setCreatedBy(createdBy);
+        instance.setUpdatedBy(updatedBy);
+        return instance;
+    }
+
+    /**
+     * Shared pause/mark-met/breach-recalc logic for ticket types whose SLA
+     * lifecycle is a pure status function (problems and changes — neither
+     * pauses nor reopens today).
+     */
+    private void applyStatusChange(SlaInstance instance, OffsetDateTime ticketCreatedAt,
+                                   boolean paused, boolean markResponse, boolean markResolution,
+                                   UUID updatedBy, OffsetDateTime now) {
+        if (paused) {
+            if (instance.getPausedAt() == null) {
+                instance.setPausedAt(now);
+            }
+        } else {
+            if (instance.getPausedAt() != null) {
+                unpauseAndRecalcDueDates(instance, ticketCreatedAt, now);
+            }
+            if (markResolution && instance.getResolutionMetAt() == null) {
+                instance.setResolutionMetAt(now);
+            }
+            if (markResponse && instance.getResponseMetAt() == null) {
+                instance.setResponseMetAt(now);
+            }
+        }
+        instance.setUpdatedBy(updatedBy);
+        instance.setUpdatedAt(now);
+        recalcBreachStatus(instance, now);
+        slaInstanceRepository.save(instance);
+    }
+
+    private void unpauseAndRecalcDueDates(SlaInstance instance, OffsetDateTime ticketCreatedAt,
+                                          OffsetDateTime now) {
+        int paused = (int) java.time.Duration.between(instance.getPausedAt(), now).toMinutes();
+        instance.setTotalPausedMinutes(instance.getTotalPausedMinutes() + paused);
+        instance.setPausedAt(null);
+
+        BusinessCalendar calendar = instance.getPolicy().getBusinessHoursCalendar();
+        if (calendar == null) {
+            return;
+        }
+        ZonedDateTime start = Optional.ofNullable(ticketCreatedAt)
+                .orElse(now)
+                .atZoneSameInstant(ZoneId.of(calendar.getTimezone()));
+        if (instance.getResponseMetAt() == null) {
+            instance.setResponseDueAt(businessHoursCalculator.addBusinessMinutes(
+                    calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                    start, instance.getPolicy().getResponseTargetMinutes() + instance.getTotalPausedMinutes())
+                    .toOffsetDateTime());
+        }
+        instance.setResolutionDueAt(businessHoursCalculator.addBusinessMinutes(
+                calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                start, instance.getPolicy().getResolutionTargetMinutes() + instance.getTotalPausedMinutes())
+                .toOffsetDateTime());
+    }
+
+    private Optional<SlaPolicy> findBestProblemPolicy(Problem problem) {
+        return slaPolicyRepository.findByOrgIdAndAppliesTo(problem.getOrgId(), SlaPolicy.AppliesTo.PROBLEM)
+                .stream()
+                .filter(p -> p.getBusinessHoursCalendar() != null)
+                .findFirst();
+    }
+
+    /** priorityFilter on CHANGE policies matches the change's risk level. */
+    private Optional<SlaPolicy> findBestChangePolicy(ChangeRequest change) {
+        String risk = change.getRisk() != null ? change.getRisk().name() : null;
+        return slaPolicyRepository.findByOrgIdAndAppliesTo(change.getOrgId(), SlaPolicy.AppliesTo.CHANGE)
+                .stream()
+                .filter(p -> p.getBusinessHoursCalendar() != null)
+                .filter(p -> p.getPriorityFilter() == null || p.getPriorityFilter().equals(risk))
+                .findFirst();
     }
 
     @Transactional

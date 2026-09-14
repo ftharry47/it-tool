@@ -45,6 +45,7 @@ public class ProblemService {
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
     private final NotificationTemplateBuilder notificationTemplateBuilder;
+    private final SlaEngine slaEngine;
 
     public ProblemService(ProblemRepository problemRepository,
                           ProblemIncidentLinkRepository problemIncidentLinkRepository,
@@ -55,7 +56,8 @@ public class ProblemService {
                           ObjectMapper objectMapper,
                           AuditLogService auditLogService,
                           NotificationService notificationService,
-                          NotificationTemplateBuilder notificationTemplateBuilder) {
+                          NotificationTemplateBuilder notificationTemplateBuilder,
+                          SlaEngine slaEngine) {
         this.problemRepository = problemRepository;
         this.problemIncidentLinkRepository = problemIncidentLinkRepository;
         this.incidentRepository = incidentRepository;
@@ -66,6 +68,7 @@ public class ProblemService {
         this.auditLogService = auditLogService;
         this.notificationService = notificationService;
         this.notificationTemplateBuilder = notificationTemplateBuilder;
+        this.slaEngine = slaEngine;
     }
 
     @Transactional(readOnly = true)
@@ -114,6 +117,8 @@ public class ProblemService {
         Problem saved = problemRepository.save(problem);
         entityManager.flush();
         entityManager.refresh(saved);
+
+        slaEngine.onProblemCreated(saved);
 
         if (saved.getAssignee() != null) {
             publishAssignment(saved, user, saved.getAssignee());
@@ -167,6 +172,7 @@ public class ProblemService {
             writeProblemAudit(saved, user.getId(), "STATUS",
                     Map.of("status", oldStatus.name()),
                     Map.of("status", saved.getStatus().name()));
+            slaEngine.onProblemStatusChanged(saved);
         }
         writeProblemFieldUpdateAudit(saved, user.getId(), beforeState, saved.getStatus() != oldStatus);
 
@@ -198,6 +204,7 @@ public class ProblemService {
         writeProblemAudit(saved, user.getId(), "STATUS",
                 Map.of("status", oldStatus.name()),
                 Map.of("status", saved.getStatus().name()));
+        slaEngine.onProblemStatusChanged(saved);
 
         return toResponse(saved);
     }

@@ -2,13 +2,17 @@ package com.alignedcardio.itsm.service.reporting;
 
 import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.AuditLog;
+import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Incident;
+import com.alignedcardio.itsm.entity.Problem;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.AuditLogRepository;
+import com.alignedcardio.itsm.repository.ChangeRequestRepository;
 import com.alignedcardio.itsm.repository.FulfillmentTaskRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
+import com.alignedcardio.itsm.repository.ProblemRepository;
 import com.alignedcardio.itsm.repository.SlaInstanceRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,6 +47,8 @@ public class AgentPerformanceService {
     private final SlaInstanceRepository slaInstanceRepository;
     private final AuditLogRepository auditLogRepository;
     private final AppUserRepository appUserRepository;
+    private final ProblemRepository problemRepository;
+    private final ChangeRequestRepository changeRequestRepository;
     private final ObjectMapper objectMapper;
 
     public AgentPerformanceService(IncidentRepository incidentRepository,
@@ -50,12 +56,16 @@ public class AgentPerformanceService {
                                    SlaInstanceRepository slaInstanceRepository,
                                    AuditLogRepository auditLogRepository,
                                    AppUserRepository appUserRepository,
+                                   ProblemRepository problemRepository,
+                                   ChangeRequestRepository changeRequestRepository,
                                    ObjectMapper objectMapper) {
         this.incidentRepository = incidentRepository;
         this.fulfillmentTaskRepository = fulfillmentTaskRepository;
         this.slaInstanceRepository = slaInstanceRepository;
         this.auditLogRepository = auditLogRepository;
         this.appUserRepository = appUserRepository;
+        this.problemRepository = problemRepository;
+        this.changeRequestRepository = changeRequestRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -73,6 +83,7 @@ public class AgentPerformanceService {
             long avgResolutionMinutes,
             int autoEscalationsAway,     // penalized
             int manualSelfEscalations,   // informational, not penalized
+            double escalatedAwayPct,     // % of handled tickets escalated away (auto + manual)
             int score,                   // 0-100
             String grade                 // A-F
     ) {}
@@ -107,17 +118,44 @@ public class AgentPerformanceService {
                 .stream()
                 .filter(i -> i.getDeletedAt() == null)
                 .toList();
-        List<UUID> ids = incidents.stream().map(Incident::getId).toList();
-        if (ids.isEmpty()) return -1;
+        List<Problem> problems = problemRepository
+                .findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(agent.getOrgId(), agent.getId())
+                .stream()
+                .filter(p -> p.getDeletedAt() == null)
+                .toList();
+        List<ChangeRequest> changes = changeRequestRepository
+                .findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(agent.getOrgId(), agent.getId())
+                .stream()
+                .filter(c -> c.getDeletedAt() == null)
+                .toList();
         int evaluated = 0;
         int met = 0;
-        for (SlaInstance sla : slaInstanceRepository.findByIncidentIdIn(ids)) {
+        for (SlaInstance sla : slaInstancesFor(incidents, problems, changes)) {
             if (sla.getResolutionDueAt() != null) {
                 evaluated++;
                 if (sla.getResolutionMetAt() != null && !sla.getResolutionMetAt().isAfter(sla.getResolutionDueAt())) met++;
             }
         }
         return evaluated > 0 ? Math.round(met * 1000.0 / evaluated) / 10.0 : -1;
+    }
+
+    /** All SLA instances backing the agent's incidents, problems and changes. */
+    private List<SlaInstance> slaInstancesFor(List<Incident> incidents, List<Problem> problems,
+                                            List<ChangeRequest> changes) {
+        List<SlaInstance> out = new ArrayList<>();
+        List<UUID> incidentIds = incidents.stream().map(Incident::getId).toList();
+        if (!incidentIds.isEmpty()) {
+            out.addAll(slaInstanceRepository.findByIncidentIdIn(incidentIds));
+        }
+        List<UUID> problemIds = problems.stream().map(Problem::getId).toList();
+        if (!problemIds.isEmpty()) {
+            out.addAll(slaInstanceRepository.findByProblem_IdIn(problemIds));
+        }
+        List<UUID> changeIds = changes.stream().map(ChangeRequest::getId).toList();
+        if (!changeIds.isEmpty()) {
+            out.addAll(slaInstanceRepository.findByChangeRequest_IdIn(changeIds));
+        }
+        return out;
     }
 
     /** All agents (any staff role) who handled at least one ticket in the period. */
@@ -153,7 +191,21 @@ public class AgentPerformanceService {
                 .filter(t -> t.getServiceRequest() != null && t.getServiceRequest().getDeletedAt() == null)
                 .toList();
 
-        int handled = incidents.size() + tasks.size();
+        // --- Problems and changes assigned to the agent created in the period ---
+        List<Problem> problems = problemRepository
+                .findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(orgId, agentId)
+                .stream()
+                .filter(p -> p.getDeletedAt() == null)
+                .filter(p -> !p.getCreatedAt().isBefore(from) && p.getCreatedAt().isBefore(to))
+                .toList();
+        List<ChangeRequest> changes = changeRequestRepository
+                .findByOrgIdAndAssigneeIdOrderByCreatedAtDesc(orgId, agentId)
+                .stream()
+                .filter(c -> c.getDeletedAt() == null)
+                .filter(c -> !c.getCreatedAt().isBefore(from) && c.getCreatedAt().isBefore(to))
+                .toList();
+
+        int handled = incidents.size() + tasks.size() + problems.size() + changes.size();
 
         int resolvedIncidents = 0;
         long totalResolutionMinutes = 0;
@@ -184,14 +236,35 @@ public class AgentPerformanceService {
             }
         }
 
-        int resolved = resolvedIncidents + completedTasks;
+        int resolvedProblems = 0;
+        for (Problem p : problems) {
+            boolean resolved = (p.getStatus() == Problem.Status.RESOLVED || p.getStatus() == Problem.Status.CLOSED)
+                    && p.getResolvedAt() != null
+                    && !p.getResolvedAt().isBefore(from) && p.getResolvedAt().isBefore(to);
+            if (resolved) {
+                resolvedProblems++;
+                totalResolutionMinutes += Duration.between(p.getCreatedAt(), p.getResolvedAt()).toMinutes();
+                resolutionCount++;
+            }
+        }
+
+        int completedChanges = 0;
+        for (ChangeRequest c : changes) {
+            boolean done = (c.getStatus() == ChangeRequest.Status.COMPLETED || c.getStatus() == ChangeRequest.Status.CLOSED)
+                    && c.getUpdatedAt() != null
+                    && !c.getUpdatedAt().isBefore(from) && c.getUpdatedAt().isBefore(to);
+            if (done) {
+                completedChanges++;
+                totalResolutionMinutes += Duration.between(c.getCreatedAt(), c.getUpdatedAt()).toMinutes();
+                resolutionCount++;
+            }
+        }
+
+        int resolved = resolvedIncidents + completedTasks + resolvedProblems + completedChanges;
         double resolutionRate = handled > 0 ? (resolved * 100.0 / handled) : 0;
 
-        // --- SLA compliance across the agent's incidents in the period ---
-        List<UUID> incidentIds = incidents.stream().map(Incident::getId).toList();
-        List<SlaInstance> slas = incidentIds.isEmpty()
-                ? List.of()
-                : slaInstanceRepository.findByIncidentIdIn(incidentIds);
+        // --- SLA compliance across the agent's tickets in the period ---
+        List<SlaInstance> slas = slaInstancesFor(incidents, problems, changes);
         int slaEvaluated = 0;
         int slaMet = 0;
         int breachCount = 0;
@@ -233,6 +306,10 @@ public class AgentPerformanceService {
             }
         }
 
+        double escalatedAwayPct = handled > 0
+                ? Math.round((autoAway + manualSelf) * 1000.0 / handled) / 10.0
+                : 0;
+
         long avgResolutionMinutes = resolutionCount > 0 ? totalResolutionMinutes / resolutionCount : 0;
 
         // --- Score ---
@@ -251,7 +328,7 @@ public class AgentPerformanceService {
                 handled, resolved, Math.round(resolutionRate * 10) / 10.0,
                 slaCompliancePct >= 0 ? Math.round(slaCompliancePct * 10) / 10.0 : -1,
                 slaEvaluated, breachCount, reopenedCount, avgResolutionMinutes,
-                autoAway, manualSelf, score, grade);
+                autoAway, manualSelf, escalatedAwayPct, score, grade);
     }
 
     private UUID extractAssigneeId(String beforeStateJson) {

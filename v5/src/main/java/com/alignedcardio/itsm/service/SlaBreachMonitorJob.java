@@ -1,8 +1,11 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.entity.AppUser;
+import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.Incident;
 import com.alignedcardio.itsm.entity.Notification;
+import com.alignedcardio.itsm.entity.Problem;
+import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.entity.SlaEscalationTier;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import com.alignedcardio.itsm.entity.Team;
@@ -38,6 +41,12 @@ public class SlaBreachMonitorJob implements Job {
 
     private static final Set<Incident.Status> TERMINAL_STATUSES = Set.of(
             Incident.Status.RESOLVED, Incident.Status.CLOSED);
+    private static final Set<Problem.Status> PROBLEM_TERMINAL_STATUSES = Set.of(
+            Problem.Status.RESOLVED, Problem.Status.CLOSED);
+    private static final Set<ChangeRequest.Status> CHANGE_TERMINAL_STATUSES = Set.of(
+            ChangeRequest.Status.COMPLETED, ChangeRequest.Status.FAILED,
+            ChangeRequest.Status.ROLLED_BACK, ChangeRequest.Status.CANCELLED,
+            ChangeRequest.Status.CLOSED, ChangeRequest.Status.REJECTED);
 
     private final SlaInstanceRepository slaInstanceRepository;
     private final SlaEngine slaEngine;
@@ -87,16 +96,15 @@ public class SlaBreachMonitorJob implements Job {
                 continue;
             }
 
+            // Resolve whichever ticket type backs the instance; null means the
+            // linked ticket is deleted, terminal, or an orphaned FK — skip it.
+            TicketRef ref = ticketRef(instance);
+            if (ref == null) {
+                continue;
+            }
             Incident incident = instance.getIncident();
-            // Never escalate a deleted or terminal incident.
-            if (incident != null && (incident.getDeletedAt() != null || TERMINAL_STATUSES.contains(incident.getStatus()))) {
-                continue;
-            }
-            if (incident == null && instance.getServiceRequest() != null && instance.getServiceRequest().getDeletedAt() != null) {
-                continue;
-            }
 
-            evaluateEscalation(instance, incident, now);
+            evaluateEscalation(instance, ref, incident, now);
 
             SlaInstance.BreachStatus from = instance.getBreachStatus();
             slaEngine.recalcBreachStatus(instance, now);
@@ -106,7 +114,7 @@ public class SlaBreachMonitorJob implements Job {
                 slaInstanceRepository.save(instance);
                 eventPublisher.publishEvent(new SlaBreachStatusChangedEvent(
                         instance.getId(), from, to,
-                        instance.getIncident() != null ? instance.getIncident().getId() : null));
+                        incident != null ? incident.getId() : null));
 
                 if (incident != null) {
                     eventPublisher.publishEvent(new SlaBreachEvent(
@@ -118,57 +126,110 @@ public class SlaBreachMonitorJob implements Job {
                             incident.getNumber()));
                 }
 
-                if (instance.getIncident() == null) {
+                // Service requests keep their historical behaviour — breach
+                // recalculation only, no end-user-facing notifications.
+                if ("SERVICE_REQUEST".equals(ref.entityType())) {
                     continue;
                 }
-                Incident breached = instance.getIncident();
-                if (to == SlaInstance.BreachStatus.BREACHED && breached.getRequester() != null) {
-                    Map<String, Object> breachPayload = new java.util.HashMap<>();
-                    breachPayload.put("number", breached.getNumber());
-                    breachPayload.put("title", breached.getTitle());
-                    breachPayload.put("priority", breached.getPriority() != null ? breached.getPriority().getName() : "");
-                    breachPayload.put("targetTime", formatTime(instance.getResolutionDueAt()));
-                    breachPayload.put("elapsedTime", formatElapsed(breached.getCreatedAt(), now));
-                    breachPayload.put("requesterFirstName", firstName(breached.getRequester().getDisplayName()));
-                    breachPayload.put("entityType", "INCIDENT");
-                    breachPayload.put("entityId", breached.getId());
-                    var content = notificationTemplateBuilder.forEvent("SLA_BREACH", breachPayload);
-                    notificationService.send(new NotificationRequest(
-                            breached.getOrgId(),
-                            breached.getRequester().getId(),
-                            "SLA_BREACH",
-                            content.inAppSubject(),
-                            content.inAppBody(),
-                            "INCIDENT",
-                            breached.getId(),
-                            Notification.Channel.BOTH,
-                            content));
+
+                if (to == SlaInstance.BreachStatus.BREACHED) {
+                    AppUser notify = ref.requester() != null ? ref.requester() : ref.assignee();
+                    if (notify != null) {
+                        Map<String, Object> breachPayload = new java.util.HashMap<>();
+                        breachPayload.put("number", ref.number());
+                        breachPayload.put("title", ref.title());
+                        breachPayload.put("priority", ref.priorityName());
+                        breachPayload.put("targetTime", formatTime(instance.getResolutionDueAt()));
+                        breachPayload.put("elapsedTime", formatElapsed(ref.createdAt(), now));
+                        breachPayload.put("requesterFirstName", firstName(notify.getDisplayName()));
+                        breachPayload.put("entityType", ref.entityType());
+                        breachPayload.put("entityId", ref.id());
+                        var content = notificationTemplateBuilder.forEvent("SLA_BREACH", breachPayload);
+                        notificationService.send(new NotificationRequest(
+                                ref.orgId(),
+                                notify.getId(),
+                                "SLA_BREACH",
+                                content.inAppSubject(),
+                                content.inAppBody(),
+                                ref.entityType(),
+                                ref.id(),
+                                Notification.Channel.BOTH,
+                                content));
+                    }
                 }
 
-                if (to == SlaInstance.BreachStatus.AT_RISK && breached.getAssignee() != null) {
+                if (to == SlaInstance.BreachStatus.AT_RISK && ref.assignee() != null) {
                     Map<String, Object> atRiskPayload = new java.util.HashMap<>();
-                    atRiskPayload.put("number", breached.getNumber());
-                    atRiskPayload.put("title", breached.getTitle());
-                    atRiskPayload.put("priority", breached.getPriority() != null ? breached.getPriority().getName() : "");
+                    atRiskPayload.put("number", ref.number());
+                    atRiskPayload.put("title", ref.title());
+                    atRiskPayload.put("priority", ref.priorityName());
                     atRiskPayload.put("targetTime", formatTime(instance.getResolutionDueAt()));
-                    atRiskPayload.put("elapsedTime", formatElapsed(breached.getCreatedAt(), now));
-                    atRiskPayload.put("assigneeFirstName", firstName(breached.getAssignee().getDisplayName()));
-                    atRiskPayload.put("entityType", "INCIDENT");
-                    atRiskPayload.put("entityId", breached.getId());
+                    atRiskPayload.put("elapsedTime", formatElapsed(ref.createdAt(), now));
+                    atRiskPayload.put("assigneeFirstName", firstName(ref.assignee().getDisplayName()));
+                    atRiskPayload.put("entityType", ref.entityType());
+                    atRiskPayload.put("entityId", ref.id());
                     var content = notificationTemplateBuilder.forEvent("SLA_AT_RISK", atRiskPayload);
                     notificationService.send(new NotificationRequest(
-                            breached.getOrgId(),
-                            breached.getAssignee().getId(),
+                            ref.orgId(),
+                            ref.assignee().getId(),
                             "SLA_AT_RISK",
                             content.inAppSubject(),
                             content.inAppBody(),
-                            "INCIDENT",
-                            breached.getId(),
+                            ref.entityType(),
+                            ref.id(),
                             Notification.Channel.BOTH,
                             content));
                 }
             }
         }
+    }
+
+    /**
+     * Normalised view over the four SLA-backed ticket types so escalation and
+     * notification logic can treat them uniformly.
+     */
+    private record TicketRef(UUID id, String number, String title, String status,
+                             OffsetDateTime createdAt, OffsetDateTime updatedAt,
+                             UUID orgId, AppUser assignee, AppUser requester,
+                             String entityType, String priorityName) {}
+
+    private TicketRef ticketRef(SlaInstance instance) {
+        try {
+            Incident i = instance.getIncident();
+            if (i != null) {
+                if (i.getDeletedAt() != null || TERMINAL_STATUSES.contains(i.getStatus())) return null;
+                return new TicketRef(i.getId(), "INC-" + i.getNumber(), i.getTitle(), i.getStatus().name(),
+                        i.getCreatedAt(), i.getUpdatedAt(), i.getOrgId(), i.getAssignee(), i.getRequester(),
+                        "INCIDENT", i.getPriority() != null ? i.getPriority().getName() : "");
+            }
+            ServiceRequest sr = instance.getServiceRequest();
+            if (sr != null) {
+                if (sr.getDeletedAt() != null) return null;
+                return new TicketRef(sr.getId(), sr.getNumber(),
+                        sr.getCatalogItem() != null ? sr.getCatalogItem().getName() : "Service request",
+                        sr.getStatus() != null ? sr.getStatus().name() : "",
+                        sr.getCreatedAt(), sr.getUpdatedAt(), sr.getOrgId(), null, sr.getRequester(),
+                        "SERVICE_REQUEST", "");
+            }
+            Problem p = instance.getProblem();
+            if (p != null) {
+                if (p.getDeletedAt() != null || PROBLEM_TERMINAL_STATUSES.contains(p.getStatus())) return null;
+                return new TicketRef(p.getId(), p.getNumber(), p.getTitle(), p.getStatus().name(),
+                        p.getCreatedAt(), p.getUpdatedAt(), p.getOrgId(), p.getAssignee(), null,
+                        "PROBLEM", "");
+            }
+            ChangeRequest c = instance.getChangeRequest();
+            if (c != null) {
+                if (c.getDeletedAt() != null || CHANGE_TERMINAL_STATUSES.contains(c.getStatus())) return null;
+                return new TicketRef(c.getId(), c.getNumber(), c.getTitle(), c.getStatus().name(),
+                        c.getCreatedAt(), c.getUpdatedAt(), c.getOrgId(), c.getAssignee(), c.getRequestedBy(),
+                        "CHANGE", c.getRisk() != null ? c.getRisk().name() : "");
+            }
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            // Lazy association backed by a soft-deleted row (@Where) — treat as gone.
+            return null;
+        }
+        return null;
     }
 
     /**
@@ -180,29 +241,33 @@ public class SlaBreachMonitorJob implements Job {
      * Never fires the same tier twice (escalationLevel is monotonically
      * increasing).
      */
-    private void evaluateEscalation(SlaInstance instance, Incident incident, OffsetDateTime now) {
-        if (incident == null || instance.getPolicy() == null) {
+    private void evaluateEscalation(SlaInstance instance, TicketRef ref, Incident incident, OffsetDateTime now) {
+        if (ref == null || instance.getPolicy() == null) {
             return;
         }
         List<SlaEscalationTier> tiers = escalationTierRepository
                 .findByPolicyIdOrderByLevelAsc(instance.getPolicy().getId());
         SlaEscalationTier next = tiers.stream()
                 .filter(t -> t.getLevel() > instance.getEscalationLevel())
-                .filter(t -> triggerMet(t, instance, incident, now))
+                .filter(t -> triggerMet(t, instance, ref, now))
                 .findFirst()
                 .orElse(null);
         if (next == null) {
             return;
         }
 
-        notifyTier(next, instance, incident);
-        reassignTier(next, incident);
+        notifyTier(next, instance, ref);
+        // Team reassignment is incident-only — problems/changes have no
+        // assignment team; for them the tier only notifies.
+        if (incident != null) {
+            reassignTier(next, incident);
+        }
 
         instance.setEscalationLevel(next.getLevel());
         slaInstanceRepository.save(instance);
     }
 
-    private boolean triggerMet(SlaEscalationTier tier, SlaInstance instance, Incident incident, OffsetDateTime now) {
+    private boolean triggerMet(SlaEscalationTier tier, SlaInstance instance, TicketRef ref, OffsetDateTime now) {
         return switch (tier.getTriggerType()) {
             case ON_RESPONSE_BREACH -> instance.getResponseDueAt() != null
                     && instance.getResponseMetAt() == null
@@ -212,36 +277,36 @@ public class SlaBreachMonitorJob implements Job {
                     && now.isAfter(instance.getResolutionDueAt());
             case ON_STUCK_STATUS -> tier.getStuckStatus() != null
                     && tier.getStuckMinutes() != null
-                    && incident.getStatus().name().equals(tier.getStuckStatus())
-                    && incident.getUpdatedAt() != null
-                    && !incident.getUpdatedAt().plusMinutes(tier.getStuckMinutes()).isAfter(now);
+                    && tier.getStuckStatus().equals(ref.status())
+                    && ref.updatedAt() != null
+                    && !ref.updatedAt().plusMinutes(tier.getStuckMinutes()).isAfter(now);
         };
     }
 
-    private void notifyTier(SlaEscalationTier tier, SlaInstance instance, Incident incident) {
+    private void notifyTier(SlaEscalationTier tier, SlaInstance instance, TicketRef ref) {
         Set<UUID> notified = new HashSet<>();
         Map<String, Object> escPayload = new java.util.HashMap<>();
-        escPayload.put("number", incident.getNumber());
-        escPayload.put("title", incident.getTitle());
+        escPayload.put("number", ref.number());
+        escPayload.put("title", ref.title());
         escPayload.put("tierLevel", tier.getLevel());
         escPayload.put("triggerType", tier.getTriggerType().name());
-        escPayload.put("entityType", "INCIDENT");
-        escPayload.put("entityId", incident.getId());
+        escPayload.put("entityType", ref.entityType());
+        escPayload.put("entityId", ref.id());
 
         if (tier.getNotifyRole() != null && !tier.getNotifyRole().isBlank()) {
             List<AppUser> recipients = appUserRepository.findByOrgIdAndRoleNames(
-                    incident.getOrgId(), List.of(tier.getNotifyRole()));
+                    ref.orgId(), List.of(tier.getNotifyRole()));
             for (AppUser recipient : recipients) {
                 if (notified.add(recipient.getId())) {
                     var content = notificationTemplateBuilder.forEvent("SLA_ESCALATION", escPayload);
                     notificationService.send(new NotificationRequest(
-                            incident.getOrgId(),
+                            ref.orgId(),
                             recipient.getId(),
                             "SLA_ESCALATION",
                             content.inAppSubject(),
                             content.inAppBody(),
-                            "INCIDENT",
-                            incident.getId(),
+                            ref.entityType(),
+                            ref.id(),
                             Notification.Channel.BOTH,
                             content));
                 }
@@ -249,18 +314,18 @@ public class SlaBreachMonitorJob implements Job {
         }
 
         List<AppUser> admins = appUserRepository.findByOrgIdAndRoleNames(
-                incident.getOrgId(), List.of("ADMIN", "SUPER_ADMIN"));
+                ref.orgId(), List.of("ADMIN", "SUPER_ADMIN"));
         for (AppUser admin : admins) {
             if (notified.add(admin.getId())) {
                 var content = notificationTemplateBuilder.forEvent("SLA_ESCALATION_ADMIN", escPayload);
                 notificationService.send(new NotificationRequest(
-                        incident.getOrgId(),
+                        ref.orgId(),
                         admin.getId(),
                         "SLA_ESCALATION_ADMIN",
                         content.inAppSubject(),
                         content.inAppBody(),
-                        "INCIDENT",
-                        incident.getId(),
+                        ref.entityType(),
+                        ref.id(),
                         Notification.Channel.BOTH,
                         content));
             }
