@@ -1312,11 +1312,18 @@ function TicketsByLocationSection({
         <p className="text-sm text-muted-foreground">No tickets match the selected filters.</p>
       ) : (
         <div className="space-y-4">
-          <div className="h-64">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={rows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="locationName" tick={{ fontSize: 12 }} />
+                <XAxis
+                  dataKey="locationName"
+                  interval={0}
+                  angle={-35}
+                  textAnchor="end"
+                  height={70}
+                  tick={{ fontSize: 11 }}
+                />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
                 <Legend />

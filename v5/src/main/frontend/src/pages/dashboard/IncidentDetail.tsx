@@ -43,7 +43,7 @@ interface Comment {
   id: string
   author: string
   body: string
-  isInternal: boolean
+  isPublic: boolean
   createdAt: string
 }
 
@@ -495,12 +495,12 @@ const [confirmBack, setConfirmBack] = useState(false)
       icon: <History className="h-4 w-4" />,
     })
 
-    const endUserVisibleComments = (commentsQuery.data ?? []).filter((c) => !c.isInternal)
+    const endUserVisibleComments = (commentsQuery.data ?? []).filter((c) => c.isPublic)
     const commentsToShow = isEndUser ? endUserVisibleComments : (commentsQuery.data ?? [])
     commentsToShow.forEach((comment) => {
       list.push({
         id: `comment-${comment.id}`,
-        title: isEndUser ? `Comment by ${comment.author}` : `${comment.isInternal ? 'Internal' : 'Public'} comment by ${comment.author}`,
+        title: isEndUser ? `Comment by ${comment.author}` : `${comment.isPublic ? 'Public' : 'Internal'} comment by ${comment.author}`,
         description: comment.body,
         actorName: comment.author,
         createdAt: comment.createdAt,
@@ -573,7 +573,7 @@ const [confirmBack, setConfirmBack] = useState(false)
       ? TIER_ORDER[currentTierIndex + 1]
       : null
   const visibleComments = isEndUser
-    ? (commentsQuery.data ?? []).filter(c => !c.isInternal)
+    ? (commentsQuery.data ?? []).filter(c => c.isPublic)
     : (commentsQuery.data ?? [])
 
   const linkOptions = (allIncidentsQuery.data ?? [])
@@ -1079,7 +1079,7 @@ const [confirmBack, setConfirmBack] = useState(false)
                     <div key={comment.id} className="rounded-lg border border-border/50 bg-background p-4">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-sm font-medium">{comment.author}</span>
-                        {comment.isInternal && (
+                        {!comment.isPublic && (
                           <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Internal</span>
                         )}
                       </div>

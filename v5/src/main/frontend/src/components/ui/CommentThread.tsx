@@ -60,7 +60,9 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
     onError: (e) => setError(`Failed to post comment: ${e.message}`),
   })
 
-  const comments = commentsQuery.data ?? []
+  // Server-side filtering already removes internal comments for non-staff;
+  // this is defense-in-depth in case a future caller changes.
+  const comments = (commentsQuery.data ?? []).filter((c) => canPostInternal || c.isPublic)
 
   return (
     <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
