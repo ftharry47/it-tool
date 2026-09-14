@@ -48,14 +48,19 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     boolean existsByOrgIdAndEntityTypeAndEntityIdAndActionIn(
             UUID orgId, String entityType, UUID entityId, java.util.Collection<String> actions);
 
-    @Query("SELECT a FROM AuditLog a WHERE a.orgId = :orgId AND a.entityType = 'INCIDENT' " +
-            "AND a.action IN ('ASSIGN','REASSIGN','AUTO_ESCALATE_TIER') " +
-            "AND (a.beforeState LIKE CONCAT('%\"assigneeId\":\"', :assigneeId, '\"%') " +
-            "     OR a.afterState LIKE CONCAT('%\"assigneeId\":\"', :assigneeId, '\"%'))")
+    // Native queries: before_state/after_state are jsonb, so HQL LIKE cannot
+    // apply (Hibernate rejects 'like' on a non-string JDBC type). jsonb '->>'
+    // extracts the assigneeId value as text directly.
+    @Query(value = "SELECT * FROM audit_log WHERE org_id = :orgId AND entity_type = 'INCIDENT' " +
+            "AND action IN ('ASSIGN','REASSIGN','AUTO_ESCALATE_TIER') " +
+            "AND (before_state ->> 'assigneeId' = :assigneeId " +
+            "     OR after_state ->> 'assigneeId' = :assigneeId)",
+            nativeQuery = true)
     List<AuditLog> findIncidentAssigneeHistory(@Param("orgId") UUID orgId, @Param("assigneeId") String assigneeId);
 
-    @Query("SELECT a FROM AuditLog a WHERE a.orgId = :orgId AND a.entityType = 'SERVICE_REQUEST' " +
-            "AND a.action = 'TASK_ASSIGNED' " +
-            "AND a.afterState LIKE CONCAT('%\"assigneeId\":\"', :assigneeId, '\"%')")
+    @Query(value = "SELECT * FROM audit_log WHERE org_id = :orgId AND entity_type = 'SERVICE_REQUEST' " +
+            "AND action = 'TASK_ASSIGNED' " +
+            "AND after_state ->> 'assigneeId' = :assigneeId",
+            nativeQuery = true)
     List<AuditLog> findServiceRequestAssigneeHistory(@Param("orgId") UUID orgId, @Param("assigneeId") String assigneeId);
 }
