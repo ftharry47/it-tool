@@ -63,4 +63,17 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             "AND after_state ->> 'assigneeId' = :assigneeId",
             nativeQuery = true)
     List<AuditLog> findServiceRequestAssigneeHistory(@Param("orgId") UUID orgId, @Param("assigneeId") String assigneeId);
+
+    // Viewer-scoped escalation check: was this incident tier-escalated AWAY
+    // FROM this user (i.e. they were the assignee in the escalation's
+    // before_state)? Incident-level "has ever been escalated" over-blocks
+    // every subsequent assignee; this scopes the freeze to the right agent.
+    @Query(value = "SELECT EXISTS(SELECT 1 FROM audit_log WHERE org_id = :orgId " +
+            "AND entity_type = 'INCIDENT' AND entity_id = :entityId " +
+            "AND action IN ('ESCALATE_TIER','AUTO_ESCALATE_TIER') " +
+            "AND before_state ->> 'assigneeId' = :viewerId)",
+            nativeQuery = true)
+    boolean existsTierEscalationAwayFrom(@Param("orgId") UUID orgId,
+                                         @Param("entityId") UUID entityId,
+                                         @Param("viewerId") String viewerId);
 }

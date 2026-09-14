@@ -24,6 +24,7 @@ public record IncidentResponse(
         Integer totalLoggedMinutes,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
-        boolean hasBeenTierEscalated
+        boolean hasBeenTierEscalated,
+        boolean tierEscalatedFromMe
 ) {
 }

@@ -194,7 +194,7 @@ public class IncidentService {
     public IncidentResponse get(AppUser viewer, UUID orgId, UUID id) {
         Incident incident = incidentRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Incident not found"));
-        return toResponse(incident, isStaff(viewer));
+        return toResponse(incident, isStaff(viewer), viewer);
     }
 
     @Transactional
@@ -256,7 +256,7 @@ public class IncidentService {
             notifyAdminsForAssignment(incident.getOrgId(), incident, requester.getDisplayName());
         }
 
-        return toResponse(incident);
+        return toResponse(incident, true, requester);
     }
 
     @Transactional
@@ -317,7 +317,7 @@ public class IncidentService {
 
         writeFieldUpdateAudit(incident, updater.getId(), beforeState);
 
-        return toResponse(incident);
+        return toResponse(incident, true, updater);
     }
 
     @Transactional
@@ -417,7 +417,7 @@ public class IncidentService {
 
         writeFieldUpdateAudit(saved, updater.getId(), assignmentBeforeState);
 
-        return toResponse(saved);
+        return toResponse(saved, true, updater);
     }
 
     @Transactional
@@ -522,7 +522,7 @@ public class IncidentService {
                 "entityType", "INCIDENT",
                 "entityId", saved.getId()));
 
-        return toResponse(saved);
+        return toResponse(saved, true, updater);
     }
 
     @Transactional
@@ -591,7 +591,7 @@ public class IncidentService {
                 beforeState, incidentAuditState(saved));
         publishAssignment(saved, updater, assignee);
 
-        return toResponse(saved);
+        return toResponse(saved, true, updater);
     }
 
     @Transactional
@@ -651,7 +651,7 @@ public class IncidentService {
         notifyUser(saved.getAssignee(), updater, saved, "INCIDENT_PRIORITY_CHANGED", contentPayload);
         notifyUser(saved.getRequester(), updater, saved, "INCIDENT_PRIORITY_CHANGED", contentPayload);
 
-        return toResponse(saved);
+        return toResponse(saved, true, updater);
     }
 
     // Manual tier escalation: moves the incident to the immediate next support tier
@@ -694,6 +694,10 @@ public class IncidentService {
         if (oldTeamName != null) {
             beforeTier.put("assignmentTeamName", oldTeamName);
         }
+        // Record who the ticket was escalated AWAY from so the transition
+        // freeze stays scoped to that agent instead of blocking every
+        // future assignee. beforeState was captured pre-clear above.
+        beforeTier.put("assigneeId", beforeState.get("assigneeId"));
         Map<String, Object> afterState = new LinkedHashMap<>();
         afterState.put("assignmentTeamName", nextTier.getName());
         afterState.put("reason", trimmedReason);
@@ -712,7 +716,7 @@ public class IncidentService {
             notifyUser(member.getUser(), updater, saved, "INCIDENT_TIER_ESCALATED", contentPayload);
         }
 
-        return toResponse(saved);
+        return toResponse(saved, true, updater);
     }
 
     // Keeps incident.assignmentTeam in sync with the assignee's L1/L2/L3 membership.
@@ -1272,10 +1276,14 @@ public class IncidentService {
     }
 
     private IncidentResponse toResponse(Incident incident) {
-        return toResponse(incident, true);
+        return toResponse(incident, true, null);
     }
 
     private IncidentResponse toResponse(Incident incident, boolean includeStaffFields) {
+        return toResponse(incident, includeStaffFields, null);
+    }
+
+    private IncidentResponse toResponse(Incident incident, boolean includeStaffFields, AppUser viewer) {
         // Reload lazy/soft-deleted associations through repositories before mapping.
         // See AGENTS.md: "Reload associations before mapping to responses".
         UUID assigneeId = incident.getAssignee() == null ? null : incident.getAssignee().getId();
@@ -1302,6 +1310,12 @@ public class IncidentService {
                 "INCIDENT",
                 incident.getId(),
                 List.of("ESCALATE_TIER", "AUTO_ESCALATE_TIER"));
+        // Escalation freezes the agent it was escalated AWAY from — not every
+        // future assignee. before_state->>assigneeId on the escalation audit
+        // row identifies that agent; the incident-level flag stays for display.
+        boolean tierEscalatedFromMe = viewer != null
+                && auditLogRepository.existsTierEscalationAwayFrom(
+                        incident.getOrgId(), incident.getId(), viewer.getId().toString());
         return new IncidentResponse(
                 incident.getId(),
                 incident.getNumber(),
@@ -1323,7 +1337,8 @@ public class IncidentService {
                 totalLogged,
                 incident.getCreatedAt(),
                 incident.getUpdatedAt(),
-                hasBeenTierEscalated
+                hasBeenTierEscalated,
+                tierEscalatedFromMe
         );
     }
 
@@ -1344,7 +1359,7 @@ public class IncidentService {
         timeEntry.setUpdatedBy(user.getId());
         timeEntryRepository.save(timeEntry);
 
-        return toResponse(incident);
+        return toResponse(incident, true, user);
     }
 
     @Transactional(readOnly = true)
@@ -1381,7 +1396,7 @@ public class IncidentService {
         incident.setEstimateSetById(user.getId());
         incident.setUpdatedBy(user.getId());
         incidentRepository.save(incident);
-        return toResponse(incident);
+        return toResponse(incident, true, user);
     }
 
     // Clears the one-time estimate lock so the new owner gets a fresh

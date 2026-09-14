@@ -37,6 +37,7 @@ interface IncidentDetail {
   createdAt: string
   updatedAt: string
   hasBeenTierEscalated: boolean
+  tierEscalatedFromMe: boolean
 }
 
 interface Comment {
@@ -556,9 +557,10 @@ const [confirmBack, setConfirmBack] = useState(false)
   const incident = incidentQuery.data
   const isAssignedToMe = !!currentUser?.id && incident.assigneeId === currentUser.id
   const canEscalate = isAdminOrSuperAdmin || isAssignedToMe
-  // Server-side flag derived from ESCALATE_TIER / AUTO_ESCALATE_TIER audit rows;
-  // do not depend on a separate activity feed call for access decisions.
-  const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !incident.hasBeenTierEscalated)
+  // The tier-escalation freeze is scoped to the agent the ticket was
+  // escalated AWAY from (tierEscalatedFromMe), not to every future assignee —
+  // the incident-level hasBeenTierEscalated flag is display-only.
+  const canTransition = isAdminOrSuperAdmin || (isAssignedToMe && !incident.tierEscalatedFromMe)
   const legalNextStatuses = (statusTransitions[incident.status] ?? [])
     .filter((s) => s !== 'REOPENED' || isAdminOrSuperAdmin)
   const isFirstAssignment = !incident.assignee

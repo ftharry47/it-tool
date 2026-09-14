@@ -456,10 +456,13 @@ class IncidentServiceTest {
         assertTrue(response.hasBeenTierEscalated());
 
         // Regression: the audit action must be exactly ESCALATE_TIER so the detail
-        // page can derive hasBeenTierEscalated from the activity feed.
+        // page can derive hasBeenTierEscalated from the activity feed, and its
+        // before_state must carry the pre-escalation assignee so the freeze can
+        // be scoped to that agent rather than every future assignee.
         ArgumentCaptor<AuditLog> auditCaptor = ArgumentCaptor.forClass(AuditLog.class);
         verify(auditLogRepository).save(auditCaptor.capture());
         assertEquals("ESCALATE_TIER", auditCaptor.getValue().getAction());
+        assertTrue(auditCaptor.getValue().getBeforeState().contains(agent.getId().toString()));
 
         // The old agent can no longer transition status (not assignee, not admin).
         assertThrows(IllegalStateException.class,
@@ -468,6 +471,59 @@ class IncidentServiceTest {
         // Admin retains full access on the same escalated incident.
         incidentService.updateStatus(admin, ORG_ID, incident.getId(), Incident.Status.RESOLVED, null);
         assertEquals(Incident.Status.RESOLVED, incident.getStatus());
+    }
+
+    // 4th-occurrence regression: the incident-level hasBeenTierEscalated flag
+    // used to block EVERY later assignee from transitioning, so escalated
+    // tickets became admin-only forever. The freeze must follow the agent it
+    // was escalated away from (tierEscalatedFromMe), not the incident.
+    @Test
+    void postEscalationAssigneeCanTransitionWhileEscalatedAwayAgentStaysFrozen() {
+        AppUser admin = userWithRole("ADMIN");
+        AppUser escalatedAwayAgent = userWithRole("AGENT");
+        AppUser newTierAgent = userWithRole("AGENT");
+        Incident incident = incident(escalatedAwayAgent, priority("Medium", 3));
+        incident.setStatus(Incident.Status.IN_PROGRESS);
+        incident.setAssignmentTeam(tierTeam(TIER_L1, "L1 Support"));
+        Team l2 = tierTeam(TIER_L2, "L2 Support");
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, TIER_L2)).thenReturn(Optional.of(l2));
+        when(teamRepository.findById(TIER_L2)).thenReturn(Optional.of(l2));
+        when(teamMemberRepository.findByTeamId(TIER_L2)).thenReturn(List.of());
+        when(teamMemberRepository.findByUserId(newTierAgent.getId()))
+                .thenReturn(List.of(membership(TIER_L2, newTierAgent)));
+        when(appUserRepository.findById(newTierAgent.getId())).thenReturn(Optional.of(newTierAgent));
+        when(auditLogRepository.existsByOrgIdAndEntityTypeAndEntityIdAndActionIn(
+                eq(ORG_ID), eq("INCIDENT"), eq(incident.getId()), any()))
+                .thenReturn(true);
+        // Viewer-scoped freeze: true only for the agent recorded in the
+        // escalation's before_state — the one it was escalated away from.
+        when(auditLogRepository.existsTierEscalationAwayFrom(
+                eq(ORG_ID), eq(incident.getId()), anyString()))
+                .thenAnswer(inv -> escalatedAwayAgent.getId().toString().equals(inv.getArgument(2)));
+
+        // Escalate L1 -> L2 (clears assignee), then an L2 agent picks it up.
+        incidentService.escalateTier(admin, ORG_ID, incident.getId(), "needs network team");
+        assertNull(incident.getAssignee());
+        incidentService.assign(admin, ORG_ID, incident.getId(), newTierAgent.getId(), null);
+        assertSame(newTierAgent, incident.getAssignee());
+
+        // The new assignee's view: ticket was escalated but NOT away from them.
+        IncidentResponse newAgentView = incidentService.get(newTierAgent, ORG_ID, incident.getId());
+        assertTrue(newAgentView.hasBeenTierEscalated());
+        assertFalse(newAgentView.tierEscalatedFromMe());
+
+        // The escalated-away agent's view: the freeze follows them.
+        IncidentResponse oldAgentView = incidentService.get(escalatedAwayAgent, ORG_ID, incident.getId());
+        assertTrue(oldAgentView.hasBeenTierEscalated());
+        assertTrue(oldAgentView.tierEscalatedFromMe());
+
+        // And the new assignee can actually transition the ticket — this was
+        // the recurring symptom (assigned but Status Transition hidden).
+        IncidentResponse transitioned = incidentService.updateStatus(
+                newTierAgent, ORG_ID, incident.getId(), Incident.Status.RESOLVED, null);
+        assertEquals(Incident.Status.RESOLVED.name(), transitioned.status());
     }
 
     @Test
