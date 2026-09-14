@@ -210,7 +210,7 @@ class NotificationServiceTest {
 
         when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(pushService.sendToUser(any(), anyString(), anyString(), anyString())).thenReturn(true);
+        when(pushService.sendToUser(any(), anyString(), anyString(), anyString(), any(), any())).thenReturn(true);
 
         NotificationContent content = new NotificationContent(
                 "EMAIL SUBJECT", "EMAIL BODY",
@@ -231,7 +231,7 @@ class NotificationServiceTest {
         verify(mailSender).send(mail.capture());
         assertEquals("EMAIL SUBJECT", mail.getValue().getSubject());
         // Push got the push variant.
-        verify(pushService).sendToUser(eq(userId), eq("PUSH TITLE"), eq("PUSH BODY"), anyString());
+        verify(pushService).sendToUser(eq(userId), eq("PUSH TITLE"), eq("PUSH BODY"), anyString(), eq("INCIDENT"), eq(entityId));
     }
 
     @Test
@@ -278,7 +278,7 @@ class NotificationServiceTest {
 
         when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(pushService.sendToUser(eq(userId), anyString(), anyString(), anyString())).thenReturn(true);
+        when(pushService.sendToUser(eq(userId), anyString(), anyString(), anyString(), any(), any())).thenReturn(true);
 
         NotificationRequest request = new NotificationRequest(
                 orgId, userId, "TEST", "Subject", "Body", null, null, Notification.Channel.IN_APP);
@@ -286,7 +286,7 @@ class NotificationServiceTest {
         Notification result = service.send(request);
 
         assertEquals(Notification.DeliveryStatus.SENT, result.getPushStatus());
-        verify(pushService).sendToUser(eq(userId), eq("Subject"), eq("Body"), anyString());
+        verify(pushService).sendToUser(eq(userId), eq("Subject"), eq("Body"), anyString(), isNull(), isNull());
     }
 
     @Test
@@ -334,7 +334,7 @@ class NotificationServiceTest {
 
         when(preferenceRepository.findByUserId(userId)).thenReturn(Optional.of(preference));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(pushService.sendToUser(any(), anyString(), anyString(), anyString()))
+        when(pushService.sendToUser(any(), anyString(), anyString(), anyString(), any(), any()))
                 .thenThrow(new RuntimeException("push exploded"));
 
         NotificationRequest request = new NotificationRequest(

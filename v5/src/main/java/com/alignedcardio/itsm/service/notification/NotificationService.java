@@ -279,7 +279,8 @@ public class NotificationService {
             String url = pushUrl(notification);
             String title = content != null ? content.pushTitle() : notification.getSubject();
             String body = content != null ? content.pushBody() : notification.getBody();
-            boolean sent = pushService.sendToUser(notification.getUserId(), title, body, url);
+            boolean sent = pushService.sendToUser(notification.getUserId(), title, body, url,
+                    notification.getEntityType(), notification.getEntityId());
             notification.setPushStatus(sent
                     ? Notification.DeliveryStatus.SENT
                     : Notification.DeliveryStatus.FAILED);

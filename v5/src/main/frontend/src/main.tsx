@@ -8,12 +8,17 @@ import App from './App'
 import './index.css'
 import { ThemeProvider } from './components/theme/ThemeProvider'
 import { registerServiceWorker } from './api/push'
+import { listenForPush } from './lib/querySync'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
       refetchInterval: 30 * 1000,
+      // Keep polling in background tabs: agents who leave the portal open
+      // but unfocused still self-correct within ~30-60s (Chrome throttles
+      // hidden-tab timers to ~1/min under intensive throttling).
+      refetchIntervalInBackground: true,
       refetchOnWindowFocus: true,
       retry: 1,
     },
@@ -35,6 +40,7 @@ const root = ReactDOM.createRoot(document.getElementById('root')!)
   })
 
   registerServiceWorker()
+  listenForPush(queryClient)
 
   root.render(
     <React.StrictMode>

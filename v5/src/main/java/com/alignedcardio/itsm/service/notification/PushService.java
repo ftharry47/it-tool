@@ -72,6 +72,16 @@ public class PushService {
      * Returns true if at least one subscription received the push.
      */
     public boolean sendToUser(java.util.UUID userId, String title, String body, String url) {
+        return sendToUser(userId, title, body, url, null, null);
+    }
+
+    /**
+     * Same as {@link #sendToUser(UUID, String, String, String)} but also
+     * embeds the affected entity so the service worker can tell open tabs
+     * which query data to refresh.
+     */
+    public boolean sendToUser(java.util.UUID userId, String title, String body, String url,
+                              String entityType, java.util.UUID entityId) {
         if (!isEnabled()) {
             return false;
         }
@@ -80,7 +90,7 @@ public class PushService {
             return false;
         }
 
-        String payload = buildPayload(title, body, url);
+        String payload = buildPayload(title, body, url, entityType, entityId);
         boolean anySent = false;
 
         for (PushSubscription sub : subs) {
@@ -113,10 +123,13 @@ public class PushService {
         return response.getStatusLine().getStatusCode();
     }
 
-    private String buildPayload(String title, String body, String url) {
-        // Minimal JSON payload — the service worker reads title/body/url
-        return String.format("{\"title\":\"%s\",\"body\":\"%s\",\"url\":\"%s\"}",
-                escapeJson(title), escapeJson(body), escapeJson(url != null ? url : "/"));
+    private String buildPayload(String title, String body, String url, String entityType, java.util.UUID entityId) {
+        // Minimal JSON payload — the service worker reads title/body/url and
+        // forwards entityType/entityId to open tabs for query invalidation.
+        return String.format(
+                "{\"title\":\"%s\",\"body\":\"%s\",\"url\":\"%s\",\"entityType\":\"%s\",\"entityId\":\"%s\"}",
+                escapeJson(title), escapeJson(body), escapeJson(url != null ? url : "/"),
+                escapeJson(entityType), entityId != null ? entityId.toString() : "");
     }
 
     private String escapeJson(String s) {

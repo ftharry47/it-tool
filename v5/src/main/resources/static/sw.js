@@ -10,11 +10,24 @@ self.addEventListener('push', (event) => {
     // fall back to defaults
   }
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      data: { url: data.url },
-      icon: '/logo-light.png',
-    })
+    Promise.all([
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        data: { url: data.url },
+        icon: '/logo-light.png',
+      }),
+      // Tell any open tabs which entity changed so the app can invalidate
+      // the affected queries — a push is a real-time refresh signal too.
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) {
+          client.postMessage({
+            type: 'PUSH_RECEIVED',
+            entityType: data.entityType || null,
+            entityId: data.entityId || null,
+          })
+        }
+      }),
+    ])
   )
 })
 

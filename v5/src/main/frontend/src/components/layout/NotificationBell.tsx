@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, Settings } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { dismissBanner, isBannerDismissed, isPushSupported, subscribeToPush } from '../../api/push'
+import { invalidateWorkQueries } from '../../lib/querySync'
 import { useAuth } from '../../auth/AuthProvider'
 import { formatDateTime } from '../../lib/date'
 
@@ -81,14 +82,25 @@ export function NotificationBell() {
     },
     enabled: !!account,
     refetchInterval: 10_000,
+    // Badge keeps polling in background tabs so a notification arriving
+    // while the tab is unfocused still triggers the invalidation below.
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   })
 
   // When the unread count changes, refresh the list too so an open dropdown
-  // stays current without waiting for the next open.
+  // stays current without waiting for the next open. A count INCREASE also
+  // means a work-item event happened elsewhere (assignment, escalation,
+  // comment) — invalidate the work queries so every open view refreshes
+  // without the agent needing to navigate or reload.
   const unreadCount = unreadQuery.data ?? 0
+  const prevUnreadCount = useRef<number | null>(null)
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['notifications', 'list'] })
+    if (prevUnreadCount.current !== null && unreadCount > prevUnreadCount.current) {
+      invalidateWorkQueries(queryClient)
+    }
+    prevUnreadCount.current = unreadCount
   }, [unreadCount, queryClient])
 
   const listQuery = useQuery<Notification[]>({
