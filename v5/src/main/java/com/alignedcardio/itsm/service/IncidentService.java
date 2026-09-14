@@ -225,8 +225,7 @@ public class IncidentService {
                     .orElseThrow(() -> new NotFoundException("Location not found"));
             incident.setLocation(location);
         }
-        PhoneNumbers.requireValid(request.phone());
-        incident.setPhone(request.phone());
+        incident.setPhone(PhoneNumbers.normalize(request.phone()));
         incident.setStatus(Incident.Status.NEW);
         incident.setCreatedBy(requester.getId());
         incident.setUpdatedBy(requester.getId());

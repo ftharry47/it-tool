@@ -1,5 +1,6 @@
 package com.alignedcardio.itsm.api.servicerequest;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.OffsetDateTime;
@@ -10,6 +11,6 @@ public record ServiceRequestCreateRequest(
         @NotNull String formData,
         OffsetDateTime neededBy,
         UUID locationId,
-        String phone
+        @NotBlank(message = "Phone number is required") String phone
 ) {
 }

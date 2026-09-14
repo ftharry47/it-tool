@@ -251,7 +251,7 @@ class IncidentServiceTest {
         });
 
         IncidentCreateRequest request = new IncidentCreateRequest(
-                "Laptop broken", "desc", 3, 3, category.getId(), null, location.getId(), null);
+                "Laptop broken", "desc", 3, 3, category.getId(), null, location.getId(), "555-123-4567");
         IncidentResponse response = incidentService.create(requester, request);
 
         assertEquals(location.getId(), response.locationId());
@@ -302,11 +302,49 @@ class IncidentServiceTest {
         });
 
         IncidentCreateRequest request = new IncidentCreateRequest(
-                "Laptop broken", "desc", 3, 3, category.getId(), null, null, null);
+                "Laptop broken", "desc", 3, 3, category.getId(), null, null, "555-123-4567");
         IncidentResponse response = incidentService.create(requester, request);
 
         assertEquals("P3", response.priority());
         verify(incidentRepository).saveAndFlush(any(Incident.class));
+    }
+
+    // Phone is mandatory on new submissions: exactly 10 US digits after
+    // stripping formatting, stored normalized as plain digits. Existing rows
+    // are untouched — validation only runs on create.
+    @Test
+    void createRequiresValidTenDigitPhoneAndStoresNormalized() {
+        AppUser requester = userWithRole("END_USER");
+        Category category = new Category();
+        category.setId(UUID.randomUUID());
+        category.setOrgId(ORG_ID);
+        category.setName("Hardware");
+
+        when(categoryRepository.findById(category.getId())).thenReturn(Optional.of(category));
+        when(priorityRepository.findByOrgIdAndName(ORG_ID, "Medium"))
+                .thenReturn(Optional.of(priority("Medium", 3)));
+        when(incidentRepository.saveAndFlush(any(Incident.class))).thenAnswer(invocation -> {
+            Incident i = invocation.getArgument(0);
+            i.setId(UUID.randomUUID());
+            i.setNumber(1L);
+            return i;
+        });
+
+        // Missing -> rejected with the clear message
+        IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
+                () -> incidentService.create(requester, new IncidentCreateRequest(
+                        "Laptop broken", "desc", 3, 3, category.getId(), null, null, null)));
+        assertEquals("Please enter a valid 10-digit phone number", missing.getMessage());
+
+        // Wrong digit count -> rejected
+        assertThrows(IllegalArgumentException.class,
+                () -> incidentService.create(requester, new IncidentCreateRequest(
+                        "Laptop broken", "desc", 3, 3, category.getId(), null, null, "555-1234")));
+
+        // Formatted input -> accepted and stored as plain digits
+        IncidentResponse response = incidentService.create(requester, new IncidentCreateRequest(
+                "Laptop broken", "desc", 3, 3, category.getId(), null, null, "(555) 123-4567"));
+        assertEquals("5551234567", response.phone());
     }
 
     @Test
@@ -329,7 +367,7 @@ class IncidentServiceTest {
         });
 
         IncidentCreateRequest request = new IncidentCreateRequest(
-                "Laptop broken", "desc", 3, 3, category.getId(), null, null, null);
+                "Laptop broken", "desc", 3, 3, category.getId(), null, null, "555-123-4567");
         IncidentResponse response = incidentService.create(requester, request);
 
         assertNull(response.priority());

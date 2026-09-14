@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 import { FilterBar, FilterSelect, useSessionFilters, enumLabel } from '../../components/ui/FilterBar'
-import { isValidPhone, PHONE_ERROR } from '../../lib/phone'
+import { isValidPhone, normalizePhone, PHONE_ERROR } from '../../lib/phone'
 
 interface Priority { id: string; name: string }
 interface Category { id: string; name: string }
@@ -176,6 +176,7 @@ export function Incidents() {
       const body = {
         ...rest,
         ...severity_values,
+        phone: normalizePhone(payload.phone),
         priorityId: (isEndUser ? null : payload.priorityId) || null,
         locationId: payload.locationId || null,
       }
@@ -463,14 +464,15 @@ export function Incidents() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="incident-phone" className="text-sm font-medium">Phone Number</label>
+                    <label htmlFor="incident-phone" className="text-sm font-medium">Phone Number <span className="text-destructive">*</span></label>
                     <input
                       id="incident-phone"
                       name="phone"
                       type="tel"
+                      required
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      placeholder="e.g., +1 555-012-3456"
+                      placeholder="e.g., 555-123-4567"
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>

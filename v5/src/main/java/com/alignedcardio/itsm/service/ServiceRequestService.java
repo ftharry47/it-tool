@@ -172,8 +172,7 @@ public class ServiceRequestService {
             throw new IllegalStateException("Invalid form data JSON", e);
         }
         sr.setNeededBy(request.neededBy());
-        PhoneNumbers.requireValid(request.phone());
-        sr.setPhone(request.phone());
+        sr.setPhone(PhoneNumbers.normalize(request.phone()));
         if (request.locationId() == null) {
             throw new IllegalStateException("Location is required for every service request");
         }

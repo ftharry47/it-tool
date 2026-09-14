@@ -740,7 +740,7 @@ class ServiceRequestServiceTest {
                 objectMapper.createObjectNode().put("request", "New printer (capital)").toString(),
                 null,
                 location.getId(),
-                null);
+                "555-123-4567");
         ServiceRequestResponse approvalResponse = service.create(requester, ORG_ID, approvalReq);
         assertEquals(ServiceRequest.Status.PENDING_APPROVAL, approvalResponse.status());
         assertEquals(catalogApprover.getId(), approvalResponse.approverId());
@@ -751,9 +751,41 @@ class ServiceRequestServiceTest {
                 objectMapper.createObjectNode().put("request", "Toner / supplies").toString(),
                 null,
                 location.getId(),
-                null);
+                "555-123-4567");
         ServiceRequestResponse noApprovalResponse = service.create(requester, ORG_ID, noApprovalReq);
         assertEquals(ServiceRequest.Status.IN_FULFILLMENT, noApprovalResponse.status());
+    }
+
+    // Phone is mandatory on new submissions: exactly 10 US digits after
+    // stripping formatting, stored normalized as plain digits.
+    @Test
+    void createRequiresValidTenDigitPhoneAndStoresNormalized() {
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Laptop", false, null);
+        Location location = new Location();
+        location.setId(UUID.randomUUID());
+        String formData = objectMapper.createObjectNode().put("request", "Standard").toString();
+
+        when(catalogItemRepository.findByOrgIdAndId(ORG_ID, item.getId())).thenReturn(Optional.of(item));
+        when(locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, location.getId()))
+                .thenReturn(Optional.of(location));
+        stubCreate();
+
+        // Missing -> rejected with the clear message
+        IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
+                () -> service.create(requester, ORG_ID,
+                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), null)));
+        assertEquals("Please enter a valid 10-digit phone number", missing.getMessage());
+
+        // Wrong digit count -> rejected
+        assertThrows(IllegalArgumentException.class,
+                () -> service.create(requester, ORG_ID,
+                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "555-1234")));
+
+        // Formatted input -> accepted and stored as plain digits
+        ServiceRequestResponse response = service.create(requester, ORG_ID,
+                new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "(555) 123-4567"));
+        assertEquals("5551234567", response.phone());
     }
 
     @Test

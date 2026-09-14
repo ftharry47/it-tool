@@ -15,6 +15,6 @@ public record IncidentCreateRequest(
         @NotNull UUID categoryId,
         UUID priorityId,
         UUID locationId,
-        String phone
+        @NotBlank(message = "Phone number is required") String phone
 ) {
 }

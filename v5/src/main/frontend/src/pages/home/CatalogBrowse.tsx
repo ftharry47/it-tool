@@ -8,7 +8,7 @@ import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { SchemaForm, type SchemaField } from '../../components/ui/SchemaForm'
 import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
-import { isValidPhone, PHONE_ERROR } from '../../lib/phone'
+import { isValidPhone, normalizePhone, PHONE_ERROR } from '../../lib/phone'
 
 interface CatalogItem {
   id: string
@@ -238,13 +238,14 @@ export function CatalogBrowse() {
             </select>
           </div>
           <div className="mb-4 space-y-2">
-            <label htmlFor="sr-phone" className="text-sm font-medium">Phone Number</label>
+            <label htmlFor="sr-phone" className="text-sm font-medium">Phone Number <span className="text-destructive">*</span></label>
             <input
               id="sr-phone"
               type="tel"
+              required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g., +1 555-012-3456"
+              placeholder="e.g., 555-123-4567"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -277,7 +278,7 @@ export function CatalogBrowse() {
                     catalogItemId: selectedItem.id,
                     formData: JSON.stringify(values),
                     locationId,
-                    phone: phone || null,
+                    phone: normalizePhone(phone),
                   })
                 }, 400)
               }, 400)
