@@ -54,6 +54,18 @@ interface TrendPoint {
   compliancePercent?: number
 }
 
+interface MonthlyPoint {
+  month: string
+  created: number
+  closed: number
+}
+
+interface LegacySplit {
+  legacy: number
+  current: number
+  byCategory: { category: string; legacy: number; current: number }[]
+}
+
 interface AdHocRow {
   group: string | null
   count: number
@@ -112,6 +124,30 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
         method: 'POST',
         body: JSON.stringify(reportBody('priority')),
       })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const monthlyQuery = useQuery<MonthlyPoint[]>({
+    queryKey: ['reports', 'tickets-monthly', mine],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/tickets-monthly?months=12&mine=${mine}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  const legacyQuery = useQuery<LegacySplit>({
+    queryKey: ['reports', 'legacy-split', mine],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/legacy-split?mine=${mine}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -185,6 +221,89 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
         </div>
         <BreakdownBarChart title="Tickets by category" query={categoryQuery} />
         <BreakdownBarChart title="Tickets by priority" query={priorityQuery} />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <h3 className="text-sm font-medium text-muted-foreground">Tickets by month (includes imported history)</h3>
+        {monthlyQuery.isLoading ? (
+          <Loading />
+        ) : monthlyQuery.error ? (
+          <ErrorFallback error={monthlyQuery.error} message="Could not load monthly volume." onRetry={() => monthlyQuery.refetch()} />
+        ) : (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyQuery.data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="created" name="Created" fill={COLORS[0]} maxBarSize={40} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="closed" name="Closed" fill={COLORS[2]} maxBarSize={40} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Legacy vs current tickets</h3>
+          {legacyQuery.isLoading ? (
+            <Loading />
+          ) : legacyQuery.error ? (
+            <ErrorFallback error={legacyQuery.error} message="Could not load legacy split." onRetry={() => legacyQuery.refetch()} />
+          ) : (legacyQuery.data?.legacy ?? 0) + (legacyQuery.data?.current ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">No data.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Imported (legacy)', value: legacyQuery.data!.legacy },
+                      { name: 'Current system', value: legacyQuery.data!.current },
+                    ].filter((d) => d.value > 0)}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={45}
+                    outerRadius={70}
+                    label
+                  >
+                    <Cell fill={COLORS[4]} />
+                    <Cell fill={COLORS[0]} />
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm lg:col-span-2">
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Category split — legacy vs current</h3>
+          {legacyQuery.isLoading ? (
+            <Loading />
+          ) : legacyQuery.error ? (
+            <ErrorFallback error={legacyQuery.error} message="Could not load legacy split." onRetry={() => legacyQuery.refetch()} />
+          ) : (legacyQuery.data?.byCategory ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No data.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={legacyQuery.data!.byCategory} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="legacy" name="Imported (legacy)" stackId="split" fill={COLORS[4]} />
+                  <Bar dataKey="current" name="Current" stackId="split" fill={COLORS[0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

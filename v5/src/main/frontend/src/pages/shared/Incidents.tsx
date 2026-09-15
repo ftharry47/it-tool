@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Loader2, Trash2, RotateCcw, CheckSquare, XSquare } from 'lucide-react'
+import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { DataTable } from '../../components/ui/DataTable'
-import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
@@ -49,7 +48,6 @@ export function Incidents() {
   const catalogPath = location.pathname.startsWith('/home') ? '/home/catalog' : '/dashboard/service-requests/new'
   
   const isEndUser = currentUser?.roles.includes('END_USER') && !currentUser?.roles.some(r => ['AGENT', 'TEAM_LEAD', 'ADMIN', 'SUPER_ADMIN'].includes(r))
-  const isAdmin = currentUser?.roles.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r)) ?? false
   const severityMap: Record<string, { impact: number; urgency: number }> = {
     low: { impact: 1, urgency: 1 },
     medium: { impact: 3, urgency: 3 },
@@ -62,10 +60,6 @@ export function Incidents() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [confirmCloseForm, setConfirmCloseForm] = useState(false)
-  const [view, setView] = useState<'active' | 'deleted'>('active')
-  const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [confirmBulk, setConfirmBulk] = useState<{ open: boolean; action: 'delete' | 'restore' } | null>(null)
   const [narrativeOpen, setNarrativeOpen] = useState(false)
   const [narrativeStep, setNarrativeStep] = useState(0)
   const [narrativeSuccess, setNarrativeSuccess] = useState({ title: '', subtitle: '' })
@@ -75,11 +69,6 @@ export function Incidents() {
     { id: 'submit', label: 'Submitting to IT team...' },
     { id: 'notify', label: 'Notifying the team...' },
   ]
-
-  const exitSelection = () => {
-    setSelectionMode(false)
-    setSelectedIds(new Set())
-  }
 
   const EMPTY_INCIDENT_FORM = { title: '', description: '', impact: 3, urgency: 3, priorityId: '', categoryId: '', locationId: '', phone: '', severity: 'medium' }
   const isFormDirty = JSON.stringify(form) !== JSON.stringify(EMPTY_INCIDENT_FORM) || selectedFile !== null
@@ -105,37 +94,13 @@ export function Incidents() {
   }
 
   const listQuery = useQuery<Incident[]>({
-    queryKey: ['incidents', view],
+    queryKey: ['incidents'],
     enabled: isAuthenticated && !!account,
     queryFn: async () => {
-      const base = isEndUser ? '/api/v1/incidents/my' : '/api/v1/incidents'
-      const endpoint = view === 'deleted' ? `${base}?showDeleted=true` : base
+      const endpoint = isEndUser ? '/api/v1/incidents/my' : '/api/v1/incidents'
       const res = await fetchWithToken(instance, account!, endpoint)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
-    },
-  })
-
-  const bulkMutation = useMutation<void, Error, void>({
-    mutationFn: async () => {
-      const ids = Array.from(selectedIds)
-      const action = confirmBulk?.action ?? 'delete'
-      const url = `/api/v1/bulk/incidents/${action === 'delete' ? 'soft-delete' : 'restore'}`
-      const res = await fetchWithToken(instance, account!, url, {
-        method: 'POST',
-        body: JSON.stringify(ids),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    },
-    onSuccess: () => {
-      exitSelection()
-      queryClient.invalidateQueries({ queryKey: ['incidents'] })
-      pushToast('success', confirmBulk?.action === 'delete' ? 'Selected incidents deleted.' : 'Selected incidents restored.')
-      setConfirmBulk(null)
-    },
-    onError: (err) => {
-      pushToast('error', `Bulk ${confirmBulk?.action} failed: ${err.message}`)
-      setConfirmBulk(null)
     },
   })
 
@@ -278,19 +243,6 @@ export function Incidents() {
         successSubtitle={narrativeSuccess.subtitle}
       />
       <ConfirmDialog
-        open={!!confirmBulk}
-        title={confirmBulk?.action === 'delete' ? 'Delete selected incidents?' : 'Restore selected incidents?'}
-        description={
-          confirmBulk?.action === 'delete'
-            ? `Delete ${selectedIds.size} incidents? This can be undone via Restore.`
-            : `Restore ${selectedIds.size} incidents? They will be visible again in all views and reports.`
-        }
-        confirmLabel={confirmBulk?.action === 'delete' ? 'Delete' : 'Restore'}
-        destructive={confirmBulk?.action === 'delete'}
-        onConfirm={() => bulkMutation.mutate()}
-        onCancel={() => setConfirmBulk(null)}
-      />
-      <ConfirmDialog
         open={confirmCloseForm}
         title="Discard unsaved changes?"
         description="You have unsaved changes in the new incident form that will be lost."
@@ -311,49 +263,17 @@ export function Incidents() {
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight">{view === 'deleted' ? 'Deleted Incidents' : 'Incidents'}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Incidents</h1>
         </div>
 
         <div className="flex justify-end gap-2">
-          {view === 'active' && (
-            <button
-              onClick={() => (showForm ? requestCloseForm() : setShowForm(true))}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="h-4 w-4" />
-              New Incident
-            </button>
-          )}
-          {isAdmin && view === 'active' && (
-            <button
-              onClick={() => setView('deleted')}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
-            >
-              <Trash2 className="h-4 w-4" />
-              View Deleted Items
-            </button>
-          )}
-          {isAdmin && view === 'deleted' && (
-            <button
-              onClick={() => { setView('active'); exitSelection() }}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Back to Active
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => setSelectionMode((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium transition hover:bg-muted"
-            >
-              {selectionMode ? (
-                <><XSquare className="h-4 w-4" /> Cancel</>
-              ) : (
-                <><CheckSquare className="h-4 w-4" /> Select</>
-              )}
-            </button>
-          )}
+          <button
+            onClick={() => (showForm ? requestCloseForm() : setShowForm(true))}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Plus className="h-4 w-4" />
+            New Incident
+          </button>
         </div>
 
         {showForm && (
@@ -552,20 +472,11 @@ export function Incidents() {
               )}
             </FilterBar>
           </div>
-          {selectionMode && isAdmin && (
-            <BulkActionToolbar
-              selectedCount={selectedIds.size}
-              view={view}
-              onCancel={exitSelection}
-              onDelete={() => setConfirmBulk({ open: true, action: 'delete' })}
-              onRestore={() => setConfirmBulk({ open: true, action: 'restore' })}
-            />
-          )}
           {isLoading ? (
             <div role="status" aria-live="polite" className="py-12 text-center text-muted-foreground">Loading incidents…</div>
           ) : (
             <DataTable<Incident>
-              caption={view === 'deleted' ? 'Deleted incidents' : 'List of incidents'}
+              caption="List of incidents"
               columns={[
                 { key: 'number', header: 'Number' },
                 { key: 'title', header: 'Title' },
@@ -579,14 +490,9 @@ export function Incidents() {
               ]}
               data={filteredIncidents}
               getRowKey={(row) => row.id}
-              onRowClick={!selectionMode ? (row) => navigate(isEndUser ? `/home/incidents/${row.id}` : `/dashboard/incidents/${row.id}`) : undefined}
-              selectable={selectionMode}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
+              onRowClick={(row) => navigate(isEndUser ? `/home/incidents/${row.id}` : `/dashboard/incidents/${row.id}`)}
               emptyText={
-                view === 'deleted'
-                  ? 'No deleted incidents found.'
-                  : (incidents.length === 0 ? 'No incidents yet.' : 'No incidents match the selected filters.')
+                incidents.length === 0 ? 'No incidents yet.' : 'No incidents match the selected filters.'
               }
             />
           )}

@@ -1161,6 +1161,109 @@ public class ReportingService {
         return rows;
     }
 
+    /**
+     * Monthly created-vs-closed incident volume, including legacy imports
+     * (they are real historical volume). Months are YYYY-MM buckets in UTC.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> ticketsMonthly(UUID orgId, int months, UUID mineUserId) {
+        if (months < 1 || months > 120) {
+            throw new IllegalArgumentException("months must be between 1 and 120");
+        }
+        OffsetDateTime start = YearMonth.now(ZoneOffset.UTC).minusMonths(months - 1L)
+                .atDay(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<Incident> root = cq.from(Incident.class);
+        cq.multiselect(root.get("createdAt"), root.get("closedAt"));
+        List<Predicate> predicates = new ArrayList<>(List.of(baseIncidentPredicates(cb, root, orgId, mineUserId)));
+        predicates.add(cb.or(
+                cb.greaterThanOrEqualTo(root.get("createdAt"), start),
+                cb.greaterThanOrEqualTo(root.get("closedAt"), start)));
+        cq.where(predicates.toArray(new Predicate[0]));
+
+        Map<YearMonth, long[]> byMonth = new TreeMap<>();
+        for (Tuple t : entityManager.createQuery(cq).getResultList()) {
+            OffsetDateTime createdAt = t.get(0, OffsetDateTime.class);
+            OffsetDateTime closedAt = t.get(1, OffsetDateTime.class);
+            if (createdAt != null) {
+                YearMonth m = YearMonth.from(createdAt.atZoneSameInstant(ZoneOffset.UTC));
+                if (!m.isBefore(YearMonth.from(start))) {
+                    byMonth.computeIfAbsent(m, k -> new long[2])[0]++;
+                }
+            }
+            if (closedAt != null) {
+                YearMonth m = YearMonth.from(closedAt.atZoneSameInstant(ZoneOffset.UTC));
+                if (!m.isBefore(YearMonth.from(start))) {
+                    byMonth.computeIfAbsent(m, k -> new long[2])[1]++;
+                }
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        YearMonth cursor = YearMonth.from(start);
+        for (int i = 0; i < months; i++) {
+            long[] counts = byMonth.getOrDefault(cursor, new long[2]);
+            result.add(Map.of("month", cursor.toString(), "created", counts[0], "closed", counts[1]));
+            cursor = cursor.plusMonths(1);
+        }
+        return result;
+    }
+
+    /**
+     * Legacy-import vs natively-created incident split — totals plus a
+     * per-category breakdown. Keeps imported volume visible without letting
+     * it distort live SLA metrics (legacy rows never have SlaInstance records).
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> legacySplit(UUID orgId, UUID mineUserId) {
+        String mineClause = mineUserId != null ? " AND i.assignee.id = :mineUserId" : "";
+
+        String totalsJpql = """
+                SELECT i.legacyImport, COUNT(i)
+                FROM Incident i
+                WHERE i.orgId = :orgId AND i.deletedAt IS NULL
+                """ + mineClause + " GROUP BY i.legacyImport";
+        TypedQuery<Tuple> totalsQuery = entityManager.createQuery(totalsJpql, Tuple.class)
+                .setParameter("orgId", orgId);
+        if (mineUserId != null) totalsQuery.setParameter("mineUserId", mineUserId);
+
+        long legacy = 0, current = 0;
+        for (Tuple t : totalsQuery.getResultList()) {
+            boolean isLegacy = Boolean.TRUE.equals(t.get(0, Boolean.class));
+            long count = t.get(1, Long.class);
+            if (isLegacy) legacy += count; else current += count;
+        }
+
+        String byCategoryJpql = """
+                SELECT COALESCE(c.name, 'Uncategorized'), i.legacyImport, COUNT(i)
+                FROM Incident i
+                LEFT JOIN i.category c
+                WHERE i.orgId = :orgId AND i.deletedAt IS NULL
+                """ + mineClause + " GROUP BY c.name, i.legacyImport";
+        TypedQuery<Tuple> catQuery = entityManager.createQuery(byCategoryJpql, Tuple.class)
+                .setParameter("orgId", orgId);
+        if (mineUserId != null) catQuery.setParameter("mineUserId", mineUserId);
+
+        Map<String, long[]> byCategory = new TreeMap<>();
+        for (Tuple t : catQuery.getResultList()) {
+            String category = t.get(0, String.class);
+            boolean isLegacy = Boolean.TRUE.equals(t.get(1, Boolean.class));
+            long count = t.get(2, Long.class);
+            byCategory.computeIfAbsent(category, k -> new long[2])[isLegacy ? 0 : 1] += count;
+        }
+        List<Map<String, Object>> categories = byCategory.entrySet().stream()
+                .map(e -> Map.<String, Object>of("category", e.getKey(), "legacy", e.getValue()[0], "current", e.getValue()[1]))
+                .toList();
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("legacy", legacy);
+        out.put("current", current);
+        out.put("byCategory", categories);
+        return out;
+    }
+
     private void validateDateRange(AdHocQueryRequest.DateRange dateRange) {
         if (dateRange == null || dateRange.from() == null || dateRange.to() == null) {
             return;

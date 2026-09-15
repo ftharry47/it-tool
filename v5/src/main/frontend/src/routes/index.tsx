@@ -48,6 +48,7 @@ import { LocationAdmin } from '../pages/admin/LocationAdmin'
 import { CategoryAdmin } from '../pages/admin/CategoryAdmin'
 import { SupportTiers } from '../pages/admin/SupportTiers'
 import { HowItWorks } from '../pages/admin/HowItWorks'
+import { ImportTickets } from '../pages/admin/ImportTickets'
 import { NotFound } from '../pages/shared/NotFound'
 import type { RouteDefinition } from './types'
 import type { CurrentUser } from '../auth/AuthProvider'
@@ -104,6 +105,7 @@ const adminRoutes: RouteDefinition[] = [
   { path: 'admin/business-calendars', label: 'Business Calendars', element: <BusinessCalendars />, group: 'Administration' },
   { path: 'admin/locations', label: 'Locations', element: <LocationAdmin />, group: 'Administration' },
 { path: 'admin/categories', label: 'Categories', element: <CategoryAdmin />, group: 'Administration' },
+  { path: 'admin/import-tickets', label: 'Import Tickets', element: <ImportTickets />, group: 'Administration' },
   { path: 'admin/how-it-works', label: 'How It Works', element: <HowItWorks />, group: 'Administration' },
 ]
 

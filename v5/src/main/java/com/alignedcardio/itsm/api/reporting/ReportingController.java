@@ -157,6 +157,23 @@ public class ReportingController {
         return reportingService.sprintVelocity(user.getOrgId());
     }
 
+    /** Monthly created-vs-closed incident volume (includes legacy imports). */
+    @GetMapping("/tickets-monthly")
+    public List<Map<String, Object>> ticketsMonthly(@AuthenticationPrincipal Jwt jwt, Authentication auth,
+                                                    @RequestParam(defaultValue = "12") int months,
+                                                    @RequestParam(required = false, defaultValue = "false") boolean mine) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.ticketsMonthly(user.getOrgId(), months, scopedUserId(auth, user, mine));
+    }
+
+    /** Legacy-imported vs natively-created incident totals + per-category split. */
+    @GetMapping("/legacy-split")
+    public Map<String, Object> legacySplit(@AuthenticationPrincipal Jwt jwt, Authentication auth,
+                                           @RequestParam(required = false, defaultValue = "false") boolean mine) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.legacySplit(user.getOrgId(), scopedUserId(auth, user, mine));
+    }
+
     @GetMapping("/incidents-by-category")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<Map<String, Object>> incidentsByCategory(@AuthenticationPrincipal Jwt jwt) {

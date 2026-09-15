@@ -86,6 +86,17 @@ public class Incident extends BaseEntity {
     @Column(name = "closing_notes", columnDefinition = "text")
     private String closingNotes;
 
+    // Historical import fields: preserve the source system's ticket identity
+    // and requester; isLegacyImport keeps these rows out of SLA tracking.
+    @Column(name = "legacy_ticket_id", length = 64)
+    private String legacyTicketId;
+
+    @Column(name = "legacy_requester", length = 255)
+    private String legacyRequester;
+
+    @Column(name = "is_legacy_import", nullable = false)
+    private boolean legacyImport = false;
+
     @OneToMany(mappedBy = "incident", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<IncidentComment> comments = new ArrayList<>();
 
@@ -247,5 +258,29 @@ public class Incident extends BaseEntity {
 
     public void setClosingNotes(String closingNotes) {
         this.closingNotes = closingNotes;
+    }
+
+    public String getLegacyTicketId() {
+        return legacyTicketId;
+    }
+
+    public void setLegacyTicketId(String legacyTicketId) {
+        this.legacyTicketId = legacyTicketId;
+    }
+
+    public String getLegacyRequester() {
+        return legacyRequester;
+    }
+
+    public void setLegacyRequester(String legacyRequester) {
+        this.legacyRequester = legacyRequester;
+    }
+
+    public boolean isLegacyImport() {
+        return legacyImport;
+    }
+
+    public void setLegacyImport(boolean legacyImport) {
+        this.legacyImport = legacyImport;
     }
 }

@@ -212,6 +212,82 @@ class ReportingServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void legacySplitAggregatesTotalsAndPerCategoryBreakdown() {
+        EntityManager em = mock(EntityManager.class);
+        TypedQuery<Tuple> totalsQuery = mock(TypedQuery.class);
+        TypedQuery<Tuple> categoryQuery = mock(TypedQuery.class);
+        when(em.createQuery(contains("SELECT i.legacyImport"), eq(Tuple.class))).thenReturn(totalsQuery);
+        when(em.createQuery(contains("SELECT COALESCE(c.name"), eq(Tuple.class))).thenReturn(categoryQuery);
+        when(totalsQuery.setParameter(anyString(), any())).thenReturn(totalsQuery);
+        when(categoryQuery.setParameter(anyString(), any())).thenReturn(categoryQuery);
+
+        Tuple legacyTotal = mock(Tuple.class);
+        when(legacyTotal.get(0, Boolean.class)).thenReturn(true);
+        when(legacyTotal.get(1, Long.class)).thenReturn(40L);
+        Tuple currentTotal = mock(Tuple.class);
+        when(currentTotal.get(0, Boolean.class)).thenReturn(false);
+        when(currentTotal.get(1, Long.class)).thenReturn(10L);
+        when(totalsQuery.getResultList()).thenReturn(List.of(legacyTotal, currentTotal));
+
+        Tuple hwLegacy = mock(Tuple.class);
+        when(hwLegacy.get(0, String.class)).thenReturn("Hardware");
+        when(hwLegacy.get(1, Boolean.class)).thenReturn(true);
+        when(hwLegacy.get(2, Long.class)).thenReturn(30L);
+        Tuple hwCurrent = mock(Tuple.class);
+        when(hwCurrent.get(0, String.class)).thenReturn("Hardware");
+        when(hwCurrent.get(1, Boolean.class)).thenReturn(false);
+        when(hwCurrent.get(2, Long.class)).thenReturn(5L);
+        when(categoryQuery.getResultList()).thenReturn(List.of(hwLegacy, hwCurrent));
+
+        ReportingService service = new ReportingService(em);
+        Map<String, Object> result = service.legacySplit(UUID.randomUUID(), null);
+
+        assertEquals(40L, result.get("legacy"));
+        assertEquals(10L, result.get("current"));
+        List<Map<String, Object>> categories = (List<Map<String, Object>>) result.get("byCategory");
+        assertEquals(1, categories.size());
+        assertEquals("Hardware", categories.get(0).get("category"));
+        assertEquals(30L, categories.get(0).get("legacy"));
+        assertEquals(5L, categories.get(0).get("current"));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void ticketsMonthlyBucketsCreatedAndClosedByMonth() {
+        EntityManager em = mock(EntityManager.class, Mockito.RETURNS_DEEP_STUBS);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime lastMonth = now.minusMonths(1);
+        Tuple t1 = mock(Tuple.class);
+        when(t1.get(0, OffsetDateTime.class)).thenReturn(now);
+        when(t1.get(1, OffsetDateTime.class)).thenReturn(now);
+        Tuple t2 = mock(Tuple.class);
+        when(t2.get(0, OffsetDateTime.class)).thenReturn(lastMonth);
+        when(t2.get(1, OffsetDateTime.class)).thenReturn(now);
+        when(em.createQuery(any(CriteriaQuery.class)).getResultList()).thenReturn(List.of(t1, t2));
+
+        ReportingService service = new ReportingService(em);
+        List<Map<String, Object>> result = service.ticketsMonthly(UUID.randomUUID(), 3, null);
+
+        assertEquals(3, result.size());
+        Map<String, Object> thisMonth = result.get(2);
+        Map<String, Object> prevMonth = result.get(1);
+        assertEquals(1L, thisMonth.get("created"));  // only t1 created this month
+        assertEquals(2L, thisMonth.get("closed"));   // both closed this month
+        assertEquals(1L, prevMonth.get("created"));  // t2 created last month
+    }
+
+    @Test
+    void ticketsMonthlyRejectsInvalidMonthRange() {
+        ReportingService service = new ReportingService(mock(EntityManager.class));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.ticketsMonthly(UUID.randomUUID(), 0, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.ticketsMonthly(UUID.randomUUID(), 200, null));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void ticketsByLocationWithNullDateRangeDoesNotThrowAndDoesNotBindNullParameters() {
         doReturn(typedQuery).when(entityManager).createQuery(anyString(), any(Class.class));
         lenient().when(typedQuery.setParameter(anyString(), any())).thenReturn(typedQuery);
