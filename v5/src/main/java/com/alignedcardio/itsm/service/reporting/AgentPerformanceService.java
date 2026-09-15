@@ -24,8 +24,12 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Computes per-agent performance metrics over a period, covering both
@@ -85,8 +89,11 @@ public class AgentPerformanceService {
             int manualSelfEscalations,   // informational, not penalized
             double escalatedAwayPct,     // % of handled tickets escalated away (auto + manual)
             int score,                   // 0-100
-            String grade                 // A-F
+            String grade,                // A-F
+            Map<String, TypeStats> byType // per-entity-type handled/resolved this period
     ) {}
+
+    public record TypeStats(int handled, int resolved) {}
 
     /** Live metrics for the current month-to-date. */
     @Transactional(readOnly = true)
@@ -292,6 +299,13 @@ public class AgentPerformanceService {
         }
 
         // --- Escalations: AUTO (penalized) vs manual self-escalation (not) ---
+        // Event counts feed the score; the percentage numerator is DISTINCT
+        // tickets drawn from the handled set, so it can never exceed the
+        // denominator (a ticket escalated twice still counts once).
+        Set<UUID> handledIncidentIds = incidents.stream()
+                .map(Incident::getId)
+                .collect(Collectors.toSet());
+        Set<UUID> escalatedAwayTicketIds = new HashSet<>();
         int autoAway = 0;
         int manualSelf = 0;
         for (AuditLog log : auditLogRepository
@@ -300,14 +314,24 @@ public class AgentPerformanceService {
                         PageRequest.of(0, 500)).getContent()) {
             if (log.getCreatedAt().isBefore(from) || !log.getCreatedAt().isBefore(to)) continue;
             if ("AUTO_ESCALATE_TIER".equals(log.getAction())) {
-                if (agentId.equals(extractAssigneeId(log.getBeforeState()))) autoAway++;
+                if (agentId.equals(extractAssigneeId(log.getBeforeState()))) {
+                    autoAway++;
+                    if (handledIncidentIds.contains(log.getEntityId())) {
+                        escalatedAwayTicketIds.add(log.getEntityId());
+                    }
+                }
             } else if ("ESCALATE_TIER".equals(log.getAction())) {
-                if (agentId.equals(log.getActorUserId())) manualSelf++;
+                if (agentId.equals(log.getActorUserId())) {
+                    manualSelf++;
+                    if (handledIncidentIds.contains(log.getEntityId())) {
+                        escalatedAwayTicketIds.add(log.getEntityId());
+                    }
+                }
             }
         }
 
         double escalatedAwayPct = handled > 0
-                ? Math.round((autoAway + manualSelf) * 1000.0 / handled) / 10.0
+                ? Math.min(100.0, Math.round(escalatedAwayTicketIds.size() * 1000.0 / handled) / 10.0)
                 : 0;
 
         long avgResolutionMinutes = resolutionCount > 0 ? totalResolutionMinutes / resolutionCount : 0;
@@ -323,12 +347,18 @@ public class AgentPerformanceService {
         int score = (int) Math.round(Math.max(0, Math.min(100, raw)));
         String grade = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "F";
 
+        Map<String, TypeStats> byType = Map.of(
+                "incidents", new TypeStats(incidents.size(), resolvedIncidents),
+                "serviceRequests", new TypeStats(tasks.size(), completedTasks),
+                "problems", new TypeStats(problems.size(), resolvedProblems),
+                "changes", new TypeStats(changes.size(), completedChanges));
+
         return new AgentPerformanceReport(
                 agentId, agent.getDisplayName(), period,
                 handled, resolved, Math.round(resolutionRate * 10) / 10.0,
                 slaCompliancePct >= 0 ? Math.round(slaCompliancePct * 10) / 10.0 : -1,
                 slaEvaluated, breachCount, reopenedCount, avgResolutionMinutes,
-                autoAway, manualSelf, escalatedAwayPct, score, grade);
+                autoAway, manualSelf, escalatedAwayPct, score, grade, byType);
     }
 
     private UUID extractAssigneeId(String beforeStateJson) {

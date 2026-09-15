@@ -49,7 +49,7 @@ class AgentPerformanceReportJobTest {
     private AgentPerformanceService.AgentPerformanceReport report(AppUser agent, String period) {
         return new AgentPerformanceService.AgentPerformanceReport(
                 agent.getId(), agent.getDisplayName(), period,
-                12, 10, 83.3, 95.0, 10, 0, 0, 240, 0, 1, 8.3, 95, "A");
+                12, 10, 83.3, 95.0, 10, 0, 0, 240, 0, 1, 8.3, 95, "A", java.util.Map.of());
     }
 
     @Test

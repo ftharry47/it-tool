@@ -160,6 +160,7 @@ interface AgentPerformanceReport {
   escalatedAwayPct: number
   score: number
   grade: string
+  byType?: Record<string, { handled: number; resolved: number }>
 }
 
 interface MyPerformanceResponse {
@@ -286,6 +287,81 @@ function MyPerformanceCard({ data, isLoading }: { data: MyPerformanceResponse | 
           <p className="text-xs text-muted-foreground">Score / 100</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Monthly volume overview across all four work types for the signed-in agent. */
+function MyMonthOverview({ data, isLoading }: { data: MyPerformanceResponse | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <p className="text-sm text-muted-foreground">Loading this month's work…</p>
+      </div>
+    )
+  }
+  if (!data) return null
+  const r = data.report
+  const monthLabel = (() => {
+    const [y, m] = r.period.split('-').map(Number)
+    return y && m ? new Date(y, m - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }) : r.period
+  })()
+  const types: { label: string; stats: { handled: number; resolved: number } }[] = [
+    { label: 'Incidents', stats: r.byType?.incidents ?? { handled: 0, resolved: 0 } },
+    { label: 'Service Requests', stats: r.byType?.serviceRequests ?? { handled: 0, resolved: 0 } },
+    { label: 'Problems', stats: r.byType?.problems ?? { handled: 0, resolved: 0 } },
+    { label: 'Changes', stats: r.byType?.changes ?? { handled: 0, resolved: 0 } },
+  ]
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">This Month — Your Work</h3>
+        <span className="text-xs text-muted-foreground">{monthLabel}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div>
+          <p className="text-2xl font-bold">{r.ticketsHandled}</p>
+          <p className="text-xs text-muted-foreground">Handled</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{r.ticketsResolved}</p>
+          <p className="text-xs text-muted-foreground">Resolved</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{r.resolutionRate}%</p>
+          <p className="text-xs text-muted-foreground">Resolution rate</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{r.slaCompliancePct >= 0 ? `${r.slaCompliancePct}%` : '—'}</p>
+          <p className="text-xs text-muted-foreground">SLA (this month)</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{r.escalatedAwayPct}%</p>
+          <p className="text-xs text-muted-foreground">Escalated away</p>
+        </div>
+      </div>
+      <ul className="mt-4 space-y-2 border-t border-border pt-3">
+        {types.map(({ label, stats }) => {
+          const pct = stats.handled > 0 ? Math.round((stats.resolved / stats.handled) * 100) : 0
+          return (
+            <li key={label} className="flex items-center gap-4 text-sm">
+              <span className="w-32 text-muted-foreground">{label}</span>
+              <div className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                {stats.handled > 0 && (
+                  <div
+                    className="bg-emerald-500"
+                    title={`${stats.resolved} of ${stats.handled} resolved`}
+                    style={{ width: `${pct}%` }}
+                  />
+                )}
+              </div>
+              <span className="w-28 text-right text-xs tabular-nums text-muted-foreground">
+                {stats.handled} handled · {stats.resolved} resolved
+              </span>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -599,6 +675,13 @@ const SLA_SEGMENT_COLORS: Record<string, string> = {
   noSla: '#94a3b8',
 }
 
+const WORKLOAD_SEGMENTS: { key: keyof AgentWorkload; label: string; color: string }[] = [
+  { key: 'onTrack', label: 'On track', color: SLA_SEGMENT_COLORS.onTrack },
+  { key: 'atRisk', label: 'At risk', color: SLA_SEGMENT_COLORS.atRisk },
+  { key: 'breached', label: 'Breached', color: SLA_SEGMENT_COLORS.breached },
+  { key: 'noSla', label: 'No SLA', color: SLA_SEGMENT_COLORS.noSla },
+]
+
 function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined; isLoading: boolean }) {
   if (isLoading) return <Loading compact />
   const rows = (data ?? []).filter((r) => r.openCount > 0)
@@ -607,6 +690,45 @@ function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined;
       <h3 className="mb-2 text-sm font-medium text-muted-foreground">Workload per Agent</h3>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No open assigned tickets.</p>
+      ) : rows.length <= 15 ? (
+        <>
+          <ul className="divide-y divide-border">
+            {rows.map((r) => {
+              const onTrackPct = Math.round((r.onTrack * 100) / r.openCount)
+              return (
+                <li key={r.agentName} className="flex items-center gap-4 py-2.5">
+                  <span className="w-36 truncate text-sm font-medium" title={r.agentName}>{r.agentName}</span>
+                  <div className="flex h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                    {WORKLOAD_SEGMENTS.filter((s) => (r[s.key] as number) > 0).map((s) => (
+                      <div
+                        key={s.key}
+                        title={`${s.label}: ${r[s.key]}`}
+                        style={{ width: `${((r[s.key] as number) / r.openCount) * 100}%`, backgroundColor: s.color }}
+                      />
+                    ))}
+                  </div>
+                  <span className="w-14 text-right text-sm tabular-nums text-muted-foreground">{r.openCount} open</span>
+                  <span
+                    className={`w-11 text-right text-xs font-semibold ${
+                      onTrackPct >= 80 ? 'text-emerald-600' : onTrackPct >= 50 ? 'text-amber-600' : 'text-red-600'
+                    }`}
+                    title="Share of open tickets on track against SLA"
+                  >
+                    {onTrackPct}%
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {WORKLOAD_SEGMENTS.map((s) => (
+              <span key={s.key} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.label}
+              </span>
+            ))}
+          </div>
+        </>
       ) : (
         <div style={{ height: Math.max(160, rows.length * 44) }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -1198,6 +1320,8 @@ export function Dashboard() {
             )}
 
             <MyPerformanceCard data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
+
+            <MyMonthOverview data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
 
             <YourSlaTargets data={mySlaTargetsQuery.data} isLoading={mySlaTargetsQuery.isLoading} />
 
