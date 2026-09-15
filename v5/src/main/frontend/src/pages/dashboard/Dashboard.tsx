@@ -683,12 +683,13 @@ const WORKLOAD_SEGMENTS: { key: keyof AgentWorkload; label: string; color: strin
 ]
 
 function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined; isLoading: boolean }) {
-  if (isLoading) return <Loading compact />
   const rows = (data ?? []).filter((r) => r.openCount > 0)
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <h3 className="mb-2 text-sm font-medium text-muted-foreground">Workload per Agent</h3>
-      {rows.length === 0 ? (
+      {isLoading ? (
+        <Loading compact />
+      ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No open assigned tickets.</p>
       ) : rows.length <= 15 ? (
         <>
@@ -710,7 +711,11 @@ function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined;
                   <span className="w-14 text-right text-sm tabular-nums text-muted-foreground">{r.openCount} open</span>
                   <span
                     className={`w-11 text-right text-xs font-semibold ${
-                      onTrackPct >= 80 ? 'text-emerald-600' : onTrackPct >= 50 ? 'text-amber-600' : 'text-red-600'
+                      onTrackPct >= 80
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : onTrackPct >= 50
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400'
                     }`}
                     title="Share of open tickets on track against SLA"
                   >

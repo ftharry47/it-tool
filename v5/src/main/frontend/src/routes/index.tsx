@@ -97,6 +97,13 @@ const dashboardRoutes: RouteDefinition[] = [
 
 const adminRoutes: RouteDefinition[] = [
   { path: 'admin', label: 'Admin', element: <AdminHome />, group: 'Administration' },
+  { path: 'admin/import-tickets', label: 'Import Tickets', element: <ImportTickets />, group: 'Administration' },
+  { path: 'admin/how-it-works', label: 'How It Works', element: <HowItWorks />, group: 'Administration' },
+]
+
+// System configuration — SUPER_ADMIN only. Absent from ADMIN route defs, so
+// direct URLs fall through to NotFound and sidebar nav never lists them.
+const superAdminRoutes: RouteDefinition[] = [
   { path: 'admin/users', label: 'Users', element: <UserAdmin />, group: 'Administration' },
   { path: 'admin/support-tiers', label: 'Support Tiers', element: <SupportTiers />, group: 'Administration' },
   { path: 'admin/catalog', label: 'Catalog', element: <CatalogAdmin />, group: 'Administration' },
@@ -104,9 +111,7 @@ const adminRoutes: RouteDefinition[] = [
   { path: 'admin/automation', label: 'Automation', element: <AutomationAdmin />, group: 'Administration' },
   { path: 'admin/business-calendars', label: 'Business Calendars', element: <BusinessCalendars />, group: 'Administration' },
   { path: 'admin/locations', label: 'Locations', element: <LocationAdmin />, group: 'Administration' },
-{ path: 'admin/categories', label: 'Categories', element: <CategoryAdmin />, group: 'Administration' },
-  { path: 'admin/import-tickets', label: 'Import Tickets', element: <ImportTickets />, group: 'Administration' },
-  { path: 'admin/how-it-works', label: 'How It Works', element: <HowItWorks />, group: 'Administration' },
+  { path: 'admin/categories', label: 'Categories', element: <CategoryAdmin />, group: 'Administration' },
 ]
 
 const defaultRoute: Record<string, string> = {
@@ -118,7 +123,8 @@ const defaultRoute: Record<string, string> = {
 }
 
 export function getRouteDefinitions(role: string, currentUser?: CurrentUser | null): RouteDefinition[] {
-  if (role === 'ADMIN' || role === 'SUPER_ADMIN') return [...dashboardRoutes, ...adminRoutes]
+  if (role === 'SUPER_ADMIN') return [...dashboardRoutes, ...adminRoutes, ...superAdminRoutes]
+  if (role === 'ADMIN') return [...dashboardRoutes, ...adminRoutes]
   if (role === 'AGENT' || role === 'TEAM_LEAD') return dashboardRoutes
   const routes = [...homeRoutes]
   // Lightweight additive permission: location approval managers get an

@@ -13,9 +13,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * SLA policies remain admin-manageable; business calendars are system-level
+ * configuration restricted to SUPER_ADMIN (same boundary as the other admin
+ * sections). Read access for agents viewing SLA details is unchanged — they
+ * were never granted here.
+ */
 @RestController
 @RequestMapping("/api/v1")
-@PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
 public class SlaAdminController {
 
     private final UserService userService;
@@ -27,12 +32,14 @@ public class SlaAdminController {
     }
 
     @GetMapping("/sla-policies")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public List<SlaPolicyResponse> listPolicies(@AuthenticationPrincipal Jwt jwt) {
         var user = userService.syncFromJwt(jwt);
         return slaAdminService.listPolicies(user.getOrgId());
     }
 
     @PostMapping("/sla-policies")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public SlaPolicyResponse createPolicy(@AuthenticationPrincipal Jwt jwt,
                                   @Valid @RequestBody SlaPolicyRequest request) {
         var user = userService.syncFromJwt(jwt);
@@ -40,6 +47,7 @@ public class SlaAdminController {
     }
 
     @PutMapping("/sla-policies/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public SlaPolicyResponse updatePolicy(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody SlaPolicyRequest request) {
@@ -48,6 +56,7 @@ public class SlaAdminController {
     }
 
     @DeleteMapping("/sla-policies/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public void deletePolicy(@AuthenticationPrincipal Jwt jwt,
                              @PathVariable UUID id) {
         var user = userService.syncFromJwt(jwt);
@@ -55,12 +64,14 @@ public class SlaAdminController {
     }
 
     @GetMapping("/business-calendars")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public List<BusinessCalendar> listCalendars(@AuthenticationPrincipal Jwt jwt) {
         var user = userService.syncFromJwt(jwt);
         return slaAdminService.listCalendars(user.getOrgId());
     }
 
     @PostMapping("/business-calendars")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public BusinessCalendar createCalendar(@AuthenticationPrincipal Jwt jwt,
                                            @Valid @RequestBody BusinessCalendarRequest request) {
         var user = userService.syncFromJwt(jwt);
@@ -68,6 +79,7 @@ public class SlaAdminController {
     }
 
     @PutMapping("/business-calendars/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public BusinessCalendar updateCalendar(@AuthenticationPrincipal Jwt jwt,
                                            @PathVariable UUID id,
                                            @Valid @RequestBody BusinessCalendarRequest request) {
@@ -76,6 +88,7 @@ public class SlaAdminController {
     }
 
     @DeleteMapping("/business-calendars/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void deleteCalendar(@AuthenticationPrincipal Jwt jwt,
                                @PathVariable UUID id) {
         var user = userService.syncFromJwt(jwt);

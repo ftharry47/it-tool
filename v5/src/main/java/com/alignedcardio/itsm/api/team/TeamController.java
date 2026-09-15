@@ -27,7 +27,7 @@ public class TeamController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<TeamResponse> create(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody @Valid TeamCreateRequest request) {
@@ -55,7 +55,7 @@ public class TeamController {
     }
 
     @PostMapping("/{id}/members")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> addMember(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
@@ -66,7 +66,7 @@ public class TeamController {
     }
 
     @DeleteMapping("/{id}/members/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> removeMember(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,

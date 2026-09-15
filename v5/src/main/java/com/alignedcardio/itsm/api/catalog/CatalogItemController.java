@@ -32,7 +32,7 @@ public class CatalogItemController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CatalogItemResponse create(@AuthenticationPrincipal Jwt jwt,
                                       @Valid @RequestBody CatalogItemCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -48,7 +48,7 @@ public class CatalogItemController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CatalogItemResponse update(@AuthenticationPrincipal Jwt jwt,
                                       @PathVariable UUID id,
                                       @Valid @RequestBody CatalogItemCreateRequest request) {

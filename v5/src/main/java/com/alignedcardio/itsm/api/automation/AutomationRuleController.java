@@ -36,7 +36,7 @@ public class AutomationRuleController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AutomationRuleResponse> create(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody @Valid AutomationRuleCreateRequest request) {
@@ -48,7 +48,7 @@ public class AutomationRuleController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<AutomationRuleResponse>> list(
             @AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -56,7 +56,7 @@ public class AutomationRuleController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AutomationRuleResponse> get(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id) {
@@ -65,7 +65,7 @@ public class AutomationRuleController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AutomationRuleResponse> update(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
@@ -76,7 +76,7 @@ public class AutomationRuleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> delete(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id) {
@@ -86,7 +86,7 @@ public class AutomationRuleController {
     }
 
     @PostMapping("/{id}/test")
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<AutomationRuleTestResponse> test(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id,
@@ -96,7 +96,7 @@ public class AutomationRuleController {
     }
 
     @GetMapping("/{id}/runs")
-    @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<AutomationRunLogResponse>> runs(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id) {

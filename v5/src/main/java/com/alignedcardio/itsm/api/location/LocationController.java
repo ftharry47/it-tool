@@ -34,7 +34,7 @@ public class LocationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<LocationResponse> create(@AuthenticationPrincipal Jwt jwt,
                                                    @Valid @RequestBody LocationRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -43,7 +43,7 @@ public class LocationController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public LocationResponse update(@AuthenticationPrincipal Jwt jwt,
                                    @PathVariable UUID id,
                                    @Valid @RequestBody LocationRequest request) {
@@ -52,7 +52,7 @@ public class LocationController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt,
                                        @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);

@@ -41,7 +41,14 @@ class AdminControllerSecurityTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void adminCanListUsers() throws Exception {
+    void adminCannotListUsers() throws Exception {
+        mvc.perform(get("/api/admin/users"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void superAdminCanListUsers() throws Exception {
         when(userService.findAllByOrgIdDefault()).thenReturn(List.of());
         mvc.perform(get("/api/admin/users"))
                 .andExpect(status().isOk());
@@ -58,7 +65,16 @@ class AdminControllerSecurityTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void adminCanUpdateUser() throws Exception {
+    void adminCannotUpdateUser() throws Exception {
+        mvc.perform(patch("/api/admin/users/00000000-0000-0000-0000-000000000000")
+                        .content("{\"isActive\":false}")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void superAdminCanUpdateUser() throws Exception {
         AppUser actor = new AppUser();
         actor.setId(UUID.randomUUID());
         when(userService.syncFromJwt(any())).thenReturn(actor);

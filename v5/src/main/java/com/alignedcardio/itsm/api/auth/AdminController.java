@@ -23,13 +23,13 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public List<CurrentUser> listUsers() {
         return userService.findAllByOrgIdDefault();
     }
 
     @PatchMapping("/users/{id}/role")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CurrentUser updateRole(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody UserUpdateRoleRequest request,
@@ -39,7 +39,7 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CurrentUser updateUser(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody UpdateUserRequest request) {

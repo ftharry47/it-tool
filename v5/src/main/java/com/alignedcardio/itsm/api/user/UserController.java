@@ -43,7 +43,7 @@ public class UserController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public UserResponse create(@AuthenticationPrincipal Jwt jwt,
                                @Valid @RequestBody UserCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -51,14 +51,14 @@ public class UserController {
     }
 
     @PostMapping("/sync-from-ad")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public AdSyncResult syncFromAd(@AuthenticationPrincipal Jwt jwt) {
         AppUser user = userService.syncFromJwt(jwt);
         return graphUserSyncService.sync(user.getOrgId());
     }
 
     @PatchMapping("/{id}/role")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CurrentUser updateRole(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody UserRoleUpdateRequest request,
@@ -68,7 +68,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public CurrentUser updateUser(@AuthenticationPrincipal Jwt jwt,
                                   @PathVariable UUID id,
                                   @Valid @RequestBody UpdateUserRequest request) {

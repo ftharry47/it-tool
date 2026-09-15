@@ -100,7 +100,17 @@ class LocationControllerSecurityTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void adminCanCreateLocation() throws Exception {
+    void adminCannotCreateLocation() throws Exception {
+        mvc.perform(post("/api/v1/locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Test Site\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(locationService);
+    }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void superAdminCanCreateLocation() throws Exception {
         AppUser user = new AppUser();
         user.setOrgId(BaseEntity.DEFAULT_ORG_ID);
         when(userService.syncFromJwt(any())).thenReturn(user);

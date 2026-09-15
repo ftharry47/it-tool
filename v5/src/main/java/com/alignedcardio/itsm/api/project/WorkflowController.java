@@ -32,7 +32,7 @@ public class WorkflowController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public WorkflowResponse create(@AuthenticationPrincipal Jwt jwt,
                                    @Valid @RequestBody WorkflowCreateRequest request) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -48,7 +48,7 @@ public class WorkflowController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public WorkflowResponse update(@AuthenticationPrincipal Jwt jwt,
                                    @PathVariable UUID id,
                                    @Valid @RequestBody WorkflowCreateRequest request) {
@@ -57,7 +57,7 @@ public class WorkflowController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void delete(@AuthenticationPrincipal Jwt jwt,
                        @PathVariable UUID id) {
         AppUser user = userService.syncFromJwt(jwt);
@@ -65,7 +65,7 @@ public class WorkflowController {
     }
 
     @PostMapping("/{id}/statuses")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public WorkflowStatusResponse addStatus(@AuthenticationPrincipal Jwt jwt,
                                             @PathVariable UUID id,
                                             @Valid @RequestBody WorkflowStatusCreateRequest request) {
@@ -74,7 +74,7 @@ public class WorkflowController {
     }
 
     @DeleteMapping("/{id}/statuses/{statusId}")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void removeStatus(@AuthenticationPrincipal Jwt jwt,
                              @PathVariable UUID id,
                              @PathVariable UUID statusId) {
@@ -83,7 +83,7 @@ public class WorkflowController {
     }
 
     @PostMapping("/{id}/transitions")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public WorkflowTransitionResponse addTransition(@AuthenticationPrincipal Jwt jwt,
                                                     @PathVariable UUID id,
                                                     @Valid @RequestBody WorkflowTransitionCreateRequest request) {
@@ -92,7 +92,7 @@ public class WorkflowController {
     }
 
     @DeleteMapping("/{id}/transitions/{transitionId}")
-    @PreAuthorize("hasAnyRole('TEAM_LEAD','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void removeTransition(@AuthenticationPrincipal Jwt jwt,
                                  @PathVariable UUID id,
                                  @PathVariable UUID transitionId) {
