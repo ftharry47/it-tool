@@ -36,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -72,24 +73,56 @@ public class IncidentImportService {
             Map.entry("p3", "Medium"), Map.entry("3", "Medium"),
             Map.entry("low", "Low"), Map.entry("p4", "Low"), Map.entry("minor", "Low"), Map.entry("4", "Low"));
 
+    private static DateTimeFormatter fmt(String pattern) {
+        // Pin US locale so AM/PM and MMM month names parse identically
+        // regardless of the JVM's default locale (e.g. en_IN).
+        return DateTimeFormatter.ofPattern(pattern, Locale.US);
+    }
+
     private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_OFFSET_DATE_TIME,
             DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
-            DateTimeFormatter.ofPattern("M/d/yyyy h:mm a"),
-            DateTimeFormatter.ofPattern("M/d/yyyy H:mm"),
+            fmt("yyyy-MM-dd HH:mm:ss"),
+            fmt("yyyy-MM-dd HH:mm"),
+            fmt("M/d/yyyy h:mm:ss a"),
+            fmt("M/d/yyyy h:mm a"),
+            fmt("M/d/yyyy H:mm:ss"),
+            fmt("M/d/yyyy H:mm"),
             DateTimeFormatter.ISO_LOCAL_DATE,
-            DateTimeFormatter.ofPattern("M/d/yyyy"),
-            DateTimeFormatter.ofPattern("d-MMM-yyyy"));
+            fmt("M/d/yyyy"),
+            // day-first variants (India/EU exports) — tried after M/d so a
+            // day>12 value falls through here automatically
+            fmt("d/M/yyyy H:mm:ss"),
+            fmt("d/M/yyyy H:mm"),
+            fmt("d/M/yyyy h:mm:ss a"),
+            fmt("d/M/yyyy h:mm a"),
+            fmt("d/M/yyyy"),
+            fmt("d-M-yyyy"),
+            fmt("d-MMM-yyyy"),
+            fmt("d-MMM-yy"),
+            fmt("M/d/yy"),
+            fmt("d/M/yy"));
 
-    public record ImportPreview(int totalRows, int importable, int skipped, List<PreviewRow> rows) {
+    /** Match outcome for a legacy reference value. */
+    private enum MatchKind { NONE, EXACT, FUZZY, MANUAL }
+
+    /** Trailing country/region codes common in legacy exports ("..., IND"). */
+    private static final Set<String> TRAILING_REGION_CODES = Set.of(
+            "ind", "in", "india", "usa", "us", "uae", "uk");
+
+    public record NamedRef(UUID id, String name) {
+    }
+
+    public record ImportPreview(int totalRows, int importable, int skipped, List<PreviewRow> rows,
+                                List<NamedRef> availableLocations, List<NamedRef> availableAssignees) {
     }
 
     public record PreviewRow(int rowNumber, String legacyTicketId, String title, String requester,
                              boolean requesterMatched, String locationName, boolean locationMatched,
+                             String locationMatch, String locationResolvedName,
                              String categoryName, boolean categoryMatched, String priorityName,
                              boolean markedCritical, String assigneeName, boolean assigneeMatched,
+                             String assigneeMatch, String assigneeResolvedName,
                              String status, String createdAt, String resolvedAt,
                              List<String> warnings, String error) {
     }
@@ -107,6 +140,21 @@ public class IncidentImportService {
                           OffsetDateTime createdAt, OffsetDateTime resolvedAt) {
         boolean isEmpty() {
             return (ticketId + name + email + description + status).isBlank();
+        }
+
+        /** Historical rows must never be blocked by a bad date — fall back to
+         *  Resolved Date, then to import time. */
+        OffsetDateTime effectiveCreatedAt() {
+            return createdAt != null ? createdAt
+                    : (resolvedAt != null ? resolvedAt : OffsetDateTime.now());
+        }
+    }
+
+    /** Admin corrections from the preview grid, keyed by normalized raw value. */
+    public record ImportOverrides(Map<String, UUID> locations, Map<String, UUID> assignees) {
+
+        public static ImportOverrides empty() {
+            return new ImportOverrides(Map.of(), Map.of());
         }
     }
 
@@ -136,37 +184,56 @@ public class IncidentImportService {
 
     @Transactional(readOnly = true)
     public ImportPreview preview(InputStream in, UUID orgId) {
+        return preview(in, orgId, ImportOverrides.empty());
+    }
+
+    @Transactional(readOnly = true)
+    public ImportPreview preview(InputStream in, UUID orgId, ImportOverrides overrides) {
+        overrides = normalizeOverrides(overrides);
         RefData ref = new RefData().load(orgId);
         List<RawRow> raw = parse(in);
         List<PreviewRow> rows = new ArrayList<>();
         int importable = 0;
         for (RawRow r : raw) {
-            PreviewRow row = mapRow(r, ref);
+            PreviewRow row = mapRow(r, ref, overrides);
             rows.add(row);
             if (row.error() == null) importable++;
         }
-        return new ImportPreview(rows.size(), importable, rows.size() - importable, rows);
+        List<NamedRef> locations = ref.locationsById.values().stream()
+                .map(l -> new NamedRef(l.getId(), l.getName()))
+                .sorted(java.util.Comparator.comparing(NamedRef::name)).toList();
+        List<NamedRef> assignees = ref.usersById.values().stream()
+                .map(u -> new NamedRef(u.getId(), u.getDisplayName()))
+                .sorted(java.util.Comparator.comparing(NamedRef::name)).toList();
+        return new ImportPreview(rows.size(), importable, rows.size() - importable, rows,
+                locations, assignees);
     }
 
     @Transactional
     public ImportResult commit(InputStream in, UUID orgId, AppUser actor) {
+        return commit(in, orgId, actor, ImportOverrides.empty());
+    }
+
+    @Transactional
+    public ImportResult commit(InputStream in, UUID orgId, AppUser actor, ImportOverrides overrides) {
+        overrides = normalizeOverrides(overrides);
         RefData ref = new RefData().load(orgId);
         List<RawRow> raw = parse(in);
         List<SkippedRow> skipped = new ArrayList<>();
         int imported = 0;
         for (RawRow r : raw) {
-            PreviewRow mapped = mapRow(r, ref);
+            PreviewRow mapped = mapRow(r, ref, overrides);
             if (mapped.error() != null) {
                 skipped.add(new SkippedRow(r.rowNumber(), mapped.error()));
                 continue;
             }
-            Incident incident = buildIncident(r, mapped, ref);
+            Incident incident = buildIncident(r, mapped, ref, overrides);
             incident = incidentRepository.save(incident);
             incidentRepository.flush();
             // createdAt is a DB-default, insertable=false column — set it to the
             // historical Created Date via a direct update after insert.
             em.createNativeQuery("UPDATE incident SET created_at = :created WHERE id = :id")
-                    .setParameter("created", r.createdAt())
+                    .setParameter("created", r.effectiveCreatedAt())
                     .setParameter("id", incident.getId())
                     .executeUpdate();
             writeImportAudit(incident, r, actor);
@@ -176,19 +243,19 @@ public class IncidentImportService {
         return new ImportResult(imported, skipped.size(), skipped);
     }
 
-    private Incident buildIncident(RawRow r, PreviewRow mapped, RefData ref) {
+    private Incident buildIncident(RawRow r, PreviewRow mapped, RefData ref, ImportOverrides overrides) {
         Incident i = new Incident();
         i.setTitle(mapped.title());
         i.setDescription(truncate(r.description(), 4000));
         i.setStatus(Incident.Status.CLOSED);
         i.setRequester(resolveRequester(r, ref));
-        i.setAssignee(findUserByName(r.assignedTo(), ref));
-        i.setLocation(mapped.locationMatched() ? findLocation(r.location(), ref) : null);
+        i.setAssignee(resolveAssignee(r.assignedTo(), ref, overrides).entity());
+        i.setLocation(resolveLocation(r.location(), ref, overrides).entity());
         i.setCategory(resolveCategory(r, ref));
         i.setPriority(resolvePriority(r, ref));
         i.setPhone(r.phone() == null || r.phone().isBlank() ? null : truncate(r.phone().trim(), 20));
-        i.setResolvedAt(r.resolvedAt() != null ? r.resolvedAt() : r.createdAt());
-        i.setClosedAt(r.resolvedAt() != null ? r.resolvedAt() : r.createdAt());
+        i.setResolvedAt(r.resolvedAt() != null ? r.resolvedAt() : r.effectiveCreatedAt());
+        i.setClosedAt(r.resolvedAt() != null ? r.resolvedAt() : r.effectiveCreatedAt());
         i.setClosingNotes(provenance(r));
         i.setLegacyTicketId(truncate(r.ticketId(), 64));
         i.setLegacyRequester(truncate(legacyRequesterLabel(r), 255));
@@ -238,12 +305,14 @@ public class IncidentImportService {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private PreviewRow mapRow(RawRow r, RefData ref) {
+    private PreviewRow mapRow(RawRow r, RefData ref, ImportOverrides overrides) {
         List<String> warnings = new ArrayList<>();
-        String error = null;
 
+        // Bad dates are never fatal for historical rows — fall back to
+        // Resolved Date, then import time, and surface the raw cell value.
         if (r.createdAt() == null) {
-            error = "Missing or unparseable Created Date";
+            warnings.add("Created Date missing or unparseable (" + nullToDash(r.createdDate())
+                    + "); using " + (r.resolvedAt() != null ? "Resolved Date" : "import time") + " instead");
         }
 
         boolean requesterMatched = r.email() != null && !r.email().isBlank()
@@ -253,10 +322,16 @@ public class IncidentImportService {
             warnings.add("Requester unmatched; using 'Legacy Import' placeholder");
         }
 
-        boolean locationMatched = r.location() != null && !r.location().isBlank()
-                && findLocation(r.location(), ref) != null;
-        if (r.location() != null && !r.location().isBlank() && !locationMatched) {
-            warnings.add("Location '" + r.location().trim() + "' unmatched; left empty");
+        Resolution<Location> location = resolveLocation(r.location(), ref, overrides);
+        if (r.location() != null && !r.location().isBlank()) {
+            switch (location.kind()) {
+                case FUZZY -> warnings.add("Location '" + r.location().trim()
+                        + "' auto-matched to '" + location.entity().getName() + "' (fuzzy)");
+                case MANUAL -> warnings.add("Location '" + r.location().trim()
+                        + "' manually mapped to '" + location.entity().getName() + "'");
+                case NONE -> warnings.add("Location '" + r.location().trim() + "' unmatched; left empty");
+                default -> { }
+            }
         }
 
         Category category = resolveCategory(r, ref);
@@ -272,10 +347,16 @@ public class IncidentImportService {
             warnings.add("Marked Critical overrides Priority '" + nullToDash(r.priority()) + "'");
         }
 
-        boolean assigneeMatched = r.assignedTo() != null && !r.assignedTo().isBlank()
-                && findUserByName(r.assignedTo(), ref) != null;
-        if (r.assignedTo() != null && !r.assignedTo().isBlank() && !assigneeMatched) {
-            warnings.add("Assignee '" + r.assignedTo().trim() + "' unmatched; left unassigned");
+        Resolution<AppUser> assignee = resolveAssignee(r.assignedTo(), ref, overrides);
+        if (r.assignedTo() != null && !r.assignedTo().isBlank()) {
+            switch (assignee.kind()) {
+                case FUZZY -> warnings.add("Assignee '" + r.assignedTo().trim()
+                        + "' auto-matched to '" + assignee.entity().getDisplayName() + "' (fuzzy)");
+                case MANUAL -> warnings.add("Assignee '" + r.assignedTo().trim()
+                        + "' manually mapped to '" + assignee.entity().getDisplayName() + "'");
+                case NONE -> warnings.add("Assignee '" + r.assignedTo().trim() + "' unmatched; left unassigned");
+                default -> { }
+            }
         }
 
         if (r.phone() != null && r.phone().trim().length() > 20) {
@@ -286,14 +367,72 @@ public class IncidentImportService {
         }
 
         return new PreviewRow(r.rowNumber(), r.ticketId(), deriveTitle(r), requesterLabel,
-                requesterMatched, r.location(), locationMatched,
+                requesterMatched, r.location(), location.kind() != MatchKind.NONE,
+                location.kind().name(), location.entity() == null ? null : location.entity().getName(),
                 category == null ? null : category.getName(), categoryMatched,
                 priority == null ? null : priority.getName(), markedCritical,
-                r.assignedTo(), assigneeMatched, "CLOSED",
-                r.createdAt() == null ? null : r.createdAt().toString(),
-                (r.resolvedAt() != null ? r.resolvedAt() : r.createdAt()) == null ? null
-                        : (r.resolvedAt() != null ? r.resolvedAt() : r.createdAt()).toString(),
-                warnings, error);
+                r.assignedTo(), assignee.kind() != MatchKind.NONE,
+                assignee.kind().name(), assignee.entity() == null ? null : assignee.entity().getDisplayName(),
+                "CLOSED",
+                r.effectiveCreatedAt().toString(),
+                (r.resolvedAt() != null ? r.resolvedAt() : r.effectiveCreatedAt()).toString(),
+                warnings, null);
+    }
+
+    /** Admin may send raw display strings as keys — normalize them so lookups
+     *  against normalized row values match regardless of punctuation. */
+    private static ImportOverrides normalizeOverrides(ImportOverrides o) {
+        if (o == null) return ImportOverrides.empty();
+        return new ImportOverrides(normalizeKeys(o.locations()), normalizeKeys(o.assignees()));
+    }
+
+    private static Map<String, UUID> normalizeKeys(Map<String, UUID> m) {
+        Map<String, UUID> out = new HashMap<>();
+        if (m != null) {
+            for (Map.Entry<String, UUID> e : m.entrySet()) {
+                if (e.getKey() != null && e.getValue() != null) out.put(normalizeName(e.getKey()), e.getValue());
+            }
+        }
+        return out;
+    }
+
+    /** A resolved reference value plus how it was matched. */
+    private record Resolution<T>(T entity, MatchKind kind) {
+        static <T> Resolution<T> none() {
+            return new Resolution<>(null, MatchKind.NONE);
+        }
+    }
+
+    private Resolution<Location> resolveLocation(String raw, RefData ref, ImportOverrides overrides) {
+        if (raw == null || raw.isBlank()) return Resolution.none();
+        String trimmed = raw.trim();
+        UUID manual = overrides.locations().get(normalizeName(trimmed));
+        if (manual != null && ref.locationsById.containsKey(manual)) {
+            return new Resolution<>(ref.locationsById.get(manual), MatchKind.MANUAL);
+        }
+        Location exact = ref.locations.get(trimmed.toLowerCase(Locale.ROOT));
+        if (exact != null) return new Resolution<>(exact, MatchKind.EXACT);
+        Location normalized = ref.locationsNorm.get(normalizeName(trimmed));
+        if (normalized != null) return new Resolution<>(normalized, MatchKind.FUZZY);
+        return ref.fuzzyLocation(trimmed);
+    }
+
+    private Resolution<AppUser> resolveAssignee(String raw, RefData ref, ImportOverrides overrides) {
+        if (raw == null || raw.isBlank()) return Resolution.none();
+        String trimmed = raw.trim();
+        UUID manual = overrides.assignees().get(normalizeName(trimmed));
+        if (manual != null && ref.usersById.containsKey(manual)) {
+            return new Resolution<>(ref.usersById.get(manual), MatchKind.MANUAL);
+        }
+        if (trimmed.contains("@")) {
+            AppUser byEmail = ref.usersByEmail.get(trimmed.toLowerCase(Locale.ROOT));
+            return byEmail == null ? Resolution.none() : new Resolution<>(byEmail, MatchKind.EXACT);
+        }
+        AppUser exact = ref.usersByName.get(trimmed.toLowerCase(Locale.ROOT));
+        if (exact != null) return new Resolution<>(exact, MatchKind.EXACT);
+        AppUser normalized = ref.usersByNameNorm.get(normalizeName(trimmed));
+        if (normalized != null) return new Resolution<>(normalized, MatchKind.FUZZY);
+        return ref.fuzzyUser(trimmed);
     }
 
     private String deriveTitle(RawRow r) {
@@ -318,18 +457,6 @@ public class IncidentImportService {
 
     private AppUser findUserByEmail(String email, RefData ref) {
         return ref.usersByEmail.get(email.trim().toLowerCase(Locale.ROOT));
-    }
-
-    private AppUser findUserByName(String name, RefData ref) {
-        if (name == null || name.isBlank()) return null;
-        String key = name.trim().toLowerCase(Locale.ROOT);
-        if (key.contains("@")) return ref.usersByEmail.get(key);
-        return ref.usersByName.get(key);
-    }
-
-    private Location findLocation(String name, RefData ref) {
-        if (name == null || name.isBlank()) return null;
-        return ref.locations.get(name.trim().toLowerCase(Locale.ROOT));
     }
 
     private Category resolveCategory(RawRow r, RefData ref) {
@@ -423,6 +550,69 @@ public class IncidentImportService {
         return cell == null ? null : fmt.formatCellValue(cell);
     }
 
+    /**
+     * Normalizes a legacy name for matching: lowercase, punctuation stripped,
+     * trailing region codes (", IND", ", VA") removed, whitespace collapsed.
+     */
+    private static String normalizeName(String s) {
+        if (s == null) return "";
+        List<String> tokens = new ArrayList<>(List.of(
+                s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split("\\s+")));
+        while (!tokens.isEmpty() && TRAILING_REGION_CODES.contains(tokens.get(tokens.size() - 1))) {
+            tokens.remove(tokens.size() - 1);
+        }
+        return String.join(" ", tokens).trim();
+    }
+
+    /**
+     * Token-level fuzzy match: every query token must be covered — either by a
+     * shared token or by an initialism spanning consecutive candidate words
+     * ("jrc" -> "james river cardiology"). Requires at least one shared
+     * non-initialism token as a guard against false positives.
+     */
+    static boolean fuzzyMatch(String query, String candidate) {
+        String[] qTokens = normalizeName(query).split("\\s+");
+        String[] cWords = normalizeName(candidate).split("\\s+");
+        if (qTokens.length == 0 || qTokens[0].isEmpty() || cWords.length == 0) return false;
+        Set<String> cSet = new HashSet<>(List.of(cWords));
+        boolean shared = false;
+        boolean[] used = new boolean[cWords.length];
+        for (String t : qTokens) {
+            if (t.isEmpty()) continue;
+            if (cSet.contains(t)) {
+                shared = true;
+                for (int i = 0; i < cWords.length; i++) {
+                    if (!used[i] && cWords[i].equals(t)) { used[i] = true; break; }
+                }
+                continue;
+            }
+            if (!consumeInitialism(t, cWords, used)) return false;
+        }
+        return shared;
+    }
+
+    /** Marks a consecutive run of unused candidate words whose initials spell t. */
+    private static boolean consumeInitialism(String t, String[] cWords, boolean[] used) {
+        if (t.length() < 2) return false;
+        for (int start = 0; start <= cWords.length - t.length(); start++) {
+            StringBuilder sb = new StringBuilder();
+            boolean ok = true;
+            for (int i = 0; i < t.length(); i++) {
+                if (used[start + i] || cWords[start + i].isEmpty()
+                        || cWords[start + i].charAt(0) != t.charAt(i)) {
+                    ok = false;
+                    break;
+                }
+                sb.append(cWords[start + i].charAt(0));
+            }
+            if (ok && sb.toString().equals(t)) {
+                for (int i = 0; i < t.length(); i++) used[start + i] = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
     private OffsetDateTime parseDate(Row row, Integer col, DataFormatter fmt) {
         if (col == null) return null;
         Cell cell = row.getCell(col);
@@ -430,6 +620,14 @@ public class IncidentImportService {
         try {
             if (DateUtil.isCellDateFormatted(cell)) {
                 return OffsetDateTime.ofInstant(cell.getDateCellValue().toInstant(), ZoneOffset.UTC);
+            }
+            // Numeric cell without a date format — try Excel serial directly
+            // (serial ~30000..80000 covers 1982..2119).
+            if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                double v = cell.getNumericCellValue();
+                if (v >= 30000 && v <= 80000) {
+                    return OffsetDateTime.ofInstant(DateUtil.getJavaDate(v).toInstant(), ZoneOffset.UTC);
+                }
             }
         } catch (Exception ignored) {
         }
@@ -454,7 +652,11 @@ public class IncidentImportService {
     private class RefData {
         final Map<String, AppUser> usersByEmail;
         final Map<String, AppUser> usersByName;
+        final Map<String, AppUser> usersByNameNorm;
+        final Map<UUID, AppUser> usersById;
         final Map<String, Location> locations;
+        final Map<String, Location> locationsNorm;
+        final Map<UUID, Location> locationsById;
         final Map<String, Category> categories;
         final Map<String, Priority> priorities;
         UUID orgId;
@@ -463,7 +665,11 @@ public class IncidentImportService {
         private RefData() {
             usersByEmail = new HashMap<>();
             usersByName = new HashMap<>();
+            usersByNameNorm = new HashMap<>();
+            usersById = new HashMap<>();
             locations = new HashMap<>();
+            locationsNorm = new HashMap<>();
+            locationsById = new HashMap<>();
             categories = new HashMap<>();
             priorities = new HashMap<>();
         }
@@ -472,10 +678,18 @@ public class IncidentImportService {
             this.orgId = orgId;
             for (AppUser u : appUserRepository.findByOrgId(orgId)) {
                 if (u.getEmail() != null) usersByEmail.putIfAbsent(u.getEmail().toLowerCase(Locale.ROOT), u);
-                if (u.getDisplayName() != null) usersByName.putIfAbsent(u.getDisplayName().toLowerCase(Locale.ROOT), u);
+                if (u.getDisplayName() != null) {
+                    usersByName.putIfAbsent(u.getDisplayName().toLowerCase(Locale.ROOT), u);
+                    String norm = normalizeName(u.getDisplayName());
+                    if (!norm.isBlank()) usersByNameNorm.putIfAbsent(norm, u);
+                }
+                if (u.getId() != null) usersById.putIfAbsent(u.getId(), u);
             }
             for (Location l : locationRepository.findByOrgIdAndDeletedAtIsNullOrderByName(orgId)) {
                 locations.putIfAbsent(l.getName().toLowerCase(Locale.ROOT), l);
+                String norm = normalizeName(l.getName());
+                if (!norm.isBlank()) locationsNorm.putIfAbsent(norm, l);
+                locationsById.putIfAbsent(l.getId(), l);
             }
             for (Category c : categoryRepository.findByOrgIdAndDeletedAtIsNullOrderByDisplayOrderAsc(orgId)) {
                 categories.putIfAbsent(c.getName().toLowerCase(Locale.ROOT), c);
@@ -484,6 +698,23 @@ public class IncidentImportService {
                 priorities.putIfAbsent(p.getName().toLowerCase(Locale.ROOT), p);
             }
             return this;
+        }
+
+        /** Best-effort fuzzy scan over normalized names; null when nothing qualifies. */
+        Resolution<Location> fuzzyLocation(String raw) {
+            for (Location l : locationsById.values()) {
+                if (fuzzyMatch(raw, l.getName())) return new Resolution<>(l, MatchKind.FUZZY);
+            }
+            return Resolution.none();
+        }
+
+        Resolution<AppUser> fuzzyUser(String raw) {
+            for (AppUser u : usersById.values()) {
+                if (u.getDisplayName() != null && fuzzyMatch(raw, u.getDisplayName())) {
+                    return new Resolution<>(u, MatchKind.FUZZY);
+                }
+            }
+            return Resolution.none();
         }
 
         AppUser legacyUser(UUID orgId) {

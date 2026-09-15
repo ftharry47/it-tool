@@ -75,6 +75,7 @@ class IncidentImportServiceTest {
         agent = user("Bob Agent", "bob@example.com");
         legacyUser = user("Legacy Import", "legacy-import@alignedcardio.local");
         location = new Location();
+        location.setId(UUID.randomUUID());
         location.setName("HQ");
         category = new Category();
         category.setName("Hardware");
@@ -93,6 +94,7 @@ class IncidentImportServiceTest {
 
     private AppUser user(String name, String email) {
         AppUser u = new AppUser();
+        u.setId(UUID.randomUUID());
         u.setDisplayName(name);
         u.setEmail(email);
         return u;
@@ -240,7 +242,7 @@ class IncidentImportServiceTest {
     }
 
     @Test
-    void commitSkipsRowsWithBadCreatedDate() throws Exception {
+    void commitImportsRowsWithBadCreatedDateUsingFallback() throws Exception {
         when(incidentRepository.save(any(Incident.class))).thenAnswer(inv -> {
             Incident i = inv.getArgument(0);
             i.setId(UUID.randomUUID());
@@ -251,16 +253,108 @@ class IncidentImportServiceTest {
         lenient().when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
         lenient().when(em.createNativeQuery(anyString())).thenReturn(nativeQuery);
 
+        // Unparseable created date is a warning, never a blocker:
+        // row 2 falls back to Resolved Date, row 3 falls back to import time.
         InputStream file = xlsx(new String[][]{
-                {"HD-4001", "not-a-date", "Jane", "jane@example.com", "", "", "", "", "Bad date row", "", "", "", "", "", "", ""},
-                {"HD-4002", "2020-01-01", "Jane", "jane@example.com", "", "", "", "", "Good row", "", "", "", "", "", "", ""}});
+                {"HD-4001", "not-a-date", "Jane", "jane@example.com", "", "", "", "", "Bad date row", "", "", "", "", "", "", "2020-02-01"},
+                {"HD-4002", "not-a-date", "Jane", "jane@example.com", "", "", "", "", "No dates row", "", "", "", "", "", "", ""},
+                {"HD-4003", "2020-01-01", "Jane", "jane@example.com", "", "", "", "", "Good row", "", "", "", "", "", "", ""}});
+
+        IncidentImportService.ImportPreview preview = service.preview(
+                xlsx(new String[][]{
+                        {"HD-4001", "not-a-date", "Jane", "jane@example.com", "", "", "", "", "Bad date row", "", "", "", "", "", "", "2020-02-01"},
+                        {"HD-4002", "not-a-date", "Jane", "jane@example.com", "", "", "", "", "No dates row", "", "", "", "", "", "", ""}}),
+                ORG_ID);
+        assertEquals(2, preview.importable());
+        assertEquals(0, preview.skipped());
+        assertTrue(preview.rows().get(0).warnings().stream()
+                .anyMatch(w -> w.contains("not-a-date") && w.contains("Resolved Date")));
+        assertTrue(preview.rows().get(1).warnings().stream()
+                .anyMatch(w -> w.contains("not-a-date") && w.contains("import time")));
 
         IncidentImportService.ImportResult result = service.commit(file, ORG_ID, agent);
+        assertEquals(3, result.imported());
+        assertEquals(0, result.skipped());
+    }
 
-        assertEquals(1, result.imported());
-        assertEquals(1, result.skipped());
-        assertEquals(2, result.skippedRows().get(0).rowNumber());
-        assertTrue(result.skippedRows().get(0).reason().contains("Created Date"));
+    @Test
+    void previewParsesDayFirstAndSecondsDates() throws Exception {
+        InputStream file = xlsx(new String[][]{
+                {"HD-5001", "14/9/2026", "Jane Doe", "jane@example.com", "", "", "", "", "Day-first", "", "", "", "", "", "", ""},
+                {"HD-5002", "14/09/2026 10:23:45", "Jane Doe", "jane@example.com", "", "", "", "", "Day-first + time", "", "", "", "", "", "", ""},
+                {"HD-5003", "9/14/2026 3:45:12 PM", "Jane Doe", "jane@example.com", "", "", "", "", "US seconds+AMPM", "", "", "", "", "", "", ""}});
+
+        IncidentImportService.ImportPreview preview = service.preview(file, ORG_ID);
+
+        assertEquals(3, preview.importable());
+        assertTrue(preview.rows().get(0).createdAt().startsWith("2026-09-14"));
+        assertTrue(preview.rows().get(1).createdAt().startsWith("2026-09-14T10:23:45"));
+        assertTrue(preview.rows().get(2).createdAt().startsWith("2026-09-14T15:45:12"));
+    }
+
+    @Test
+    void previewFuzzyMatchesRenamedLocationAndInitialism() throws Exception {
+        Location renamed = new Location();
+        renamed.setId(UUID.randomUUID());
+        renamed.setName("Solid State Practice - Coimbatore");
+        Location jrc = new Location();
+        jrc.setId(UUID.randomUUID());
+        jrc.setName("James River Cardiology - Discovery, VA");
+        when(locationRepository.findByOrgIdAndDeletedAtIsNullOrderByName(ORG_ID))
+                .thenReturn(List.of(location, renamed, jrc));
+
+        InputStream file = xlsx(new String[][]{
+                {"HD-6001", "2026-09-14", "Jane Doe", "jane@example.com", "", "Solid State Practice - Coimbatore, IND", "", "", "Suffix rename", "", "", "", "", "", "", ""},
+                {"HD-6002", "2026-09-14", "Jane Doe", "jane@example.com", "", "JRC - Discovery", "", "", "Abbreviation", "", "", "", "", "", "", ""}});
+
+        IncidentImportService.ImportPreview preview = service.preview(file, ORG_ID);
+
+        IncidentImportService.PreviewRow r1 = preview.rows().get(0);
+        assertTrue(r1.locationMatched());
+        assertEquals("FUZZY", r1.locationMatch());
+        assertEquals("Solid State Practice - Coimbatore", r1.locationResolvedName());
+
+        IncidentImportService.PreviewRow r2 = preview.rows().get(1);
+        assertTrue(r2.locationMatched());
+        assertEquals("FUZZY", r2.locationMatch());
+        assertEquals("James River Cardiology - Discovery, VA", r2.locationResolvedName());
+    }
+
+    @Test
+    void commitAppliesManualOverrides() throws Exception {
+        Location clinic = new Location();
+        clinic.setId(UUID.randomUUID());
+        clinic.setName("River City Clinic");
+        when(locationRepository.findByOrgIdAndDeletedAtIsNullOrderByName(ORG_ID))
+                .thenReturn(List.of(location, clinic));
+        when(incidentRepository.save(any(Incident.class))).thenAnswer(inv -> {
+            Incident i = inv.getArgument(0);
+            i.setId(UUID.randomUUID());
+            i.setOrgId(ORG_ID);
+            return i;
+        });
+        Query nativeQuery = mock(Query.class);
+        lenient().when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
+        lenient().when(em.createNativeQuery(anyString())).thenReturn(nativeQuery);
+
+        // Two rows share the same unmatched raw value — one override covers both.
+        String[][] rows = {
+                {"HD-7001", "14/9/2026", "Jane Doe", "jane@example.com", "", "Old Clinic Name", "", "", "Row one", "", "", "", "", "", "", ""},
+                {"HD-7002", "14/9/2026", "Jane Doe", "jane@example.com", "", "Old Clinic Name", "", "", "Row two", "", "", "", "", "", "", ""}};
+        var overrides = new IncidentImportService.ImportOverrides(
+                java.util.Map.of("Old Clinic Name", clinic.getId()), java.util.Map.of());
+
+        IncidentImportService.ImportPreview preview = service.preview(xlsx(rows), ORG_ID, overrides);
+        assertEquals("MANUAL", preview.rows().get(0).locationMatch());
+        assertEquals("River City Clinic", preview.rows().get(0).locationResolvedName());
+        assertEquals("MANUAL", preview.rows().get(1).locationMatch());
+
+        IncidentImportService.ImportResult result = service.commit(xlsx(rows), ORG_ID, agent, overrides);
+        assertEquals(2, result.imported());
+        ArgumentCaptor<Incident> captor = ArgumentCaptor.forClass(Incident.class);
+        verify(incidentRepository, times(2)).save(captor.capture());
+        assertEquals(clinic, captor.getAllValues().get(0).getLocation());
+        assertEquals(clinic, captor.getAllValues().get(1).getLocation());
     }
 
     @Test
