@@ -62,6 +62,7 @@ class ServiceRequestServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private NotificationTemplateBuilder notificationTemplateBuilder;
     @Mock private SlaEngine slaEngine;
+    @Mock private com.alignedcardio.itsm.repository.PriorityRepository priorityRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<UUID, ServiceRequest> savedRequests = new HashMap<>();
@@ -83,7 +84,8 @@ class ServiceRequestServiceTest {
                 teamMemberRepository,
                 notificationService,
                 notificationTemplateBuilder,
-                slaEngine);
+                slaEngine,
+                priorityRepository);
     }
 
     private AppUser user(String name) {
@@ -740,7 +742,8 @@ class ServiceRequestServiceTest {
                 objectMapper.createObjectNode().put("request", "New printer (capital)").toString(),
                 null,
                 location.getId(),
-                "555-123-4567");
+                "555-123-4567",
+                null);
         ServiceRequestResponse approvalResponse = service.create(requester, ORG_ID, approvalReq);
         assertEquals(ServiceRequest.Status.PENDING_APPROVAL, approvalResponse.status());
         assertEquals(catalogApprover.getId(), approvalResponse.approverId());
@@ -751,7 +754,8 @@ class ServiceRequestServiceTest {
                 objectMapper.createObjectNode().put("request", "Toner / supplies").toString(),
                 null,
                 location.getId(),
-                "555-123-4567");
+                "555-123-4567",
+                null);
         ServiceRequestResponse noApprovalResponse = service.create(requester, ORG_ID, noApprovalReq);
         assertEquals(ServiceRequest.Status.IN_FULFILLMENT, noApprovalResponse.status());
     }
@@ -774,17 +778,17 @@ class ServiceRequestServiceTest {
         // Missing -> rejected with the clear message
         IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
                 () -> service.create(requester, ORG_ID,
-                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), null)));
+                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), null, null)));
         assertEquals("Please enter a valid 10-digit phone number", missing.getMessage());
 
         // Wrong digit count -> rejected
         assertThrows(IllegalArgumentException.class,
                 () -> service.create(requester, ORG_ID,
-                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "555-1234")));
+                        new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "555-1234", null)));
 
         // Formatted input -> accepted and stored as plain digits
         ServiceRequestResponse response = service.create(requester, ORG_ID,
-                new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "(555) 123-4567"));
+                new ServiceRequestCreateRequest(item.getId(), formData, null, location.getId(), "(555) 123-4567", null));
         assertEquals("5551234567", response.phone());
     }
 

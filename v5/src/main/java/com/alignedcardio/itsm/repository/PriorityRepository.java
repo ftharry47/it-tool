@@ -14,4 +14,6 @@ public interface PriorityRepository extends JpaRepository<Priority, UUID> {
     List<Priority> findByOrgIdAndStatusOrderByDisplayOrderAsc(UUID orgId, Priority.Status status);
 
     Optional<Priority> findByOrgIdAndName(UUID orgId, String name);
+
+    Optional<Priority> findByOrgIdAndId(UUID orgId, UUID id);
 }

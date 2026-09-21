@@ -54,6 +54,7 @@ interface PendingTaskAction {
   workflow: 'FULL' | 'SOFTWARE' | 'INSTANT'
   description: string
   assigneeId?: string
+  reassign?: boolean
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -109,6 +110,8 @@ interface ServiceRequestDetail {
   locationId: string | null
   locationName: string | null
   createdAt: string
+  priorityId: string | null
+  priorityName: string | null
   tasks: FulfillmentTask[]
 }
 
@@ -358,6 +361,21 @@ export function ServiceRequestDetail() {
     onError: (error) => setActionError(error.message),
   })
 
+  // Hold/resume flips the request's status; the backend pauses/resumes its SLA.
+  const statusMutation = useMutation<ServiceRequestDetail, Error, 'ON_HOLD' | 'IN_FULFILLMENT'>({
+    mutationFn: async (status) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: invalidateTaskQueries,
+    onError: (error) => setActionError(error.message),
+  })
+
   if (requestQuery.isLoading) return <Loading />
   if (requestQuery.error) return <ErrorFallback error={requestQuery.error} message="Could not load request." onRetry={() => requestQuery.refetch()} />
   if (!requestQuery.data) return <Loading />
@@ -377,7 +395,7 @@ export function ServiceRequestDetail() {
 
   const confirmTaskTitle = (action: PendingTaskAction) => {
     switch (action.type) {
-      case 'assign': return 'Assign task?'
+      case 'assign': return action.reassign ? 'Reassign task?' : 'Assign task?'
       case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark provisioned?' : 'Mark ordered?'
       case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark granted?' : 'Mark installed?'
       case 'complete': return 'Complete task?'
@@ -386,7 +404,7 @@ export function ServiceRequestDetail() {
 
   const confirmTaskLabel = (action: PendingTaskAction) => {
     switch (action.type) {
-      case 'assign': return 'Assign'
+      case 'assign': return action.reassign ? 'Reassign' : 'Assign'
       case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark Provisioned' : 'Mark Ordered'
       case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark Granted' : 'Mark Installed'
       case 'complete': return 'Complete'
@@ -464,6 +482,10 @@ export function ServiceRequestDetail() {
                   <dt className="text-muted-foreground">Location</dt>
                   <dd className="font-medium">{request.locationName ?? '—'}</dd>
                 </div>
+                <div className="flex justify-between sm:block">
+                  <dt className="text-muted-foreground">Priority</dt>
+                  <dd className="font-medium">{request.priorityName ?? '—'}</dd>
+                </div>
                 {request.approvalComment && (
                   <div className="sm:col-span-2">
                     <dt className="text-muted-foreground">Approval comment</dt>
@@ -505,8 +527,9 @@ export function ServiceRequestDetail() {
                                 type: 'assign',
                                 taskId: row.id,
                                 workflow: (row.workflow ?? 'FULL') as 'FULL' | 'SOFTWARE' | 'INSTANT',
-                                description: `Assign task "${row.description}" to ${member?.displayName ?? 'selected fulfiller'}?`,
+                                description: `${row.assigneeId ? 'Reassign' : 'Assign'} task "${row.description}" to ${member?.displayName ?? 'selected fulfiller'}?`,
                                 assigneeId,
+                                reassign: !!row.assigneeId,
                               })
                             }
                           }}
@@ -514,7 +537,7 @@ export function ServiceRequestDetail() {
                           aria-label={`Assign fulfiller for ${row.description}`}
                           className="rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
                         >
-                          <option value="">{row.assigneeName ?? 'Assign…'}</option>
+                          <option value="">{row.assigneeName ? `${row.assigneeName} — reassign…` : 'Assign…'}</option>
                           {fulfillmentMembers.map((m) => (
                             <option key={m.userId} value={m.userId}>{m.displayName}</option>
                           ))}
@@ -631,6 +654,26 @@ export function ServiceRequestDetail() {
           </div>
 
           <aside className="space-y-6">
+            {canPostInternal && ['APPROVED', 'IN_FULFILLMENT', 'ON_HOLD'].includes(request.status) && (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="mb-2 text-lg font-semibold">
+                  {request.status === 'ON_HOLD' ? 'Resume Work' : 'Hold Request'}
+                </h2>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {request.status === 'ON_HOLD'
+                    ? 'Resume fulfillment — the SLA clock resumes from where it paused.'
+                    : 'Pauses work and stops the SLA clock until the request resumes.'}
+                </p>
+                <button
+                  onClick={() => statusMutation.mutate(request.status === 'ON_HOLD' ? 'IN_FULFILLMENT' : 'ON_HOLD')}
+                  disabled={statusMutation.isPending}
+                  className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
+                >
+                  {request.status === 'ON_HOLD' ? 'Resume (restart SLA clock)' : 'Place on Hold (pause SLA)'}
+                </button>
+              </div>
+            )}
+
             {request.status === 'PENDING_APPROVAL' && request.approverId === currentUser?.id && (
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Approval</h2>

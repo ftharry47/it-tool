@@ -220,6 +220,97 @@ public class ReportingController {
         return out;
     }
 
+    /**
+     * Drill-down behind "Workload per Agent": the agent's open tickets across
+     * all four entity types. Admin-only — an agent's own queue is already
+     * visible via their own list pages.
+     */
+    @GetMapping("/agent-queue")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public Map<String, Object> agentQueue(@AuthenticationPrincipal Jwt jwt,
+                                          @RequestParam UUID agentId) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.agentQueue(user.getOrgId(), agentId);
+    }
+
+    /**
+     * Full worked-ticket list for an agent with date/type/status filters.
+     * Non-admin callers are scoped to themselves; ADMIN/SUPER_ADMIN may pass
+     * agentId to inspect any agent's history.
+     */
+    @GetMapping("/agent-performance/tickets")
+    public List<Map<String, Object>> agentPerformanceTickets(@AuthenticationPrincipal Jwt jwt,
+                                                             Authentication auth,
+                                                             @RequestParam(required = false) OffsetDateTime from,
+                                                             @RequestParam(required = false) OffsetDateTime to,
+                                                             @RequestParam(required = false) String entityType,
+                                                             @RequestParam(required = false) String status,
+                                                             @RequestParam(required = false) UUID agentId) {
+        AppUser user = userService.syncFromJwt(jwt);
+        UUID target = (agentId != null && isAdmin(auth)) ? agentId : user.getId();
+        OffsetDateTime effectiveFrom = from != null ? from : OffsetDateTime.now().minusMonths(3);
+        OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
+        return reportingService.agentPerformanceTickets(user.getOrgId(), target,
+                effectiveFrom, effectiveTo, entityType, status);
+    }
+
+    /** Real-time service-request operations snapshot for admins. */
+    @GetMapping("/service-request-ops")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public Map<String, Object> serviceRequestOps(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.serviceRequestOps(user.getOrgId());
+    }
+
+    /** Admin triage: items needing attention right now across all ticket types. */
+    @GetMapping("/needs-attention")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public Map<String, Object> needsAttention(@AuthenticationPrincipal Jwt jwt) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.needsAttention(user.getOrgId());
+    }
+
+    /**
+     * Same ad-hoc query, rendered as an XLSX workbook download.
+     * format=xlsx triggers the export; anything else returns JSON as before.
+     */
+    @PostMapping(value = "/query", params = "format=xlsx", produces =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> adHocQueryXlsx(@AuthenticationPrincipal Jwt jwt, Authentication auth,
+                                                 @RequestBody AdHocQueryRequest request,
+                                                 @RequestParam(required = false, defaultValue = "false") boolean mine)
+            throws java.io.IOException {
+        AppUser user = userService.syncFromJwt(jwt);
+        AdHocQueryResponse data = reportingService.adHocQuery(user.getOrgId(), request, scopedUserId(auth, user, mine));
+
+        try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(
+                    data.entity() != null ? data.entity() : "export");
+            java.util.List<String> headers = data.rows().stream()
+                    .flatMap(r -> r.keySet().stream())
+                    .distinct()
+                    .toList();
+            org.apache.poi.ss.usermodel.Row head = sheet.createRow(0);
+            for (int c = 0; c < headers.size(); c++) {
+                head.createCell(c).setCellValue(headers.get(c));
+            }
+            int r = 1;
+            for (Map<String, Object> row : data.rows()) {
+                org.apache.poi.ss.usermodel.Row excelRow = sheet.createRow(r++);
+                for (int c = 0; c < headers.size(); c++) {
+                    Object v = row.get(headers.get(c));
+                    excelRow.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                }
+            }
+            wb.write(bos);
+            return ResponseEntity.ok()
+                    .header("Content-Disposition",
+                            "attachment; filename=\"" + data.entity() + "-export.xlsx\"")
+                    .body(bos.toByteArray());
+        }
+    }
+
     /** All agents' generated performance reports — SUPER_ADMIN aggregate view. */
     @GetMapping("/agent-performance/all")
     @PreAuthorize("hasRole('SUPER_ADMIN')")

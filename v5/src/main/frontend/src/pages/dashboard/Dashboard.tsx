@@ -114,6 +114,7 @@ interface ChangeSummary {
 }
 
 interface AgentWorkload {
+  agentId: string
   agentName: string
   openCount: number
   onTrack: number
@@ -131,6 +132,33 @@ interface TicketsByLocationRow {
   oldestOpenDays: number | null
   resolvedCount: number
   breachedCount: number
+}
+
+interface QueueTicket {
+  id: string
+  number: string
+  title: string | null
+  status: string
+  createdAt: string | null
+  slaStatus: string | null
+}
+
+interface NeedsAttentionData {
+  unassignedIncidents: QueueTicket[]
+  breachedSlaCount: number
+  rejectedNeedsReview: QueueTicket[]
+  escalationsAwaitingPickup: QueueTicket[]
+  pendingApprovals: number
+}
+
+interface ServiceRequestOps {
+  byStatus: Record<string, number>
+  oldestOpen: QueueTicket[]
+  needsAttention: {
+    pendingApprovals: number
+    rejectedNeedsReview: number
+    unassignedTasks: number
+  }
 }
 
 interface EscalationEntry {
@@ -248,55 +276,12 @@ function GradeChip({ grade }: { grade: string }) {
   )
 }
 
-/** Part B: live current-month performance for the signed-in staff member. */
-function MyPerformanceCard({ data, isLoading }: { data: MyPerformanceResponse | undefined; isLoading: boolean }) {
+/** Merged monthly view: performance stats + grade + per-type volume, all in one card. */
+function MyMonthCard({ data, isLoading }: { data: MyPerformanceResponse | undefined; isLoading: boolean }) {
   if (isLoading) {
     return (
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <p className="text-sm text-muted-foreground">Loading your monthly stats…</p>
-      </div>
-    )
-  }
-  if (!data) return null
-  const r = data.report
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">This Month — Your Performance</h3>
-        <GradeChip grade={r.grade} />
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div>
-          <p className="text-2xl font-bold">{r.ticketsHandled}</p>
-          <p className="text-xs text-muted-foreground">Handled</p>
-        </div>
-        <div>
-          <p className="text-2xl font-bold">{r.ticketsResolved}</p>
-          <p className="text-xs text-muted-foreground">Resolved</p>
-        </div>
-        <div>
-          <p className="text-2xl font-bold">{data.rollingSlaCompliancePct >= 0 ? `${data.rollingSlaCompliancePct}%` : '—'}</p>
-          <p className="text-xs text-muted-foreground">SLA (all-time)</p>
-        </div>
-        <div>
-          <p className="text-2xl font-bold">{r.escalatedAwayPct}%</p>
-          <p className="text-xs text-muted-foreground">Escalated away</p>
-        </div>
-        <div>
-          <p className="text-2xl font-bold">{r.score}</p>
-          <p className="text-xs text-muted-foreground">Score / 100</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** Monthly volume overview across all four work types for the signed-in agent. */
-function MyMonthOverview({ data, isLoading }: { data: MyPerformanceResponse | undefined; isLoading: boolean }) {
-  if (isLoading) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-        <p className="text-sm text-muted-foreground">Loading this month's work…</p>
       </div>
     )
   }
@@ -315,10 +300,13 @@ function MyMonthOverview({ data, isLoading }: { data: MyPerformanceResponse | un
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">This Month — Your Work</h3>
-        <span className="text-xs text-muted-foreground">{monthLabel}</span>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground">This Month — Your Work</h3>
+          <span className="text-xs text-muted-foreground">{monthLabel}</span>
+        </div>
+        <GradeChip grade={r.grade} />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <div>
           <p className="text-2xl font-bold">{r.ticketsHandled}</p>
           <p className="text-xs text-muted-foreground">Handled</p>
@@ -333,11 +321,19 @@ function MyMonthOverview({ data, isLoading }: { data: MyPerformanceResponse | un
         </div>
         <div>
           <p className="text-2xl font-bold">{r.slaCompliancePct >= 0 ? `${r.slaCompliancePct}%` : '—'}</p>
-          <p className="text-xs text-muted-foreground">SLA (this month)</p>
+          <p className="text-xs text-muted-foreground">SLA (month)</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{data.rollingSlaCompliancePct >= 0 ? `${data.rollingSlaCompliancePct}%` : '—'}</p>
+          <p className="text-xs text-muted-foreground">SLA (all-time)</p>
         </div>
         <div>
           <p className="text-2xl font-bold">{r.escalatedAwayPct}%</p>
           <p className="text-xs text-muted-foreground">Escalated away</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{r.score}</p>
+          <p className="text-xs text-muted-foreground">Score / 100</p>
         </div>
       </div>
       <ul className="mt-4 space-y-2 border-t border-border pt-3">
@@ -402,14 +398,18 @@ function fmtTargetMinutes(minutes: number): string {
   return `${minutes}m`
 }
 
-/** Part B2: the SLA policies that govern the signed-in agent's work. */
-function YourSlaTargets({ data, isLoading }: { data: SlaTarget[] | undefined; isLoading: boolean }) {
+/**
+ * The SLA policies governing the signed-in agent's work, grouped by what they
+ * actually do: fulfillment-only agents (on IT Fulfillment but no L-tier) see
+ * only Service Request SLAs; tier agents who also fulfill see both groups.
+ */
+function YourSlaTargets({ data, isLoading, fulfillmentOnly }: { data: SlaTarget[] | undefined; isLoading: boolean; fulfillmentOnly: boolean }) {
   if (isLoading || !data || data.length === 0) return null
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Your SLA Targets</h3>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {data.map((p) => (
+  const requestPolicies = data.filter((p) => p.appliesTo === 'REQUEST')
+  const ticketPolicies = fulfillmentOnly ? [] : data.filter((p) => p.appliesTo !== 'REQUEST')
+  if (requestPolicies.length === 0 && ticketPolicies.length === 0) return null
+
+  const renderPolicy = (p: SlaTarget) => (
           <div key={p.id} className="rounded-lg border border-border p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium">{p.name}</p>
@@ -432,8 +432,31 @@ function YourSlaTargets({ data, isLoading }: { data: SlaTarget[] | undefined; is
               </p>
             )}
           </div>
-        ))}
-      </div>
+  )
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Your SLA Targets</h3>
+      {ticketPolicies.length > 0 && (
+        <div className={requestPolicies.length > 0 ? 'mb-4' : ''}>
+          {requestPolicies.length > 0 && (
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Incidents · Problems · Changes</p>
+          )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {ticketPolicies.map(renderPolicy)}
+          </div>
+        </div>
+      )}
+      {requestPolicies.length > 0 && (
+        <div>
+          {ticketPolicies.length > 0 && (
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Service Requests</p>
+          )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {requestPolicies.map(renderPolicy)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -708,7 +731,13 @@ function WorkloadChart({ data, isLoading }: { data: AgentWorkload[] | undefined;
                       />
                     ))}
                   </div>
-                  <span className="w-14 text-right text-sm tabular-nums text-muted-foreground">{r.openCount} open</span>
+                  <Link
+                    to={`/dashboard/agent-queue?agentId=${r.agentId}`}
+                    className="w-14 text-right text-sm tabular-nums text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    title={`Open ${r.agentName}'s queue`}
+                  >
+                    {r.openCount} open
+                  </Link>
                   <span
                     className={`w-11 text-right text-xs font-semibold ${
                       onTrackPct >= 80
@@ -1090,6 +1119,30 @@ export function Dashboard() {
     staleTime: 0,
   })
 
+  const needsAttentionQuery = useQuery<NeedsAttentionData>({
+    queryKey: ['dashboard', 'needs-attention'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account, '/api/v1/reports/needs-attention')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isAdmin,
+    refetchInterval: 30_000,
+    staleTime: 0,
+  })
+
+  const srOpsQuery = useQuery<ServiceRequestOps>({
+    queryKey: ['dashboard', 'sr-ops'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account, '/api/v1/reports/service-request-ops')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isAdmin,
+    refetchInterval: 30_000,
+    staleTime: 0,
+  })
+
   const allActiveQuery = useQuery<IncidentSummary[]>({
     queryKey: ['dashboard', 'all-active'],
     queryFn: async () => {
@@ -1279,6 +1332,8 @@ export function Dashboard() {
                   <MetricCard label="Resolved today" value={ticketsQuery.data?.resolvedToday ?? 0} />
                 </div>
 
+                <NeedsAttentionCard data={needsAttentionQuery.data} isLoading={needsAttentionQuery.isLoading} />
+
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   {slaQuery.data && <SlaView data={slaQuery.data} />}
                   {ticketsQuery.data && <TicketsView data={ticketsQuery.data} />}
@@ -1288,6 +1343,8 @@ export function Dashboard() {
                   <WorkloadChart data={workloadQuery.data} isLoading={workloadQuery.isLoading} />
                   <EscalationsFeed data={escalationsQuery.data} isLoading={escalationsQuery.isLoading} />
                 </div>
+
+                <ServiceRequestOpsCard data={srOpsQuery.data} isLoading={srOpsQuery.isLoading} />
 
                 <PriorityView data={priorityQuery.data} isLoading={priorityQuery.isLoading} error={priorityQuery.error} onRetry={() => priorityQuery.refetch()} />
 
@@ -1324,11 +1381,13 @@ export function Dashboard() {
               </>
             )}
 
-            <MyPerformanceCard data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
+            <MyMonthCard data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
 
-            <MyMonthOverview data={myPerfQuery.data} isLoading={myPerfQuery.isLoading} />
-
-            <YourSlaTargets data={mySlaTargetsQuery.data} isLoading={mySlaTargetsQuery.isLoading} />
+            <YourSlaTargets
+              data={mySlaTargetsQuery.data}
+              isLoading={mySlaTargetsQuery.isLoading}
+              fulfillmentOnly={isFulfillmentMember && myTierTeams.length === 0}
+            />
 
             <IncidentSection
               title="My Tickets"
@@ -1376,6 +1435,212 @@ export function Dashboard() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const QUEUE_LINKS: Record<string, string> = {
+  INCIDENT: '/dashboard/incidents',
+  SERVICE_REQUEST: '/dashboard/service-requests',
+  PROBLEM: '/dashboard/problems',
+  CHANGE: '/dashboard/changes',
+}
+
+function queueTicketLink(type: string, id: string) {
+  return `${QUEUE_LINKS[type] ?? '/dashboard'}/${id}`
+}
+
+function ageDays(createdAt: string | null): number | null {
+  if (!createdAt) return null
+  return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000))
+}
+
+/** Part K: admin triage — what needs attention right now across all ticket types. */
+function NeedsAttentionCard({ data, isLoading }: { data: NeedsAttentionData | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <Loading compact />
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const groups: { label: string; count: number; items: QueueTicket[]; type: string; tone: 'red' | 'amber' }[] = [
+    {
+      label: 'Unassigned incidents',
+      count: data.unassignedIncidents.length,
+      items: data.unassignedIncidents,
+      type: 'INCIDENT',
+      tone: 'red',
+    },
+    {
+      label: 'Escalations awaiting pickup',
+      count: data.escalationsAwaitingPickup.length,
+      items: data.escalationsAwaitingPickup,
+      type: 'INCIDENT',
+      tone: 'amber',
+    },
+    {
+      label: 'Rejected requests awaiting review',
+      count: data.rejectedNeedsReview.length,
+      items: data.rejectedNeedsReview,
+      type: 'SERVICE_REQUEST',
+      tone: 'amber',
+    },
+  ]
+  const totalFlags = groups.reduce((n, g) => n + g.count, 0) + data.breachedSlaCount + data.pendingApprovals
+  if (totalFlags === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <h3 className="text-sm font-medium text-muted-foreground">Needs Attention</h3>
+        <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">All clear — nothing waiting on you.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Needs Attention</h3>
+        <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-950 dark:text-red-300">
+          {totalFlags} open item{totalFlags === 1 ? '' : 's'}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        {data.breachedSlaCount > 0 && (
+          <Link to="/dashboard/sla" className="rounded-md bg-red-100 px-2 py-1 font-medium text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900">
+            {data.breachedSlaCount} breached SLA{data.breachedSlaCount === 1 ? '' : 's'}
+          </Link>
+        )}
+        {data.pendingApprovals > 0 && (
+          <Link to="/dashboard/approvals" className="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900">
+            {data.pendingApprovals} pending approval{data.pendingApprovals === 1 ? '' : 's'}
+          </Link>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+        {groups.filter((g) => g.count > 0).map((g) => (
+          <div key={g.label}>
+            <p className={`text-xs font-semibold ${g.tone === 'red' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {g.label} ({g.count})
+            </p>
+            <ul className="mt-1 space-y-1">
+              {g.items.slice(0, 4).map((t) => {
+                const days = ageDays(t.createdAt)
+                return (
+                  <li key={t.id} className="text-sm">
+                    <Link to={queueTicketLink(g.type, t.id)} className="font-medium hover:underline">
+                      {t.number}
+                    </Link>
+                    <span className="ml-1.5 text-muted-foreground">
+                      {t.title ? t.title.slice(0, 32) : ''}
+                      {days != null && days > 0 ? ` · ${days}d old` : ''}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const SR_STATUS_LABEL: Record<string, string> = {
+  SUBMITTED: 'Submitted',
+  PENDING_APPROVAL: 'Pending Approval',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  REJECTED_NEEDS_REVIEW: 'Needs Review',
+  IN_FULFILLMENT: 'In Fulfillment',
+  ON_HOLD: 'On Hold',
+  FULFILLED: 'Fulfilled',
+  CANCELLED: 'Cancelled',
+}
+
+/** Part G: live service-request operations board for admins. */
+function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <Loading compact />
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const OPEN_STATUSES = ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED_NEEDS_REVIEW', 'IN_FULFILLMENT', 'ON_HOLD']
+  const openTotal = OPEN_STATUSES.reduce((n, s) => n + (data.byStatus[s] ?? 0), 0)
+  const attention = data.needsAttention
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Service Request Operations</h3>
+        <Link to="/dashboard/service-requests" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          View all →
+        </Link>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {OPEN_STATUSES.map((s) => {
+          const n = data.byStatus[s] ?? 0
+          const hot = s === 'PENDING_APPROVAL' || s === 'REJECTED_NEEDS_REVIEW'
+          return (
+            <span
+              key={s}
+              className={`rounded-md px-2 py-1 text-xs font-medium ${
+                n === 0
+                  ? 'bg-muted text-muted-foreground'
+                  : hot
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                    : 'bg-muted text-foreground'
+              }`}
+            >
+              {SR_STATUS_LABEL[s]}: {n}
+            </span>
+          )
+        })}
+        <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+          Open total: {openTotal}
+        </span>
+      </div>
+
+      {(attention.pendingApprovals > 0 || attention.rejectedNeedsReview > 0 || attention.unassignedTasks > 0) && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300">
+          Needs attention:
+          {attention.pendingApprovals > 0 && ` ${attention.pendingApprovals} awaiting approval.`}
+          {attention.rejectedNeedsReview > 0 && ` ${attention.rejectedNeedsReview} rejected needing review.`}
+          {attention.unassignedTasks > 0 && ` ${attention.unassignedTasks} fulfillment task${attention.unassignedTasks === 1 ? '' : 's'} unassigned.`}
+        </div>
+      )}
+
+      {data.oldestOpen.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-muted-foreground">Oldest open</p>
+          <ul className="mt-1 divide-y divide-border">
+            {data.oldestOpen.slice(0, 5).map((t) => {
+              const days = ageDays(t.createdAt)
+              return (
+                <li key={t.id} className="flex items-center gap-3 py-1.5 text-sm">
+                  <Link to={`/dashboard/service-requests/${t.id}`} className="w-24 shrink-0 font-medium hover:underline">
+                    {t.number}
+                  </Link>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">{t.title ?? ''}</span>
+                  <StatusBadge status={t.status} />
+                  {days != null && (
+                    <span className={`w-16 text-right text-xs tabular-nums ${days >= 7 ? 'font-semibold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                      {days}d old
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

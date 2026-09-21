@@ -25,6 +25,11 @@ interface Location {
   name: string
 }
 
+interface PriorityOption {
+  id: string
+  name: string
+}
+
 interface CreatedServiceRequest {
   id: string
   number: number
@@ -43,6 +48,7 @@ export function CatalogBrowse() {
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [locationId, setLocationId] = useState('')
+  const [priorityId, setPriorityId] = useState('')
   const [phone, setPhone] = useState('')
   const [serverError, setServerError] = useState<string | null>(null)
   const [schemaError, setSchemaError] = useState<string | null>(null)
@@ -66,6 +72,16 @@ export function CatalogBrowse() {
     queryKey: ['locations'],
     queryFn: async () => {
       const res = await fetchWithToken(instance, account!, '/api/v1/locations')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  const prioritiesQuery = useQuery<PriorityOption[]>({
+    queryKey: ['priorities'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/incidents/priorities')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -99,7 +115,7 @@ export function CatalogBrowse() {
     }
   }, [selectedItem])
 
-  const createMutation = useMutation<CreatedServiceRequest, Error, { catalogItemId: string; formData: string; locationId: string | null; phone: string | null }>({
+  const createMutation = useMutation<CreatedServiceRequest, Error, { catalogItemId: string; formData: string; locationId: string | null; phone: string | null; priorityId: string | null }>({
     mutationFn: async (payload) => {
       const res = await fetchWithToken(instance, account!, '/api/v1/service-requests', {
         method: 'POST',
@@ -190,6 +206,7 @@ export function CatalogBrowse() {
                   setSelectedItem(item)
                   setFormValues({})
                   setLocationId('')
+                  setPriorityId('')
                   setServerError(null)
                 }}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -213,6 +230,7 @@ export function CatalogBrowse() {
           setSelectedItem(null)
           setFormValues({})
           setLocationId('')
+          setPriorityId('')
           setPhone('')
           setServerError(null)
           setSchemaError(null)
@@ -234,6 +252,20 @@ export function CatalogBrowse() {
               <option value="">Select location</option>
               {locationsQuery.data?.map((loc) => (
                 <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-4 space-y-2">
+            <label htmlFor="sr-priority" className="text-sm font-medium">Priority</label>
+            <select
+              id="sr-priority"
+              value={priorityId}
+              onChange={(e) => setPriorityId(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Default</option>
+              {prioritiesQuery.data?.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>
@@ -279,6 +311,7 @@ export function CatalogBrowse() {
                     formData: JSON.stringify(values),
                     locationId,
                     phone: normalizePhone(phone),
+                    priorityId: priorityId || null,
                   })
                 }, 400)
               }, 400)

@@ -17,6 +17,7 @@ import com.alignedcardio.itsm.repository.AuditLogRepository;
 import com.alignedcardio.itsm.repository.CatalogItemRepository;
 import com.alignedcardio.itsm.repository.FulfillmentTaskRepository;
 import com.alignedcardio.itsm.repository.LocationRepository;
+import com.alignedcardio.itsm.repository.PriorityRepository;
 import com.alignedcardio.itsm.repository.ServiceRequestRepository;
 import com.alignedcardio.itsm.repository.TeamMemberRepository;
 import com.alignedcardio.itsm.util.DateFormats;
@@ -57,6 +58,7 @@ public class ServiceRequestService {
     private final NotificationService notificationService;
     private final NotificationTemplateBuilder notificationTemplateBuilder;
     private final SlaEngine slaEngine;
+    private final PriorityRepository priorityRepository;
 
     /** IT Fulfillment team — fulfiller assignees must be members (seeded in V31). */
     private static final UUID IT_FULFILLMENT_TEAM_ID = UUID.fromString("00000000-0000-0000-0000-000000000010");
@@ -74,7 +76,8 @@ public class ServiceRequestService {
                                  TeamMemberRepository teamMemberRepository,
                                  NotificationService notificationService,
                                  NotificationTemplateBuilder notificationTemplateBuilder,
-                                 SlaEngine slaEngine) {
+                                 SlaEngine slaEngine,
+                                 PriorityRepository priorityRepository) {
         this.serviceRequestRepository = serviceRequestRepository;
         this.catalogItemRepository = catalogItemRepository;
         this.fulfillmentTaskRepository = fulfillmentTaskRepository;
@@ -89,6 +92,7 @@ public class ServiceRequestService {
         this.notificationService = notificationService;
         this.notificationTemplateBuilder = notificationTemplateBuilder;
         this.slaEngine = slaEngine;
+        this.priorityRepository = priorityRepository;
     }
 
     @Transactional(readOnly = true)
@@ -179,6 +183,10 @@ public class ServiceRequestService {
         Location location = locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(orgId, request.locationId())
                 .orElseThrow(() -> new NotFoundException("Location not found"));
         sr.setLocation(location);
+        if (request.priorityId() != null) {
+            sr.setPriority(priorityRepository.findByOrgIdAndId(orgId, request.priorityId())
+                    .orElseThrow(() -> new NotFoundException("Priority not found")));
+        }
         sr.setApprovalRequired(computeApprovalRequired(item, sr.getFormData()));
         sr.setCreatedBy(user.getId());
         sr.setUpdatedBy(user.getId());
@@ -1111,7 +1119,9 @@ public class ServiceRequestService {
                                 t.getOrderId(),
                                 t.getVendor()))
                         .toList(),
-                sr.getCreatedAt()
+                sr.getCreatedAt(),
+                sr.getPriority() != null ? sr.getPriority().getId() : null,
+                sr.getPriority() != null ? sr.getPriority().getName() : null
         );
     }
 }

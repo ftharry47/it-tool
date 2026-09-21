@@ -39,10 +39,10 @@ public class SlaEngine {
     }
 
     @Transactional
-    public void onIncidentCreated(Incident incident) {
+    public boolean onIncidentCreated(Incident incident) {
         SlaPolicy policy = findBestPolicy(incident).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
-            return;
+            return false;
         }
 
         BusinessCalendar calendar = policy.getBusinessHoursCalendar();
@@ -68,6 +68,7 @@ public class SlaEngine {
         instance.setUpdatedBy(incident.getUpdatedBy());
 
         slaInstanceRepository.save(instance);
+        return true;
     }
 
     @Transactional
@@ -166,7 +167,8 @@ public class SlaEngine {
     }
 
     private static final Set<ServiceRequest.Status> SR_PAUSED_STATUSES = Set.of(
-            ServiceRequest.Status.PENDING_APPROVAL);
+            ServiceRequest.Status.PENDING_APPROVAL,
+            ServiceRequest.Status.ON_HOLD);
 
     private static final Set<ServiceRequest.Status> SR_TERMINAL_STATUSES = Set.of(
             ServiceRequest.Status.FULFILLED,
@@ -179,10 +181,10 @@ public class SlaEngine {
             ServiceRequest.Status.FULFILLED);
 
     @Transactional
-    public void onServiceRequestCreated(ServiceRequest serviceRequest) {
+    public boolean onServiceRequestCreated(ServiceRequest serviceRequest) {
         SlaPolicy policy = findBestServiceRequestPolicy(serviceRequest).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
-            return;
+            return false;
         }
 
         BusinessCalendar calendar = policy.getBusinessHoursCalendar();
@@ -208,6 +210,7 @@ public class SlaEngine {
         instance.setUpdatedBy(serviceRequest.getUpdatedBy());
 
         slaInstanceRepository.save(instance);
+        return true;
     }
 
     @Transactional
@@ -275,14 +278,15 @@ public class SlaEngine {
             Problem.Status.RESOLVED, Problem.Status.CLOSED);
 
     @Transactional
-    public void onProblemCreated(Problem problem) {
+    public boolean onProblemCreated(Problem problem) {
         SlaPolicy policy = findBestProblemPolicy(problem).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
-            return;
+            return false;
         }
         slaInstanceRepository.save(newInstance(
                 problem.getOrgId(), policy, problem.getCreatedAt(),
                 problem.getCreatedBy(), problem.getUpdatedBy(), i -> i.setProblem(problem)));
+        return true;
     }
 
     /** Response = time to first investigation; resolution = RESOLVED/CLOSED. */
@@ -307,14 +311,15 @@ public class SlaEngine {
             ChangeRequest.Status.CLOSED, ChangeRequest.Status.REJECTED);
 
     @Transactional
-    public void onChangeCreated(ChangeRequest change) {
+    public boolean onChangeCreated(ChangeRequest change) {
         SlaPolicy policy = findBestChangePolicy(change).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
-            return;
+            return false;
         }
         slaInstanceRepository.save(newInstance(
                 change.getOrgId(), policy, change.getCreatedAt(),
                 change.getCreatedBy(), change.getUpdatedBy(), i -> i.setChangeRequest(change)));
+        return true;
     }
 
     /** Response = time to approval; resolution = time to a terminal implementation state. */
@@ -490,9 +495,11 @@ public class SlaEngine {
     }
 
     private Optional<SlaPolicy> findBestServiceRequestPolicy(ServiceRequest serviceRequest) {
+        String priorityName = serviceRequest.getPriority() != null ? serviceRequest.getPriority().getName() : null;
         return slaPolicyRepository.findByOrgIdAndAppliesTo(serviceRequest.getOrgId(), SlaPolicy.AppliesTo.REQUEST)
                 .stream()
                 .filter(p -> p.getBusinessHoursCalendar() != null)
+                .filter(p -> p.getPriorityFilter() == null || p.getPriorityFilter().equals(priorityName))
                 .findFirst();
     }
 }

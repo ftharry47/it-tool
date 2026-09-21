@@ -10,8 +10,10 @@ public final class ServiceRequestStatusMachine {
     private static final Map<ServiceRequest.Status, Set<ServiceRequest.Status>> COMMON = Map.ofEntries(
             Map.entry(ServiceRequest.Status.SUBMITTED, Set.of(ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.CANCELLED)),
             Map.entry(ServiceRequest.Status.PENDING_APPROVAL, Set.of(ServiceRequest.Status.APPROVED, ServiceRequest.Status.REJECTED, ServiceRequest.Status.REJECTED_NEEDS_REVIEW, ServiceRequest.Status.CANCELLED)),
-            Map.entry(ServiceRequest.Status.APPROVED, Set.of(ServiceRequest.Status.IN_FULFILLMENT, ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.CANCELLED)),
-            Map.entry(ServiceRequest.Status.IN_FULFILLMENT, Set.of(ServiceRequest.Status.FULFILLED, ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.CANCELLED)),
+            Map.entry(ServiceRequest.Status.APPROVED, Set.of(ServiceRequest.Status.IN_FULFILLMENT, ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.ON_HOLD, ServiceRequest.Status.CANCELLED)),
+            Map.entry(ServiceRequest.Status.IN_FULFILLMENT, Set.of(ServiceRequest.Status.FULFILLED, ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.ON_HOLD, ServiceRequest.Status.CANCELLED)),
+            // ON_HOLD pauses the SLA clock; resume returns to fulfillment or approval.
+            Map.entry(ServiceRequest.Status.ON_HOLD, Set.of(ServiceRequest.Status.IN_FULFILLMENT, ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.CANCELLED)),
             Map.entry(ServiceRequest.Status.REJECTED, Set.of(ServiceRequest.Status.CANCELLED)),
             Map.entry(ServiceRequest.Status.REJECTED_NEEDS_REVIEW, Set.of(ServiceRequest.Status.APPROVED, ServiceRequest.Status.CANCELLED)),
             Map.entry(ServiceRequest.Status.FULFILLED, Set.of()),

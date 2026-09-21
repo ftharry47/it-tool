@@ -15,6 +15,7 @@ import { ApprovedRequestDetail } from '../pages/shared/ApprovedRequestDetail'
 import { KbBrowse } from '../pages/home/KbBrowse'
 import { KbArticleView } from '../pages/home/KbArticleView'
 import { Dashboard } from '../pages/dashboard/Dashboard'
+import { AgentQueue } from '../pages/dashboard/AgentQueue'
 import { ProblemList } from '../pages/dashboard/ProblemList'
 import { ProblemDetail } from '../pages/dashboard/ProblemDetail'
 import { ServiceRequestList } from '../pages/dashboard/ServiceRequestList'
@@ -67,6 +68,7 @@ const homeRoutes: RouteDefinition[] = [
 
 const dashboardRoutes: RouteDefinition[] = [
   { path: 'dashboard', label: 'Dashboard', element: <Dashboard />, group: 'Overview' },
+  { path: 'dashboard/agent-queue', label: 'Agent Queue', element: <AgentQueue />, hidden: true },
   { path: 'dashboard/incidents', label: 'Incidents', element: <Incidents />, group: 'Work' },
   { path: 'dashboard/incidents/:id', label: 'Incident Detail', element: <IncidentDetail /> },
   { path: 'dashboard/service-requests', label: 'Service Requests', element: <ServiceRequestList />, group: 'Work' },

@@ -3,11 +3,16 @@ import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { FileQuestion, FolderOpen } from 'lucide-react'
+import { Download, FileQuestion, FolderOpen } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { DataTable } from '../../components/ui/DataTable'
+import { DateInput } from '../../components/ui/DateInput'
+import { StatusBadge } from '../../components/ui/StatusBadge'
+import { downloadCsv } from '../../lib/csv'
+import { formatDate, formatDateTime } from '../../lib/date'
 
 const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -484,6 +489,7 @@ const TABS = [
   { key: 'tickets', label: 'Tickets Summary', endpoint: '/api/v1/reports/tickets-summary' },
   { key: 'sla', label: 'SLA Compliance', endpoint: '/api/v1/reports/sla-compliance' },
   { key: 'agent', label: 'Agent Workload', endpoint: '/api/v1/reports/agent-workload' },
+  { key: 'worked', label: 'Worked Tickets', endpoint: '/api/v1/reports/agent-performance/tickets' },
   { key: 'sprint', label: 'Sprint Velocity', endpoint: '/api/v1/reports/sprint-velocity' },
 ]
 
@@ -496,7 +502,7 @@ export function ReportsDashboard() {
   const userId = currentUser?.id
   const [active, setActive] = useState('tickets')
 
-  const allowedTabs = isAdmin ? TABS : TABS.filter((t) => t.key === 'tickets' || t.key === 'sla')
+  const allowedTabs = isAdmin ? TABS : TABS.filter((t) => t.key === 'tickets' || t.key === 'sla' || t.key === 'worked')
   const activeTab = allowedTabs.find((t) => t.key === active) ?? allowedTabs[0]
 
   const query = useQuery<unknown>({
@@ -507,7 +513,7 @@ export function ReportsDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!account,
+    enabled: !!account && activeTab.key !== 'worked',
     refetchInterval: 60_000,
     staleTime: 0,
   })
@@ -535,7 +541,7 @@ export function ReportsDashboard() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
           {allowedTabs.map((t) => (
             <button
               key={t.key}
@@ -547,6 +553,15 @@ export function ReportsDashboard() {
               {t.label}
             </button>
           ))}
+          {!!query.data && activeTab.key !== 'worked' && (
+            <button
+              onClick={() => downloadCsv(`${activeTab.key}-report.csv`, query.data)}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
         </div>
 
         {query.isLoading && <Loading />}
@@ -559,7 +574,129 @@ export function ReportsDashboard() {
             {active === 'sprint' && <SprintVelocityView data={query.data as SprintVelocity[]} />}
           </>
         )}
+        {active === 'worked' && <WorkedTicketsView isAdmin={isAdmin} />}
       </div>
+    </div>
+  )
+}
+
+interface WorkedTicket {
+  type: string
+  id: string
+  number: string
+  title: string | null
+  status: string
+  createdAt: string | null
+  resolvedAt: string | null
+}
+
+const WORKED_TYPE_LINK: Record<string, string> = {
+  INCIDENT: '/dashboard/incidents',
+  SERVICE_REQUEST: '/dashboard/service-requests',
+  PROBLEM: '/dashboard/problems',
+  CHANGE: '/dashboard/changes',
+}
+
+/** Part C: every ticket the agent worked, filterable by range/type/status. */
+function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0]
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [entityType, setEntityType] = useState('')
+  const [status, setStatus] = useState('')
+  const [agentId, setAgentId] = useState('')
+
+  const usersQuery = useQuery<{ id: string; displayName: string }[]>({
+    queryKey: ['worked-tickets', 'users'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/users')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isAdmin,
+  })
+
+  const query = useQuery<WorkedTicket[]>({
+    queryKey: ['worked-tickets', from, to, entityType, status, agentId],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (from) params.set('from', new Date(from).toISOString())
+      if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
+      if (entityType) params.set('entityType', entityType)
+      if (status) params.set('status', status)
+      if (agentId) params.set('agentId', agentId)
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/agent-performance/tickets?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  const rows = query.data ?? []
+  const selectCls = 'rounded-md border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring'
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium text-muted-foreground">Worked Tickets</h3>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectCls}>
+              <option value="">Me</option>
+              {(usersQuery.data ?? []).map((u) => (
+                <option key={u.id} value={u.id}>{u.displayName}</option>
+              ))}
+            </select>
+          )}
+          <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className={selectCls}>
+            <option value="">All types</option>
+            <option value="incident">Incidents</option>
+            <option value="service_request">Service Requests</option>
+            <option value="problem">Problems</option>
+            <option value="change">Changes</option>
+          </select>
+          <input
+            value={status}
+            onChange={(e) => setStatus(e.target.value.toUpperCase())}
+            placeholder="Status (e.g. RESOLVED)"
+            className={`${selectCls} w-44`}
+          />
+          <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-1.5" />
+          <DateInput value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1.5" />
+          {rows.length > 0 && (
+            <button
+              onClick={() => downloadCsv('worked-tickets.csv', rows)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
+        </div>
+      </div>
+      {query.isLoading ? (
+        <Loading compact />
+      ) : query.error ? (
+        <p className="text-sm text-destructive">Could not load worked tickets.</p>
+      ) : (
+        <DataTable<WorkedTicket>
+          caption="Tickets the agent worked on"
+          columns={[
+            { key: 'number', header: '#', render: (r) => (
+              <Link to={`${WORKED_TYPE_LINK[r.type] ?? '/dashboard'}/${r.id}`} className="font-medium hover:underline">{r.number}</Link>
+            ) },
+            { key: 'type', header: 'Type', render: (r) => r.type.replace(/_/g, ' ') },
+            { key: 'title', header: 'Title', render: (r) => r.title ?? '—' },
+            { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+            { key: 'createdAt', header: 'Created', render: (r) => formatDate(r.createdAt) },
+            { key: 'resolvedAt', header: 'Resolved', render: (r) => r.resolvedAt ? formatDateTime(r.resolvedAt) : '—' },
+          ]}
+          data={rows}
+          getRowKey={(r) => r.id}
+          emptyText="No worked tickets match the filters."
+        />
+      )}
     </div>
   )
 }

@@ -290,6 +290,77 @@ class SlaBreachMonitorJobTest {
         assertTrue(log.getAfterState().contains("L2 Support"));
     }
 
+    @Test
+    void pausedInstanceNeverEscalatesOrBreaches() {
+        // E1 regression: an ON_HOLD ticket's clock is stopped — the job must
+        // not evaluate stale due dates against wall-clock time.
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.ON_HOLD);
+        SlaInstance instance = instance(policy, incident);
+        instance.setPausedAt(OffsetDateTime.now().minusHours(2));
+        instance.setResponseDueAt(OffsetDateTime.now().minusMinutes(10)); // stale, unextended
+        instance.setResolutionDueAt(OffsetDateTime.now().minusMinutes(10));
+
+        SlaEscalationTier t1 = tier(policy, 1, SlaEscalationTier.TriggerType.ON_RESOLUTION_BREACH);
+        lenient().when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t1));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+
+        job.execute(null);
+
+        assertEquals(0, instance.getEscalationLevel());
+        verifyNoInteractions(escalationTierRepository);
+        verify(slaEngine, never()).recalcBreachStatus(any(), any());
+        verifyNoInteractions(notificationService);
+        verifyNoInteractions(incidentRepository);
+    }
+
+    @Test
+    void policyTierNeverReassignsTicketDownTheTierChain() {
+        // E2 regression: ticket manually escalated to L3 — a lower-tier policy
+        // escalation must notify + bump escalationLevel but NOT move the team.
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        Team l3 = new Team();
+        l3.setId(SupportTiers.L3_ID);
+        l3.setName("L3 Engineering");
+        incident.setAssignmentTeam(l3);
+        AppUser assignee = new AppUser();
+        assignee.setId(UUID.randomUUID());
+        incident.setAssignee(assignee);
+
+        SlaInstance instance = instance(policy, incident);
+        instance.setEscalationLevel(1); // policy-tier progression lags manual escalation
+        instance.setResponseDueAt(OffsetDateTime.now().minusMinutes(10));
+
+        Team l2 = new Team();
+        l2.setId(SupportTiers.L2_ID);
+        l2.setName("L2 Support");
+        SlaEscalationTier t2 = tier(policy, 2, SlaEscalationTier.TriggerType.ON_RESPONSE_BREACH);
+        t2.setReassignToTeamId(l2.getId());
+
+        when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t2));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+        when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, l2.getId()))
+                .thenReturn(Optional.of(l2));
+
+        job.execute(null);
+
+        // Escalation still registers (notify + level bump) but the team does
+        // not move down and the assignee is not cleared.
+        assertEquals(2, instance.getEscalationLevel());
+        assertSame(l3, incident.getAssignmentTeam());
+        assertSame(assignee, incident.getAssignee());
+        verify(incidentRepository, never()).save(any());
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertEquals("AUTO_ESCALATE_TIER", captor.getValue().getAction());
+        assertTrue(captor.getValue().getAfterState().contains("downgradeSuppressed"));
+        assertTrue(captor.getValue().getAfterState().contains("L3 Engineering"));
+    }
+
     private SlaPolicy policy() {
         SlaPolicy policy = new SlaPolicy();
         policy.setId(UUID.randomUUID());

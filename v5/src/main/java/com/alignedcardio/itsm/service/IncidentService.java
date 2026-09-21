@@ -65,10 +65,7 @@ public class IncidentService {
     private final AuditLogService auditLogService;
 
     // Fixed global support-tier chain (seeded in V38): L1 -> L2 -> L3.
-    private static final UUID TIER_L1_ID = UUID.fromString("00000000-0000-0000-0000-000000000020");
-    private static final UUID TIER_L2_ID = UUID.fromString("00000000-0000-0000-0000-000000000021");
-    private static final UUID TIER_L3_ID = UUID.fromString("00000000-0000-0000-0000-000000000022");
-    private static final List<UUID> TIER_CHAIN = List.of(TIER_L1_ID, TIER_L2_ID, TIER_L3_ID);
+    private static final List<UUID> TIER_CHAIN = SupportTiers.CHAIN;
 
     public IncidentService(IncidentRepository incidentRepository,
                            PriorityRepository priorityRepository,

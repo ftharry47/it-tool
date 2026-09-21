@@ -4,6 +4,7 @@ import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fetchWithToken } from '../../api/client'
+import { downloadCsv } from '../../lib/csv'
 import { DataTable } from '../../components/ui/DataTable'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
@@ -52,15 +53,19 @@ export function AdHocQueryBuilder() {
 
   const availableFields = entity ? (metaQuery.data?.fieldsByEntity[entity] ?? []) : []
 
+  const buildBody = () => {
+    const body: Record<string, unknown> = { entity }
+    if (groupBy) body.groupBy = groupBy
+    if (from || to) {
+      body.dateRange = { from: from ? toIso(from) : null, to: to ? toIso(to) : null }
+    }
+    body.filters = filters.filter((f) => f.field && f.op)
+    return body
+  }
+
   const queryMutation = useMutation<{ rows: QueryRow[]; groupBy: string | null }, Error>({
     mutationFn: async () => {
-      const body: Record<string, unknown> = { entity }
-      if (groupBy) body.groupBy = groupBy
-      if (from || to) {
-        body.dateRange = { from: from ? toIso(from) : null, to: to ? toIso(to) : null }
-      }
-      body.filters = filters.filter((f) => f.field && f.op)
-      const res = await fetchWithToken(instance, account!, '/api/v1/reports/query', { method: 'POST', body: JSON.stringify(body) })
+      const res = await fetchWithToken(instance, account!, '/api/v1/reports/query', { method: 'POST', body: JSON.stringify(buildBody()) })
       if (!res.ok) {
         const text = await res.text()
         throw new Error(text || `HTTP ${res.status}`)
@@ -68,6 +73,26 @@ export function AdHocQueryBuilder() {
       return res.json()
     },
   })
+
+  // Server-side XLSX export of the same query — for row-level exports larger
+  // than what the on-screen result set comfortably shows.
+  const exportXlsx = async () => {
+    const res = await fetchWithToken(instance, account!, '/api/v1/reports/query?format=xlsx', {
+      method: 'POST',
+      body: JSON.stringify(buildBody()),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || `HTTP ${res.status}`)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${entity || 'report'}-export.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const addFilter = () => setFilters([...filters, { field: '', op: '', value: '' }])
   const updateFilter = (i: number, patch: Partial<QueryFilter>) => {
@@ -173,13 +198,31 @@ export function AdHocQueryBuilder() {
             <button onClick={addFilter} className="rounded-md border border-border px-3 py-2 text-sm transition hover:bg-muted">Add Filter</button>
           </div>
 
-          <button
-            onClick={() => queryMutation.mutate()}
-            disabled={!entity || queryMutation.isPending}
-            className="mt-6 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
-          >
-            Run Query
-          </button>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => queryMutation.mutate()}
+              disabled={!entity || queryMutation.isPending}
+              className="inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+            >
+              Run Query
+            </button>
+            {queryMutation.data && (
+              <>
+                <button
+                  onClick={() => downloadCsv(`${entity || 'query'}-export.csv`, queryMutation.data.rows)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
+                >
+                  Export CSV
+                </button>
+                <button
+                  onClick={() => { exportXlsx().catch((e) => console.error(e)) }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
+                >
+                  Export Excel
+                </button>
+              </>
+            )}
+          </div>
           {queryMutation.error && <p className="mt-2 text-sm text-destructive">{queryMutation.error.message}</p>}
         </div>
 

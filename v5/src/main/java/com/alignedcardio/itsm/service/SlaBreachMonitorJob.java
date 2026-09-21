@@ -104,6 +104,14 @@ public class SlaBreachMonitorJob implements Job {
             }
             Incident incident = instance.getIncident();
 
+            // A paused SLA (ON_HOLD / waiting-on-customer) must never be
+            // evaluated against wall-clock due dates — the pause only shifts
+            // dueAt forward when the ticket unpauses, so evaluating now would
+            // breach/escalate a clock that is legitimately stopped.
+            if (instance.getPausedAt() != null) {
+                continue;
+            }
+
             evaluateEscalation(instance, ref, incident, now);
 
             SlaInstance.BreachStatus from = instance.getBreachStatus();
@@ -275,8 +283,12 @@ public class SlaBreachMonitorJob implements Job {
             case ON_RESOLUTION_BREACH -> instance.getResolutionDueAt() != null
                     && instance.getResolutionMetAt() == null
                     && now.isAfter(instance.getResolutionDueAt());
+            // Paused statuses (ON_HOLD etc.) are excluded even if an admin
+            // configures one as a stuck trigger — a deliberately paused clock
+            // is not neglect.
             case ON_STUCK_STATUS -> tier.getStuckStatus() != null
                     && tier.getStuckMinutes() != null
+                    && instance.getPausedAt() == null
                     && tier.getStuckStatus().equals(ref.status())
                     && ref.updatedAt() != null
                     && !ref.updatedAt().plusMinutes(tier.getStuckMinutes()).isAfter(now);
@@ -340,25 +352,38 @@ public class SlaBreachMonitorJob implements Job {
                 .findByOrgIdAndIdAndDeletedAtIsNull(incident.getOrgId(), tier.getReassignToTeamId())
                 .orElse(null);
         if (team != null) {
-            // Audit the automatic escalation distinctly from manual ESCALATE_TIER:
-            // null actor = system/job, beforeState captures the pre-escalation
-            // assignee so performance reports can attribute "escalated away".
+            Team current = incident.getAssignmentTeam();
+            // Never let a policy tier move a ticket DOWN or SIDEWAYS the
+            // support-tier chain — manual escalation may already have moved it
+            // past the tier's target team (slaInstance.escalationLevel tracks
+            // policy-tier progression, not the ticket's actual tier position).
+            int currentIdx = SupportTiers.indexOf(current);
+            int targetIdx = SupportTiers.indexOf(team);
+            boolean downgradeSuppressed = currentIdx >= 0 && targetIdx >= 0 && currentIdx >= targetIdx;
+
             Map<String, Object> beforeState = new java.util.HashMap<>();
             beforeState.put("assigneeId", incident.getAssignee() != null ? incident.getAssignee().getId().toString() : null);
-            beforeState.put("assignmentTeamId", incident.getAssignmentTeam() != null ? incident.getAssignmentTeam().getId().toString() : null);
-            beforeState.put("assignmentTeamName", incident.getAssignmentTeam() != null ? incident.getAssignmentTeam().getName() : null);
+            beforeState.put("assignmentTeamId", current != null ? current.getId().toString() : null);
+            beforeState.put("assignmentTeamName", current != null ? current.getName() : null);
 
-            incident.setAssignmentTeam(team);
-            // Move ownership to the new tier; the old agent no longer owns the ticket.
-            incident.setAssignee(null);
-            incident.setUpdatedAt(OffsetDateTime.now());
-            incidentRepository.save(incident);
+            if (!downgradeSuppressed) {
+                incident.setAssignmentTeam(team);
+                // Move ownership to the new tier; the old agent no longer owns the ticket.
+                incident.setAssignee(null);
+                incident.setUpdatedAt(OffsetDateTime.now());
+                incidentRepository.save(incident);
+            }
 
             Map<String, Object> afterState = new java.util.HashMap<>();
-            afterState.put("assignmentTeamId", team.getId().toString());
-            afterState.put("assignmentTeamName", team.getName());
+            afterState.put("assignmentTeamId", downgradeSuppressed && current != null
+                    ? current.getId().toString() : team.getId().toString());
+            afterState.put("assignmentTeamName", downgradeSuppressed && current != null
+                    ? current.getName() : team.getName());
             afterState.put("triggerType", tier.getTriggerType().name());
             afterState.put("tierLevel", tier.getLevel());
+            if (downgradeSuppressed) {
+                afterState.put("downgradeSuppressed", true);
+            }
 
             try {
                 AuditLog log = new AuditLog();

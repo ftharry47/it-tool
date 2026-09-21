@@ -11,6 +11,7 @@ public record ServiceRequestCreateRequest(
         @NotNull String formData,
         OffsetDateTime neededBy,
         UUID locationId,
-        @NotBlank(message = "Phone number is required") String phone
+        @NotBlank(message = "Phone number is required") String phone,
+        UUID priorityId
 ) {
 }

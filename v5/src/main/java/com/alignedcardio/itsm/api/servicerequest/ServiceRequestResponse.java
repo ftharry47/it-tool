@@ -26,6 +26,8 @@ public record ServiceRequestResponse(
         String locationName,
         String phone,
         List<FulfillmentTaskResponse> tasks,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        UUID priorityId,
+        String priorityName
 ) {
 }

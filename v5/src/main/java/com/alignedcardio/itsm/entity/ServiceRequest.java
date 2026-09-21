@@ -13,7 +13,8 @@ import java.time.OffsetDateTime;
 public class ServiceRequest extends BaseEntity {
 
     public enum Status {
-        SUBMITTED, PENDING_APPROVAL, APPROVED, REJECTED, REJECTED_NEEDS_REVIEW, IN_FULFILLMENT, FULFILLED, CANCELLED
+        SUBMITTED, PENDING_APPROVAL, APPROVED, REJECTED, REJECTED_NEEDS_REVIEW,
+        IN_FULFILLMENT, ON_HOLD, FULFILLED, CANCELLED
     }
 
     public enum ApprovalDecision {
@@ -74,12 +75,25 @@ public class ServiceRequest extends BaseEntity {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    /** Optional SLA-driving priority (matches REQUEST policy priorityFilter). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "priority_id")
+    private Priority priority;
+
     public String getPhone() {
         return phone;
     }
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Priority priority) {
+        this.priority = priority;
     }
 
     public String getNumber() {

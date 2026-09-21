@@ -682,6 +682,266 @@ public class ReportingService {
         row.put(key, ((Long) row.get(key)) + 1);
     }
 
+    /**
+     * One agent's full open queue across all four ticket types — the drill-down
+     * behind "Workload per Agent". Mirrors agentWorkload attribution:
+     * incidents/problems/changes by direct assignee, service requests via an
+     * open fulfillment-task assignment.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> agentQueue(UUID orgId, UUID agentId) {
+        List<Incident> incidents = entityManager.createQuery(
+                "SELECT i FROM Incident i JOIN i.assignee a WHERE i.orgId = :org AND i.deletedAt IS NULL " +
+                        "AND a.id = :agent AND i.status IN :statuses ORDER BY i.createdAt", Incident.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("statuses", WORKLOAD_INCIDENT_STATUSES).getResultList();
+        List<Problem> problems = entityManager.createQuery(
+                "SELECT p FROM Problem p JOIN p.assignee a WHERE p.orgId = :org AND p.deletedAt IS NULL " +
+                        "AND a.id = :agent AND p.status IN :statuses ORDER BY p.createdAt", Problem.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("statuses", WORKLOAD_PROBLEM_STATUSES).getResultList();
+        List<ChangeRequest> changes = entityManager.createQuery(
+                "SELECT c FROM ChangeRequest c JOIN c.assignee a WHERE c.orgId = :org AND c.deletedAt IS NULL " +
+                        "AND a.id = :agent AND c.status IN :statuses ORDER BY c.createdAt", ChangeRequest.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("statuses", WORKLOAD_CHANGE_STATUSES).getResultList();
+        List<ServiceRequest> requests = entityManager.createQuery(
+                "SELECT DISTINCT sr FROM FulfillmentTask ft JOIN ft.assignee a JOIN ft.serviceRequest sr " +
+                        "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                        "AND a.id = :agent AND ft.status IN :statuses AND sr.status NOT IN :terminal " +
+                        "ORDER BY sr.createdAt", ServiceRequest.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("statuses", WORKLOAD_TASK_STATUSES)
+                .setParameter("terminal", TERMINAL_REQUEST_STATUSES).getResultList();
+
+        Map<UUID, SlaInstance.BreachStatus> slaInc = slaStatusIndex("incident",
+                incidents.stream().map(Incident::getId).toList());
+        Map<UUID, SlaInstance.BreachStatus> slaSr = slaStatusIndex("serviceRequest",
+                requests.stream().map(ServiceRequest::getId).toList());
+        Map<UUID, SlaInstance.BreachStatus> slaProb = slaStatusIndex("problem",
+                problems.stream().map(Problem::getId).toList());
+        Map<UUID, SlaInstance.BreachStatus> slaChg = slaStatusIndex("changeRequest",
+                changes.stream().map(ChangeRequest::getId).toList());
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("incidents", incidents.stream().map(i -> queueRow(i.getId(), "INC-" + i.getNumber(),
+                i.getTitle(), i.getStatus().name(), i.getCreatedAt(), slaInc.get(i.getId()))).toList());
+        out.put("serviceRequests", requests.stream().map(s -> queueRow(s.getId(), s.getNumber(),
+                s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request",
+                s.getStatus().name(), s.getCreatedAt(), slaSr.get(s.getId()))).toList());
+        out.put("problems", problems.stream().map(p -> queueRow(p.getId(), p.getNumber(),
+                p.getTitle(), p.getStatus().name(), p.getCreatedAt(), slaProb.get(p.getId()))).toList());
+        out.put("changes", changes.stream().map(c -> queueRow(c.getId(), c.getNumber(),
+                c.getTitle(), c.getStatus().name(), c.getCreatedAt(), slaChg.get(c.getId()))).toList());
+        return out;
+    }
+
+    private Map<String, Object> queueRow(UUID id, String number, String title, String status,
+                                         OffsetDateTime createdAt, SlaInstance.BreachStatus sla) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        row.put("number", number);
+        row.put("title", title);
+        row.put("status", status);
+        row.put("createdAt", createdAt);
+        row.put("slaStatus", sla == null ? null : sla.name());
+        return row;
+    }
+
+    /**
+     * Full worked-ticket list for an agent over a period — incidents/problems/
+     * changes by assignee+created range, service requests via fulfillment-task
+     * assignment in range. Same "worked" definition as the monthly report.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> agentPerformanceTickets(UUID orgId, UUID agentId,
+                                                             OffsetDateTime from, OffsetDateTime to,
+                                                             String entityType, String status) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        boolean want = entityType == null || entityType.isBlank() ? true : false;
+
+        if (want || "incident".equals(entityType)) {
+            for (Incident i : incidentRepositoryFilter(orgId, agentId, from, to, status)) {
+                out.add(workedRow("INCIDENT", i.getId(), "INC-" + i.getNumber(), i.getTitle(),
+                        i.getStatus().name(), i.getCreatedAt(), i.getResolvedAt()));
+            }
+        }
+        if (want || "service_request".equals(entityType)) {
+            List<ServiceRequest> srs = entityManager.createQuery(
+                    "SELECT DISTINCT sr FROM FulfillmentTask ft JOIN ft.assignee a JOIN ft.serviceRequest sr " +
+                            "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                            "AND a.id = :agent AND ft.assignedAt >= :from AND ft.assignedAt < :to " +
+                            "ORDER BY sr.createdAt DESC", ServiceRequest.class)
+                    .setParameter("org", orgId).setParameter("agent", agentId)
+                    .setParameter("from", from).setParameter("to", to).getResultList();
+            for (ServiceRequest s : srs) {
+                if (status != null && !status.isBlank() && !s.getStatus().name().equals(status)) continue;
+                out.add(workedRow("SERVICE_REQUEST", s.getId(), s.getNumber(),
+                        s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request",
+                        s.getStatus().name(), s.getCreatedAt(), null));
+            }
+        }
+        if (want || "problem".equals(entityType)) {
+            for (Problem p : problemListFor(orgId, agentId, from, to, status)) {
+                out.add(workedRow("PROBLEM", p.getId(), p.getNumber(), p.getTitle(),
+                        p.getStatus().name(), p.getCreatedAt(), p.getResolvedAt()));
+            }
+        }
+        if (want || "change".equals(entityType)) {
+            for (ChangeRequest c : changeListFor(orgId, agentId, from, to, status)) {
+                out.add(workedRow("CHANGE", c.getId(), c.getNumber(), c.getTitle(),
+                        c.getStatus().name(), c.getCreatedAt(), null));
+            }
+        }
+        out.sort((a, b) -> ((OffsetDateTime) b.get("createdAt")).compareTo((OffsetDateTime) a.get("createdAt")));
+        return out;
+    }
+
+    private List<Incident> incidentRepositoryFilter(UUID orgId, UUID agentId,
+                                                    OffsetDateTime from, OffsetDateTime to, String status) {
+        List<Incident> all = entityManager.createQuery(
+                "SELECT i FROM Incident i WHERE i.orgId = :org AND i.deletedAt IS NULL " +
+                        "AND i.assignee.id = :agent AND i.createdAt >= :from AND i.createdAt < :to " +
+                        "ORDER BY i.createdAt DESC", Incident.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("from", from).setParameter("to", to).getResultList();
+        return status == null || status.isBlank() ? all
+                : all.stream().filter(i -> i.getStatus().name().equals(status)).toList();
+    }
+
+    private List<Problem> problemListFor(UUID orgId, UUID agentId,
+                                         OffsetDateTime from, OffsetDateTime to, String status) {
+        List<Problem> all = entityManager.createQuery(
+                "SELECT p FROM Problem p WHERE p.orgId = :org AND p.deletedAt IS NULL " +
+                        "AND p.assignee.id = :agent AND p.createdAt >= :from AND p.createdAt < :to " +
+                        "ORDER BY p.createdAt DESC", Problem.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("from", from).setParameter("to", to).getResultList();
+        return status == null || status.isBlank() ? all
+                : all.stream().filter(p -> p.getStatus().name().equals(status)).toList();
+    }
+
+    private List<ChangeRequest> changeListFor(UUID orgId, UUID agentId,
+                                              OffsetDateTime from, OffsetDateTime to, String status) {
+        List<ChangeRequest> all = entityManager.createQuery(
+                "SELECT c FROM ChangeRequest c WHERE c.orgId = :org AND c.deletedAt IS NULL " +
+                        "AND c.assignee.id = :agent AND c.createdAt >= :from AND c.createdAt < :to " +
+                        "ORDER BY c.createdAt DESC", ChangeRequest.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("from", from).setParameter("to", to).getResultList();
+        return status == null || status.isBlank() ? all
+                : all.stream().filter(c -> c.getStatus().name().equals(status)).toList();
+    }
+
+    private Map<String, Object> workedRow(String type, UUID id, String number, String title,
+                                          String status, OffsetDateTime createdAt, OffsetDateTime resolvedAt) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("type", type);
+        row.put("id", id);
+        row.put("number", number);
+        row.put("title", title);
+        row.put("status", status);
+        row.put("createdAt", createdAt);
+        row.put("resolvedAt", resolvedAt);
+        return row;
+    }
+
+    /**
+     * ServiceNow-style service-request operations snapshot for admins: status
+     * breakdown, oldest open items, and things needing attention.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> serviceRequestOps(UUID orgId) {
+        Map<String, Long> byStatus = entityManager.createQuery(
+                "SELECT s.status, COUNT(*) FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL " +
+                        "GROUP BY s.status", Tuple.class)
+                .setParameter("org", orgId).getResultList().stream()
+                .collect(Collectors.toMap(t -> t.get(0).toString(), t -> t.get(1, Long.class),
+                        (a, b) -> a, LinkedHashMap::new));
+
+        List<ServiceRequest> oldestOpen = entityManager.createQuery(
+                "SELECT s FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL " +
+                        "AND s.status NOT IN :terminal ORDER BY s.createdAt", ServiceRequest.class)
+                .setParameter("org", orgId).setParameter("terminal", TERMINAL_REQUEST_STATUSES)
+                .setMaxResults(10).getResultList();
+
+        long pendingApprovals = byStatus.getOrDefault("PENDING_APPROVAL", 0L);
+        long needsReview = byStatus.getOrDefault("REJECTED_NEEDS_REVIEW", 0L);
+        Long unassignedTasks = entityManager.createQuery(
+                "SELECT COUNT(ft) FROM FulfillmentTask ft JOIN ft.serviceRequest sr " +
+                        "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                        "AND ft.assignee IS NULL AND ft.status IN :statuses", Long.class)
+                .setParameter("org", orgId).setParameter("statuses", WORKLOAD_TASK_STATUSES)
+                .getSingleResult();
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("byStatus", byStatus);
+        out.put("oldestOpen", oldestOpen.stream().map(s -> queueRow(s.getId(), s.getNumber(),
+                s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request",
+                s.getStatus().name(), s.getCreatedAt(), null)).toList());
+        Map<String, Object> attention = new LinkedHashMap<>();
+        attention.put("pendingApprovals", pendingApprovals);
+        attention.put("rejectedNeedsReview", needsReview);
+        attention.put("unassignedTasks", unassignedTasks);
+        out.put("needsAttention", attention);
+        return out;
+    }
+
+    /**
+     * Admin triage view: what genuinely needs attention right now across all
+     * four ticket types.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> needsAttention(UUID orgId) {
+        Map<String, Object> out = new LinkedHashMap<>();
+
+        List<Incident> unassigned = entityManager.createQuery(
+                "SELECT i FROM Incident i WHERE i.orgId = :org AND i.deletedAt IS NULL " +
+                        "AND i.assignee IS NULL AND i.status IN :statuses ORDER BY i.createdAt",
+                Incident.class)
+                .setParameter("org", orgId).setParameter("statuses", WORKLOAD_INCIDENT_STATUSES)
+                .setMaxResults(10).getResultList();
+        out.put("unassignedIncidents", unassigned.stream().map(i -> queueRow(i.getId(),
+                "INC-" + i.getNumber(), i.getTitle(), i.getStatus().name(), i.getCreatedAt(), null)).toList());
+
+        // Open tickets whose SLA instance is breached — by entity type.
+        List<Tuple> breached = entityManager.createQuery(
+                "SELECT si.id, si.breachStatus FROM SlaInstance si WHERE si.orgId = :org " +
+                        "AND si.breachStatus = :breached AND si.resolutionMetAt IS NULL", Tuple.class)
+                .setParameter("org", orgId)
+                .setParameter("breached", SlaInstance.BreachStatus.BREACHED).getResultList();
+        out.put("breachedSlaCount", breached.size());
+
+        List<ServiceRequest> needsReview = entityManager.createQuery(
+                "SELECT s FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL " +
+                        "AND s.status = :status ORDER BY s.createdAt", ServiceRequest.class)
+                .setParameter("org", orgId)
+                .setParameter("status", ServiceRequest.Status.REJECTED_NEEDS_REVIEW)
+                .setMaxResults(10).getResultList();
+        out.put("rejectedNeedsReview", needsReview.stream().map(s -> queueRow(s.getId(), s.getNumber(),
+                s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request",
+                s.getStatus().name(), s.getCreatedAt(), null)).toList());
+
+        // Auto-escalated tickets still sitting unassigned — nobody picked them up.
+        List<Incident> staleEscalations = entityManager.createQuery(
+                "SELECT i FROM Incident i WHERE i.orgId = :org AND i.deletedAt IS NULL " +
+                        "AND i.assignee IS NULL AND i.assignmentTeam IS NOT NULL " +
+                        "AND i.status IN :statuses ORDER BY i.updatedAt", Incident.class)
+                .setParameter("org", orgId).setParameter("statuses", WORKLOAD_INCIDENT_STATUSES)
+                .setMaxResults(10).getResultList();
+        out.put("escalationsAwaitingPickup", staleEscalations.stream().map(i -> queueRow(i.getId(),
+                "INC-" + i.getNumber(), i.getTitle(), i.getStatus().name(), i.getCreatedAt(), null)).toList());
+
+        Long pendingApprovals = entityManager.createQuery(
+                "SELECT COUNT(s) FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL " +
+                        "AND s.status = :status", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("status", ServiceRequest.Status.PENDING_APPROVAL).getSingleResult();
+        out.put("pendingApprovals", pendingApprovals);
+
+        return out;
+    }
+
     private Map<UUID, SlaInstance.BreachStatus> slaStatusIndex(String association, Collection<UUID> ticketIds) {
         if (ticketIds.isEmpty()) {
             return Map.of();
