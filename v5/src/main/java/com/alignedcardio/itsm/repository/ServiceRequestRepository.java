@@ -26,6 +26,8 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     List<ServiceRequest> findByOrgIdAndStatusAndApprover_IdOrderByCreatedAtDesc(
             UUID orgId, ServiceRequest.Status status, UUID approverId);
 
-    List<ServiceRequest> findByOrgIdAndApprover_IdAndApprovalDecisionAndDeletedAtIsNullOrderByCreatedAtDesc(
+    // Bypassed requests must not appear in the designated approver's
+    // "approved by me" history — they didn't make that decision.
+    List<ServiceRequest> findByOrgIdAndApprover_IdAndApprovalDecisionAndApprovalBypassedFalseAndDeletedAtIsNullOrderByCreatedAtDesc(
             UUID orgId, UUID approverId, ServiceRequest.ApprovalDecision approvalDecision);
 }

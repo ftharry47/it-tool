@@ -61,6 +61,16 @@ public class ServiceRequest extends BaseEntity {
     @Column(name = "decided_at")
     private OffsetDateTime decidedAt;
 
+    @Column(name = "approval_bypassed", nullable = false)
+    private boolean approvalBypassed = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bypassed_by_id")
+    private AppUser bypassedBy;
+
+    @Column(name = "bypass_reason", columnDefinition = "text")
+    private String bypassReason;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "previous_status", length = 32)
     private Status previousStatus;
@@ -174,6 +184,30 @@ public class ServiceRequest extends BaseEntity {
 
     public void setDecidedAt(OffsetDateTime decidedAt) {
         this.decidedAt = decidedAt;
+    }
+
+    public boolean isApprovalBypassed() {
+        return approvalBypassed;
+    }
+
+    public void setApprovalBypassed(boolean approvalBypassed) {
+        this.approvalBypassed = approvalBypassed;
+    }
+
+    public AppUser getBypassedBy() {
+        return bypassedBy;
+    }
+
+    public void setBypassedBy(AppUser bypassedBy) {
+        this.bypassedBy = bypassedBy;
+    }
+
+    public String getBypassReason() {
+        return bypassReason;
+    }
+
+    public void setBypassReason(String bypassReason) {
+        this.bypassReason = bypassReason;
     }
 
     public Status getPreviousStatus() {

@@ -7,6 +7,7 @@ import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Location;
 import com.alignedcardio.itsm.entity.Notification;
+import com.alignedcardio.itsm.entity.Priority;
 import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.event.ServiceRequestEvent;
 import com.alignedcardio.itsm.repository.AppUserRepository;
@@ -448,6 +449,179 @@ public class ServiceRequestService {
         return toResponse(saved);
     }
 
+    /**
+     * SUPER_ADMIN record correction. Editable: location, priority, phone,
+     * needed-by, form data. Edits never touch status or approval state — a
+     * routed approval must still be decided or bypassed explicitly. The one
+     * exception: changing the location while the request is still
+     * PENDING_APPROVAL re-resolves the designated approver so the pending
+     * item lands with the right approval manager.
+     */
+    @Transactional
+    public ServiceRequestResponse update(AppUser user, UUID orgId, UUID id, ServiceRequestUpdateRequest request) {
+        if (!isSuperAdmin(user)) {
+            throw new IllegalStateException("Only SUPER_ADMIN can edit service requests");
+        }
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+
+        Map<String, Object> before = new LinkedHashMap<>();
+        Map<String, Object> after = new LinkedHashMap<>();
+
+        if (request.locationId() != null) {
+            Location location = locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(orgId, request.locationId())
+                    .orElseThrow(() -> new NotFoundException("Location not found"));
+            if (sr.getLocation() == null || !sr.getLocation().getId().equals(location.getId())) {
+                before.put("location", sr.getLocation() != null ? sr.getLocation().getName() : null);
+                after.put("location", location.getName());
+                sr.setLocation(location);
+                if (sr.getStatus() == ServiceRequest.Status.PENDING_APPROVAL) {
+                    AppUser newApprover = resolveApprover(sr);
+                    AppUser oldApprover = sr.getApprover();
+                    if (oldApprover == null || !oldApprover.getId().equals(newApprover.getId())) {
+                        before.put("approver", oldApprover != null ? oldApprover.getDisplayName() : null);
+                        after.put("approver", newApprover.getDisplayName());
+                        sr.setApprover(newApprover);
+                    }
+                }
+            }
+        }
+        if (request.priorityId() != null) {
+            Priority priority = priorityRepository.findByOrgIdAndId(orgId, request.priorityId())
+                    .orElseThrow(() -> new NotFoundException("Priority not found"));
+            if (sr.getPriority() == null || !sr.getPriority().getId().equals(priority.getId())) {
+                before.put("priority", sr.getPriority() != null ? sr.getPriority().getName() : null);
+                after.put("priority", priority.getName());
+                sr.setPriority(priority);
+            }
+        }
+        if (request.phone() != null) {
+            String phone = PhoneNumbers.normalize(request.phone());
+            if (!java.util.Objects.equals(sr.getPhone(), phone)) {
+                before.put("phone", sr.getPhone());
+                after.put("phone", phone);
+                sr.setPhone(phone);
+            }
+        }
+        if (request.neededBy() != null
+                && !request.neededBy().equals(sr.getNeededBy())) {
+            before.put("neededBy", sr.getNeededBy() != null ? sr.getNeededBy().toString() : null);
+            after.put("neededBy", request.neededBy().toString());
+            sr.setNeededBy(request.neededBy());
+        }
+        if (request.formData() != null) {
+            formSchemaValidator.validate(sr.getCatalogItem().getFormSchema().toString(), request.formData());
+            JsonNode parsed;
+            try {
+                parsed = objectMapper.readTree(request.formData());
+            } catch (Exception e) {
+                throw new IllegalStateException("Invalid form data JSON", e);
+            }
+            if (!parsed.equals(sr.getFormData())) {
+                before.put("formData", sr.getFormData());
+                after.put("formData", parsed);
+                sr.setFormData(parsed);
+            }
+        }
+
+        if (before.isEmpty()) {
+            return toResponse(sr);
+        }
+
+        sr.setUpdatedBy(user.getId());
+        sr.setUpdatedAt(OffsetDateTime.now());
+        recordActivity(sr, user.getId(), "EDITED", before, after);
+        return toResponse(serviceRequestRepository.save(sr));
+    }
+
+    /**
+     * SUPER_ADMIN override: approves a PENDING_APPROVAL request without the
+     * designated approver's decision. The record stays honest — `approver`
+     * remains the routed manager, `bypassedBy` names who actually decided,
+     * and the request never appears in the manager's "approved by me" list.
+     */
+    @Transactional
+    public ServiceRequestResponse bypassApproval(AppUser user, UUID orgId, UUID id, String reason) {
+        if (!isSuperAdmin(user)) {
+            throw new IllegalStateException("Only SUPER_ADMIN can bypass approval");
+        }
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+        if (sr.getStatus() != ServiceRequest.Status.PENDING_APPROVAL) {
+            throw new IllegalStateException("Request is not pending approval");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalStateException("A reason is required when bypassing approval");
+        }
+
+        AppUser designatedApprover = sr.getApprover();
+
+        sr.setApprovalDecision(ServiceRequest.ApprovalDecision.APPROVED);
+        sr.setApprovalComment(reason);
+        sr.setApprovalBypassed(true);
+        sr.setBypassedBy(user);
+        sr.setBypassReason(reason);
+        sr.setDecidedAt(OffsetDateTime.now());
+        sr.setPreviousStatus(null);
+        sr.setStatus(ServiceRequest.Status.APPROVED);
+        sr.setUpdatedBy(user.getId());
+        sr.setUpdatedAt(OffsetDateTime.now());
+
+        recordActivity(sr, user.getId(), "APPROVAL_BYPASSED",
+                Map.of("status", "PENDING_APPROVAL",
+                        "approver", designatedApprover != null ? designatedApprover.getDisplayName() : ""),
+                Map.of("status", sr.getStatus().name(),
+                        "bypassedBy", user.getDisplayName(),
+                        "originalApprover", designatedApprover != null ? designatedApprover.getDisplayName() : "",
+                        "reason", reason));
+
+        seedFulfillmentTasks(user, sr);
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+
+        slaEngine.onServiceRequestStatusChanged(saved);
+
+        publishEvent(saved, "APPROVED");
+        publishEvent(saved, "IN_FULFILLMENT");
+        notifyAdminsForFulfillerAssignment(saved);
+        if (designatedApprover != null) {
+            notifyApproverOfBypass(user, saved, designatedApprover, reason);
+        }
+
+        return toResponse(saved);
+    }
+
+    /** Tell the routed approver their pending item was overridden by an admin. */
+    private void notifyApproverOfBypass(AppUser admin, ServiceRequest sr, AppUser approver, String reason) {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("number", sr.getNumber());
+        payload.put("catalogItemName", sr.getCatalogItem().getName());
+        payload.put("requesterName", sr.getRequester().getDisplayName());
+        payload.put("actorName", admin.getDisplayName());
+        payload.put("reason", reason);
+        payload.put("entityType", "SERVICE_REQUEST");
+        payload.put("entityId", sr.getId());
+        payload.put("subject", "Request #" + sr.getNumber() + " was approved by admin override");
+        payload.put("body", "Request #" + sr.getNumber() + " (" + sr.getCatalogItem().getName()
+                + ") for " + sr.getRequester().getDisplayName()
+                + " was awaiting your approval. " + admin.getDisplayName()
+                + " bypassed your pending approval and approved it directly.\n\nReason: " + reason);
+        try {
+            var content = notificationTemplateBuilder.forEvent("SR_APPROVAL_BYPASSED", payload);
+            notificationService.send(new NotificationRequest(
+                    sr.getOrgId(),
+                    approver.getId(),
+                    "SR_APPROVAL_BYPASSED",
+                    content.inAppSubject(),
+                    content.inAppBody(),
+                    "SERVICE_REQUEST",
+                    sr.getId(),
+                    null,
+                    content));
+        } catch (Exception e) {
+            logger.warn("Failed to send SR_APPROVAL_BYPASSED to {}", approver.getId(), e);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<ServiceRequestResponse> listPendingApprovals(AppUser user) {
         return serviceRequestRepository
@@ -461,7 +635,7 @@ public class ServiceRequestService {
     @Transactional(readOnly = true)
     public List<ServiceRequestResponse> listApprovedByMe(AppUser user) {
         return serviceRequestRepository
-                .findByOrgIdAndApprover_IdAndApprovalDecisionAndDeletedAtIsNullOrderByCreatedAtDesc(
+                .findByOrgIdAndApprover_IdAndApprovalDecisionAndApprovalBypassedFalseAndDeletedAtIsNullOrderByCreatedAtDesc(
                         user.getOrgId(), user.getId(), ServiceRequest.ApprovalDecision.APPROVED)
                 .stream()
                 .map(this::toResponse)
@@ -1098,6 +1272,9 @@ public class ServiceRequestService {
                 sr.getApprover() != null ? sr.getApprover().getDisplayName() : null,
                 sr.getApprovalDecision(),
                 sr.getApprovalComment(),
+                sr.isApprovalBypassed(),
+                sr.getBypassedBy() != null ? sr.getBypassedBy().getId() : null,
+                sr.getBypassedBy() != null ? sr.getBypassedBy().getDisplayName() : null,
                 sr.getDecidedAt(),
                 sr.getNeededBy(),
                 sr.getLocation() != null ? sr.getLocation().getId() : null,

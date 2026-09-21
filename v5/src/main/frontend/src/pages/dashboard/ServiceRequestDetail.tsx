@@ -15,6 +15,7 @@ import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
+import { SchemaForm, isValidSchema } from '../../components/ui/SchemaForm'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { formatDateTime } from '../../lib/date'
 
@@ -71,6 +72,8 @@ const ACTION_LABELS: Record<string, string> = {
   DELIVERED: 'Marked installed',
   TASK_COMPLETED: 'Task completed',
   SEND_REMINDER: 'Reminder sent',
+  EDITED: 'Request edited by admin',
+  APPROVAL_BYPASSED: 'Approval bypassed by admin',
 }
 
 function actionLabel(action: string): string {
@@ -105,10 +108,15 @@ interface ServiceRequestDetail {
   approverName: string | null
   approvalDecision: string
   approvalComment: string | null
+  approvalBypassed: boolean
+  bypassedById: string | null
+  bypassedByName: string | null
   decidedAt: string | null
   neededBy: string | null
+  catalogItemId: string
   locationId: string | null
   locationName: string | null
+  phone: string | null
   createdAt: string
   priorityId: string | null
   priorityName: string | null
@@ -364,10 +372,8 @@ export function ServiceRequestDetail() {
   // Hold/resume flips the request's status; the backend pauses/resumes its SLA.
   const statusMutation = useMutation<ServiceRequestDetail, Error, 'ON_HOLD' | 'IN_FULFILLMENT'>({
     mutationFn: async (status) => {
-      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/status`, {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/status?status=${status}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
@@ -375,6 +381,114 @@ export function ServiceRequestDetail() {
     onSuccess: invalidateTaskQueries,
     onError: (error) => setActionError(error.message),
   })
+
+  // ---- SUPER_ADMIN: record edit + approval bypass ----
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({
+    locationId: '',
+    priorityId: '',
+    phone: '',
+    neededBy: '',
+  })
+  const [editFormData, setEditFormData] = useState<Record<string, string>>({})
+  const [bypassOpen, setBypassOpen] = useState(false)
+  const [bypassReason, setBypassReason] = useState('')
+
+  const locationsQuery = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/locations')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isSuperAdmin,
+  })
+
+  const prioritiesQuery = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['priorities'],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/incidents/priorities')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isSuperAdmin,
+  })
+
+  // The request response doesn't carry the item's schema — fetch it for the
+  // edit drawer so the dynamic form fields render exactly like submission.
+  const catalogItemQuery = useQuery<{ formSchema: string } | null>({
+    queryKey: ['catalog-item-schema', requestQuery.data?.catalogItemId],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, '/api/v1/catalog-items')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const items: { id: string; formSchema: string }[] = await res.json()
+      return items.find((i) => i.id === requestQuery.data?.catalogItemId) ?? null
+    },
+    enabled: !!account && isSuperAdmin && !!requestQuery.data?.catalogItemId,
+  })
+
+  const updateMutation = useMutation<ServiceRequestDetail, Error, void>({
+    mutationFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locationId: editForm.locationId || null,
+          priorityId: editForm.priorityId || null,
+          phone: editForm.phone || null,
+          neededBy: editForm.neededBy ? new Date(editForm.neededBy).toISOString() : null,
+          formData: JSON.stringify(editFormData),
+        }),
+      })
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      setEditOpen(false)
+      setActionError(null)
+      invalidateTaskQueries()
+    },
+    onError: (error) => setActionError(error.message),
+  })
+
+  const bypassMutation = useMutation<ServiceRequestDetail, Error, string>({
+    mutationFn: async (reason) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/bypass-approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {
+      setBypassOpen(false)
+      setBypassReason('')
+      setActionError(null)
+      invalidateTaskQueries()
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    onError: (error) => setActionError(error.message),
+  })
+
+  const openEditDrawer = () => {
+    const r = requestQuery.data
+    if (!r) return
+    let parsed: Record<string, string> = {}
+    try {
+      parsed = JSON.parse(r.formData)
+    } catch { /* malformed data — start empty */ }
+    setEditForm({
+      locationId: r.locationId ?? '',
+      priorityId: r.priorityId ?? '',
+      phone: r.phone ?? '',
+      neededBy: r.neededBy ? r.neededBy.slice(0, 10) : '',
+    })
+    setEditFormData(parsed)
+    setActionError(null)
+    setEditOpen(true)
+  }
 
   if (requestQuery.isLoading) return <Loading />
   if (requestQuery.error) return <ErrorFallback error={requestQuery.error} message="Could not load request." onRetry={() => requestQuery.refetch()} />
@@ -460,7 +574,17 @@ export function ServiceRequestDetail() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold">Details</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Details</h2>
+                {isSuperAdmin && (
+                  <button
+                    onClick={openEditDrawer}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+                  >
+                    Edit (admin)
+                  </button>
+                )}
+              </div>
               <dl className="grid gap-2 text-sm sm:grid-cols-2">
                 <div className="flex justify-between sm:block">
                   <dt className="text-muted-foreground">Requester</dt>
@@ -475,9 +599,15 @@ export function ServiceRequestDetail() {
                   <dd><StatusBadge status={request.approvalDecision} /></dd>
                 </div>
                 <div className="flex justify-between sm:block">
-                  <dt className="text-muted-foreground">Approver</dt>
+                  <dt className="text-muted-foreground">{request.approvalBypassed ? 'Designated approver' : 'Approver'}</dt>
                   <dd className="font-medium">{request.approverName ?? '—'}</dd>
                 </div>
+                {request.approvalBypassed && (
+                  <div className="flex justify-between sm:block">
+                    <dt className="text-muted-foreground">Bypassed by</dt>
+                    <dd className="font-medium text-amber-600 dark:text-amber-400">{request.bypassedByName ?? '—'}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between sm:block">
                   <dt className="text-muted-foreground">Location</dt>
                   <dd className="font-medium">{request.locationName ?? '—'}</dd>
@@ -674,6 +804,22 @@ export function ServiceRequestDetail() {
               </div>
             )}
 
+            {request.status === 'PENDING_APPROVAL' && isSuperAdmin && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-6 shadow-sm dark:border-amber-800 dark:bg-amber-950/20">
+                <h2 className="mb-2 text-lg font-semibold">Admin Override</h2>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Approve this request without the designated approver's decision. The record will show the
+                  approval was bypassed — never attribute it to the approver. A reason is required.
+                </p>
+                <button
+                  onClick={() => { setBypassReason(''); setActionError(null); setBypassOpen(true) }}
+                  className="w-full rounded-md border border-amber-400 bg-amber-100 px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900"
+                >
+                  Bypass Approval…
+                </button>
+              </div>
+            )}
+
             {request.status === 'PENDING_APPROVAL' && request.approverId === currentUser?.id && (
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Approval</h2>
@@ -785,6 +931,107 @@ export function ServiceRequestDetail() {
           pending={sendToApprovalMutation.isPending}
         />
         {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
+      </FormDrawer>
+
+      <FormDrawer open={bypassOpen} title="Bypass Approval" dirty={bypassReason.trim() !== ''} onClose={() => { setBypassOpen(false); setBypassReason(''); setActionError(null) }}>
+        <EntityForm
+          fields={[{ name: 'reason', label: 'Reason for bypassing approval (required)', type: 'textarea', required: true }]}
+          values={{ reason: bypassReason }}
+          onChange={(_, value) => setBypassReason(value)}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!bypassReason.trim()) {
+              setActionError('A reason is required when bypassing approval')
+              return
+            }
+            bypassMutation.mutate(bypassReason)
+          }}
+          submitLabel="Bypass & Approve"
+          pending={bypassMutation.isPending}
+        />
+        {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
+      </FormDrawer>
+
+      <FormDrawer open={editOpen} title="Edit Request (admin)" dirty onClose={() => { setEditOpen(false); setActionError(null) }}>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="edit-location" className="text-sm font-medium">Location</label>
+            <select
+              id="edit-location"
+              value={editForm.locationId}
+              onChange={(e) => setEditForm({ ...editForm, locationId: e.target.value })}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              {(locationsQuery.data ?? []).map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+            {request.status === 'PENDING_APPROVAL' && (
+              <p className="text-xs text-muted-foreground">
+                Changing the location re-routes the pending approval to the new location's approval manager.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="edit-priority" className="text-sm font-medium">Priority</label>
+            <select
+              id="edit-priority"
+              value={editForm.priorityId}
+              onChange={(e) => setEditForm({ ...editForm, priorityId: e.target.value })}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Default</option>
+              {(prioritiesQuery.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="edit-phone" className="text-sm font-medium">Phone Number</label>
+            <input
+              id="edit-phone"
+              type="tel"
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="edit-neededby" className="text-sm font-medium">Needed By</label>
+            <DateInput
+              id="edit-neededby"
+              value={editForm.neededBy}
+              onChange={(e) => setEditForm({ ...editForm, neededBy: e.target.value })}
+            />
+          </div>
+          {catalogItemQuery.data?.formSchema && (() => {
+            let parsed: unknown
+            try { parsed = JSON.parse(catalogItemQuery.data.formSchema) } catch { parsed = null }
+            return isValidSchema(parsed) ? (
+              <SchemaForm
+                schema={parsed}
+                values={editFormData}
+                onChange={(name, value) => setEditFormData({ ...editFormData, [name]: value })}
+                onSubmit={() => updateMutation.mutate()}
+                submitLabel="Save Changes"
+                pending={updateMutation.isPending}
+                serverError={actionError}
+              />
+            ) : null
+          })()}
+          {(!catalogItemQuery.data?.formSchema) && (
+            <>
+              <button
+                onClick={() => updateMutation.mutate()}
+                disabled={updateMutation.isPending}
+                className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+              >
+                Save Changes
+              </button>
+              {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+            </>
+          )}
+        </div>
       </FormDrawer>
 
       <FormDrawer open={deliveryDateTask !== null} title="Set Delivery Date" dirty={deliveryDate !== ''} onClose={() => { setDeliveryDateTask(null); setActionError(null) }}>

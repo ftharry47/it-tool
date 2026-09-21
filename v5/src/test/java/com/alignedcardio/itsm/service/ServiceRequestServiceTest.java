@@ -4,6 +4,7 @@ import com.alignedcardio.itsm.api.servicerequest.ApprovalRequest;
 import com.alignedcardio.itsm.api.servicerequest.ServiceRequestActivityResponse;
 import com.alignedcardio.itsm.api.servicerequest.ServiceRequestCreateRequest;
 import com.alignedcardio.itsm.api.servicerequest.ServiceRequestResponse;
+import com.alignedcardio.itsm.api.servicerequest.ServiceRequestUpdateRequest;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.alignedcardio.itsm.entity.AppUser;
@@ -437,6 +438,206 @@ class ServiceRequestServiceTest {
         when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
 
         assertThrows(NotFoundException.class, () -> service.get(stranger, ORG_ID, sr.getId()));
+    }
+
+    private AppUser superAdmin(String name) {
+        AppUser admin = user(name);
+        Role role = new Role();
+        role.setName("SUPER_ADMIN");
+        UserRole ur = new UserRole();
+        ur.setUser(admin);
+        ur.setRole(role);
+        admin.setUserRoles(java.util.Set.of(ur));
+        return admin;
+    }
+
+    private Location locationWithManager(String name, AppUser manager) {
+        Location loc = new Location();
+        loc.setId(UUID.randomUUID());
+        loc.setName(name);
+        loc.setApprovalManager(manager);
+        return loc;
+    }
+
+    @Test
+    void updateLogsOnlyChangedFields() {
+        AppUser admin = superAdmin("Admin");
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Clinical Software", true, null);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setPhone("555-000-1111");
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+
+        service.update(admin, ORG_ID, sr.getId(),
+                new ServiceRequestUpdateRequest(null, null, "555-222-3333", null, null));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog log = captor.getValue();
+        assertEquals("EDITED", log.getAction());
+        assertEquals(admin.getId(), log.getActorUserId());
+        // Only the changed field appears in the diff — nothing else.
+        assertTrue(log.getAfterState().contains("phone"));
+        assertFalse(log.getAfterState().contains("location"));
+        assertFalse(log.getAfterState().contains("priority"));
+        assertFalse(log.getAfterState().contains("formData"));
+        assertTrue(log.getBeforeState().contains("555-000-1111"));
+    }
+
+    @Test
+    void updateLocationWhilePendingReresolvesApprover() {
+        AppUser admin = superAdmin("Admin");
+        AppUser requester = user("Requester");
+        AppUser oldManager = user("Old Manager");
+        AppUser newManager = user("New Manager");
+        CatalogItem item = item("Clinical Software", true, null);
+        Location oldLoc = locationWithManager("Old Site", oldManager);
+        Location newLoc = locationWithManager("New Site", newManager);
+
+        ServiceRequest sr = pendingRequest(item, requester, oldLoc);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprover(oldManager);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        when(locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, newLoc.getId()))
+                .thenReturn(Optional.of(newLoc));
+        stubSave();
+
+        service.update(admin, ORG_ID, sr.getId(),
+                new ServiceRequestUpdateRequest(newLoc.getId(), null, null, null, null));
+
+        assertEquals(newManager.getId(), sr.getApprover().getId());
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        String after = captor.getValue().getAfterState();
+        assertTrue(after.contains("New Site"));
+        assertTrue(after.contains("New Manager"));
+    }
+
+    @Test
+    void updateLocationAfterDecisionKeepsApprover() {
+        AppUser admin = superAdmin("Admin");
+        AppUser requester = user("Requester");
+        AppUser decider = user("Deciding Manager");
+        AppUser newManager = user("New Manager");
+        CatalogItem item = item("Clinical Software", true, null);
+        Location oldLoc = locationWithManager("Old Site", decider);
+        Location newLoc = locationWithManager("New Site", newManager);
+
+        ServiceRequest sr = pendingRequest(item, requester, oldLoc);
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setApprover(decider);
+        sr.setApprovalDecision(ServiceRequest.ApprovalDecision.APPROVED);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        when(locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, newLoc.getId()))
+                .thenReturn(Optional.of(newLoc));
+        stubSave();
+
+        service.update(admin, ORG_ID, sr.getId(),
+                new ServiceRequestUpdateRequest(newLoc.getId(), null, null, null, null));
+
+        // A made decision never re-routes: the approver stays the decider.
+        assertEquals(decider.getId(), sr.getApprover().getId());
+        assertEquals(newLoc.getId(), sr.getLocation().getId());
+    }
+
+    @Test
+    void updateRejectsNonSuperAdmin() {
+        AppUser requester = user("Requester");
+        CatalogItem item = item("Clinical Software", false, null);
+        ServiceRequest sr = pendingRequest(item, requester, null);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> service.update(requester, ORG_ID, sr.getId(),
+                        new ServiceRequestUpdateRequest(null, null, "555", null, null)));
+        assertTrue(e.getMessage().contains("SUPER_ADMIN"));
+    }
+
+    @Test
+    void bypassApprovalMarksDistinctAndNotifiesApprover() {
+        AppUser admin = superAdmin("Super Admin");
+        AppUser requester = user("Requester");
+        AppUser manager = user("Approval Manager");
+        CatalogItem item = item("Clinical Software", true, manager);
+        Location loc = locationWithManager("Site", manager);
+
+        ServiceRequest sr = pendingRequest(item, requester, loc);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprover(manager);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        when(notificationTemplateBuilder.forEvent(eq("SR_APPROVAL_BYPASSED"), any()))
+                .thenReturn(new com.alignedcardio.itsm.service.notification.NotificationContent(
+                        "s", "b", "h", "s", "i", "p", "p"));
+        stubSave();
+
+        ServiceRequestResponse response =
+                service.bypassApproval(admin, ORG_ID, sr.getId(), "Urgent clinical need");
+
+        assertEquals(ServiceRequest.Status.APPROVED, response.status());
+        assertEquals(ServiceRequest.ApprovalDecision.APPROVED, sr.getApprovalDecision());
+        assertTrue(sr.isApprovalBypassed());
+        assertEquals(admin.getId(), sr.getBypassedBy().getId());
+        // The designated approver stays on the record — the bypasser is separate.
+        assertEquals(manager.getId(), sr.getApprover().getId());
+        assertEquals(manager.getId(), response.approverId());
+        assertEquals(admin.getDisplayName(), response.bypassedByName());
+
+        // Audit: distinct APPROVAL_BYPASSED action naming both parties + reason.
+        ArgumentCaptor<AuditLog> auditCaptor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(auditCaptor.capture());
+        AuditLog log = auditCaptor.getValue();
+        assertEquals("APPROVAL_BYPASSED", log.getAction());
+        assertTrue(log.getAfterState().contains("Super Admin"));
+        assertTrue(log.getAfterState().contains("Approval Manager"));
+        assertTrue(log.getAfterState().contains("Urgent clinical need"));
+
+        // Original approver is notified of the override.
+        ArgumentCaptor<com.alignedcardio.itsm.service.notification.NotificationRequest> notifCaptor =
+                ArgumentCaptor.forClass(com.alignedcardio.itsm.service.notification.NotificationRequest.class);
+        verify(notificationService).send(notifCaptor.capture());
+        assertEquals(manager.getId(), notifCaptor.getValue().userId());
+        assertEquals("SR_APPROVAL_BYPASSED", notifCaptor.getValue().type());
+
+        // Same downstream as a normal approval: requester APPROVED +
+        // IN_FULFILLMENT events drive the requester notification.
+        ArgumentCaptor<ServiceRequestEvent> eventCaptor = ArgumentCaptor.forClass(ServiceRequestEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        List<String> types = eventCaptor.getAllValues().stream().map(ServiceRequestEvent::triggerType).toList();
+        assertEquals(List.of("APPROVED", "IN_FULFILLMENT"), types);
+    }
+
+    @Test
+    void bypassApprovalRequiresSuperAdminReasonAndPending() {
+        AppUser admin = superAdmin("Admin");
+        AppUser manager = user("Manager");
+        CatalogItem item = item("Clinical Software", true, manager);
+        ServiceRequest sr = pendingRequest(item, user("Requester"), null);
+        sr.setStatus(ServiceRequest.Status.PENDING_APPROVAL);
+        sr.setApprover(manager);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.bypassApproval(manager, ORG_ID, sr.getId(), "reason"));
+        assertThrows(IllegalStateException.class,
+                () -> service.bypassApproval(admin, ORG_ID, sr.getId(), "  "));
+
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        assertThrows(IllegalStateException.class,
+                () -> service.bypassApproval(admin, ORG_ID, sr.getId(), "reason"));
+    }
+
+    @Test
+    void approvedByMeUsesBypassedExcludingQuery() {
+        // listApprovedByMe must hit the repository method that filters out
+        // approval_bypassed rows, so bypassed requests never appear in the
+        // designated approver's "approved by me" history.
+        AppUser manager = user("Manager");
+        service.listApprovedByMe(manager);
+        verify(serviceRequestRepository)
+                .findByOrgIdAndApprover_IdAndApprovalDecisionAndApprovalBypassedFalseAndDeletedAtIsNullOrderByCreatedAtDesc(
+                        ORG_ID, manager.getId(), ServiceRequest.ApprovalDecision.APPROVED);
     }
 
     @Test

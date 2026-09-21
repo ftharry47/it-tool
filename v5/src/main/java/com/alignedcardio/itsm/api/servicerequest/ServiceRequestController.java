@@ -148,6 +148,24 @@ public class ServiceRequestController {
         return serviceRequestService.getActivity(user, user.getOrgId(), id);
     }
 
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ServiceRequestResponse update(@AuthenticationPrincipal Jwt jwt,
+                                         @PathVariable UUID id,
+                                         @RequestBody ServiceRequestUpdateRequest request) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.update(user, user.getOrgId(), id, request);
+    }
+
+    @PostMapping("/{id}/bypass-approval")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ServiceRequestResponse bypassApproval(@AuthenticationPrincipal Jwt jwt,
+                                                 @PathVariable UUID id,
+                                                 @RequestBody Map<String, String> body) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.bypassApproval(user, user.getOrgId(), id, body.get("reason"));
+    }
+
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public ServiceRequestResponse updateStatus(@AuthenticationPrincipal Jwt jwt,
