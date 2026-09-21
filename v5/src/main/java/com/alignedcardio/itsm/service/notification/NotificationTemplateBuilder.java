@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
+import com.alignedcardio.itsm.util.DateFormats;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -568,7 +568,7 @@ View full request:
         if (newest != null) {
             appendComment(html, newest, false);
         } else {
-            html.append("<p style=\"margin-top:12px; padding:12px; background:#eff6ff; border-left:4px solid #2563eb;\">");
+            html.append("<p style=\"margin-top:12px; padding:12px; background:#fef2f2; border-left:4px solid #dc2828;\">");
             html.append(escape(str(values, "commentPreview")));
             html.append("</p>");
         }
@@ -586,14 +586,16 @@ View full request:
     private void appendComment(StringBuilder html, Map<String, Object> c, boolean grey) {
         String author = str(c, "authorName");
         String body = str(c, "body");
+        // Timestamps render server-side in US Eastern — never the reader's
+        // device timezone (emails have no access to it).
         String when = c.get("createdAt") instanceof OffsetDateTime t
-                ? t.format(DateTimeFormatter.ofPattern("d MMM yyyy HH:mm"))
+                ? DateFormats.formatDateTime(t)
                 : str(c, "createdAt");
         html.append("<div style=\"margin-bottom:12px; padding:12px; border-radius:4px; ");
         if (grey) {
             html.append("background:#f3f4f6; color:#374151;");
         } else {
-            html.append("background:#eff6ff; border-left:4px solid #2563eb;");
+            html.append("background:#fef2f2; border-left:4px solid #dc2828;");
         }
         html.append("\">");
         html.append("<p style=\"margin:0; font-size:12px; color:#6b7280;\">").append(escape(author))

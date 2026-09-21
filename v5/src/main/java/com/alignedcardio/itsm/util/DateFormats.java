@@ -19,8 +19,10 @@ public final class DateFormats {
 
     public static final ZoneId DISPLAY_ZONE = ZoneId.of("America/New_York");
 
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MM/dd/yyyy");
-    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("MM/dd/yyyy, h:mm a");
+    private static final DateTimeFormatter DATE =
+            DateTimeFormatter.ofPattern("MM/dd/yyyy", java.util.Locale.US);
+    private static final DateTimeFormatter DATE_TIME =
+            DateTimeFormatter.ofPattern("MM/dd/yyyy, h:mm a", java.util.Locale.US);
 
     private DateFormats() {
     }

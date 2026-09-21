@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
+import com.alignedcardio.itsm.util.DateFormats;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -408,7 +408,8 @@ public class SlaBreachMonitorJob implements Job {
 
     private String formatTime(OffsetDateTime t) {
         if (t == null) return "unknown";
-        return t.format(DateTimeFormatter.ofPattern("d MMM yyyy HH:mm"));
+        // Server-side rendering, fixed US Eastern — matches in-app display.
+        return DateFormats.formatDateTime(t);
     }
 
     private String formatElapsed(OffsetDateTime start, OffsetDateTime now) {

@@ -79,7 +79,7 @@ public final class EmailRenderer {
                 if (line.isEmpty()) continue;
                 if (URL_LINE.matcher(line).matches()) {
                     String href = line.startsWith("/") ? line : line;
-                    out.append("<a href=\"").append(escape(href)).append("\" style=\"color: #2563eb; text-decoration: none;\">")
+                    out.append("<a href=\"").append(escape(href)).append("\" style=\"color: #dc2828; text-decoration: none;\">")
                             .append(escape(line)).append("</a>");
                 } else {
                     out.append(escape(line));
@@ -101,11 +101,11 @@ public final class EmailRenderer {
 
     private static String header() {
         return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
-                + "style=\"background: #0f172a; border-radius: 6px 6px 0 0; margin-bottom: 20px;\">\n"
+                + "style=\"background: #dc2828; border-radius: 6px 6px 0 0; margin-bottom: 20px;\">\n"
                 + "  <tr>\n"
                 + "    <td style=\"padding: 20px;\">\n"
                 + "      <span style=\"color: #ffffff; font-size: 18px; font-weight: 600;\">"
-                + "Azentro | One Mail Delivery System"
+                + "Azentro"
                 + "</span>\n"
                 + "    </td>\n"
                 + "  </tr>\n"
@@ -116,6 +116,6 @@ public final class EmailRenderer {
         return "<p style=\"margin-top: 24px; color: #555;\">"
                 + "If you have questions about this ticket, reply from the portal or contact your IT team."
                 + "</p>\n"
-                + "<p style=\"color: #555;\">Regards,<br>Azentro | One Mail Delivery System</p>\n";
+                + "<p style=\"color: #555;\">© 2026 Azentro. All Rights Reserved.</p>\n";
     }
 }

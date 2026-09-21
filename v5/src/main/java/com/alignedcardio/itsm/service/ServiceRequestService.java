@@ -705,7 +705,7 @@ public class ServiceRequestService {
             payload.put("approvalComment", sr.getApprovalComment());
         }
         if (sr.getDecidedAt() != null) {
-            payload.put("approvedDate", sr.getDecidedAt().toString());
+            payload.put("approvedDate", DateFormats.formatDateTime(sr.getDecidedAt()));
         }
         if (actor != null) {
             payload.put("fulfillerName", actor.getDisplayName());
@@ -720,7 +720,7 @@ public class ServiceRequestService {
             Map<String, Object> payload = new java.util.HashMap<>();
             payload.put("number", sr.getNumber());
             payload.put("catalogItemName", sr.getCatalogItem().getName());
-            payload.put("approvedDate", sr.getDecidedAt() != null ? sr.getDecidedAt().toString() : "");
+            payload.put("approvedDate", sr.getDecidedAt() != null ? DateFormats.formatDateTime(sr.getDecidedAt()) : "");
             payload.put("entityType", "SERVICE_REQUEST");
             payload.put("entityId", sr.getId());
             try {
@@ -1227,7 +1227,7 @@ public class ServiceRequestService {
         payload.put("number", sr.getNumber());
         payload.put("catalogItemName", sr.getCatalogItem().getName());
         payload.put("requesterName", sr.getRequester().getDisplayName());
-        payload.put("submittedDate", sr.getCreatedAt() != null ? sr.getCreatedAt().toString() : "");
+        payload.put("submittedDate", sr.getCreatedAt() != null ? DateFormats.formatDateTime(sr.getCreatedAt()) : "");
         payload.put("adminName", user.getDisplayName());
         payload.put("reminderMessage", trimmed);
         payload.put("message", trimmed);
