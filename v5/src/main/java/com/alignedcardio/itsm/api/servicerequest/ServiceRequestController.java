@@ -166,6 +166,16 @@ public class ServiceRequestController {
         return serviceRequestService.bypassApproval(user, user.getOrgId(), id, body.get("reason"));
     }
 
+    /** Cancel = "withdrawn / no longer needed". Reason required; requester or staff. */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("isAuthenticated()")
+    public ServiceRequestResponse cancel(@AuthenticationPrincipal Jwt jwt,
+                                         @PathVariable UUID id,
+                                         @RequestBody Map<String, String> body) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return serviceRequestService.cancel(user, user.getOrgId(), id, body.get("reason"));
+    }
+
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('AGENT','TEAM_LEAD','ADMIN','SUPER_ADMIN')")
     public ServiceRequestResponse updateStatus(@AuthenticationPrincipal Jwt jwt,

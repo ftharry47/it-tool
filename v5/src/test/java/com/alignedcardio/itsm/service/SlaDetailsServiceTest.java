@@ -77,7 +77,7 @@ class SlaDetailsServiceTest {
                 sla(null, serviceRequest("SR-2"))));
 
         List<SlaInstanceDetailResponse> rows =
-                service.list(ORG, null, null, null, null, agent, false);
+                service.list(ORG, null, null, null, null, agent, false, null, null, null, null);
 
         assertEquals(2, rows.size());
         assertTrue(rows.stream().anyMatch(r -> "Active incident".equals(r.incidentTitle())));
@@ -103,7 +103,7 @@ class SlaDetailsServiceTest {
                 sla(activeIncident, null)));
 
         List<SlaInstanceDetailResponse> rows =
-                service.list(ORG, null, null, null, null, agent, true);
+                service.list(ORG, null, null, null, null, agent, true, null, null, null, null);
 
         assertEquals(1, rows.size());
         assertEquals("Active incident", rows.get(0).incidentTitle());
@@ -120,7 +120,7 @@ class SlaDetailsServiceTest {
         when(query.getResultList()).thenReturn(List.of(sla(null, serviceRequest("SR-9"))));
 
         List<SlaInstanceDetailResponse> rows =
-                service.list(ORG, null, null, null, null, agent, false);
+                service.list(ORG, null, null, null, null, agent, false, null, null, null, null);
 
         assertEquals(1, rows.size());
         assertEquals("SR-9", rows.get(0).serviceRequestNumber());

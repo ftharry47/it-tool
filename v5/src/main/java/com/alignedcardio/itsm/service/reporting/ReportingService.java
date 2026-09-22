@@ -284,6 +284,11 @@ public class ReportingService {
                 cb.isNotNull(serviceRequest.get("id")),
                 cb.isNotNull(problem.get("id")),
                 cb.isNotNull(change.get("id"))));
+        // Cancelled requests are withdrawn — not a fulfilled SLA. Counting them
+        // as "met" would inflate compliance, so they're excluded entirely.
+        predicates.add(cb.or(
+                cb.isNull(serviceRequest.get("id")),
+                cb.notEqual(serviceRequest.get("status"), ServiceRequest.Status.CANCELLED)));
         if (mineUserId != null) {
             predicates.add(cb.or(
                     cb.equal(incident.get("assignee").get("id"), mineUserId),
@@ -319,10 +324,12 @@ public class ReportingService {
         OffsetDateTime from = month.atDay(1).atStartOfDay().atOffset(now.getOffset());
 
         List<SlaInstance> instances = entityManager.createQuery(
-                "SELECT si FROM SlaInstance si WHERE si.orgId = :org AND si.createdAt >= :from",
+                "SELECT si FROM SlaInstance si WHERE si.orgId = :org AND si.createdAt >= :from " +
+                        "AND (si.serviceRequest IS NULL OR si.serviceRequest.status <> :cancelled)",
                 SlaInstance.class)
                 .setParameter("org", orgId)
                 .setParameter("from", from)
+                .setParameter("cancelled", ServiceRequest.Status.CANCELLED)
                 .getResultList();
 
         // Service-request ownership: agents holding a non-deleted fulfillment task.
@@ -874,6 +881,49 @@ public class ReportingService {
                 .setParameter("org", orgId).setParameter("statuses", WORKLOAD_TASK_STATUSES)
                 .getSingleResult();
 
+        // Aging: how long open requests have been sitting, bucketed per status
+        // ([0-1d, 2-3d, 4-7d, 8d+]).
+        Set<ServiceRequest.Status> openStatuses = EnumSet.complementOf(
+                EnumSet.copyOf(TERMINAL_REQUEST_STATUSES));
+        OffsetDateTime now = OffsetDateTime.now();
+        Map<ServiceRequest.Status, long[]> aging = new LinkedHashMap<>();
+        for (ServiceRequest.Status s : openStatuses) aging.put(s, new long[4]);
+        for (Tuple t : entityManager.createQuery(
+                "SELECT s.status, s.createdAt FROM ServiceRequest s WHERE s.orgId = :org " +
+                        "AND s.deletedAt IS NULL AND s.status IN :open", Tuple.class)
+                .setParameter("org", orgId)
+                .setParameter("open", openStatuses)
+                .getResultList()) {
+            OffsetDateTime created = t.get(1, OffsetDateTime.class);
+            long days = created == null ? 0 : java.time.Duration.between(created, now).toDays();
+            int bucket = days <= 1 ? 0 : days <= 3 ? 1 : days <= 7 ? 2 : 3;
+            aging.get(t.get(0, ServiceRequest.Status.class))[bucket]++;
+        }
+        List<Map<String, Object>> agingRows = new ArrayList<>();
+        for (Map.Entry<ServiceRequest.Status, long[]> e : aging.entrySet()) {
+            long[] b = e.getValue();
+            if (b[0] + b[1] + b[2] + b[3] == 0) continue;
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("status", e.getKey().name());
+            r.put("age0to1", b[0]);
+            r.put("age2to3", b[1]);
+            r.put("age4to7", b[2]);
+            r.put("age8plus", b[3]);
+            agingRows.add(r);
+        }
+
+        // Open requests whose SLA clock is already at risk or breached.
+        Long slaAtRisk = entityManager.createQuery(
+                "SELECT COUNT(si) FROM SlaInstance si WHERE si.orgId = :org " +
+                        "AND si.serviceRequest.deletedAt IS NULL " +
+                        "AND si.serviceRequest.status NOT IN :terminal " +
+                        "AND si.breachStatus IN :risk", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("terminal", TERMINAL_REQUEST_STATUSES)
+                .setParameter("risk", List.of(SlaInstance.BreachStatus.AT_RISK,
+                        SlaInstance.BreachStatus.BREACHED))
+                .getSingleResult();
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("byStatus", byStatus);
         out.put("oldestOpen", oldestOpen.stream().map(s -> queueRow(s.getId(), s.getNumber(),
@@ -884,6 +934,9 @@ public class ReportingService {
         attention.put("rejectedNeedsReview", needsReview);
         attention.put("unassignedTasks", unassignedTasks);
         out.put("needsAttention", attention);
+        out.put("aging", agingRows);
+        out.put("slaAtRisk", slaAtRisk);
+        out.put("approverBacklog", pendingApprovalsBacklog(orgId));
         return out;
     }
 
@@ -1636,5 +1689,224 @@ public class ReportingService {
             }
         }
         return entity.getId().toString();
+    }
+
+    // --- Row-level data export (Data Export page) ---------------------------
+
+    /**
+     * Admin export: full display-ready rows (names resolved, dates in
+     * America/New_York), not aggregates. entity is one of incident,
+     * service_request, problem, change, sla_instance.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> exportRows(UUID orgId, String entity,
+                                                OffsetDateTime from, OffsetDateTime to, String status) {
+        return switch (entity) {
+            case "incident" -> exportIncidents(orgId, from, to, status);
+            case "service_request" -> exportServiceRequests(orgId, from, to, status);
+            case "problem" -> exportProblems(orgId, from, to, status);
+            case "change" -> exportChanges(orgId, from, to, status);
+            case "sla_instance" -> exportSlaInstances(orgId, from, to, status);
+            default -> throw new IllegalArgumentException("Unknown export entity: " + entity);
+        };
+    }
+
+    private void applyExportParams(TypedQuery<Tuple> q, UUID orgId,
+                                   OffsetDateTime from, OffsetDateTime to, Object status) {
+        q.setParameter("org", orgId);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+        if (status != null) q.setParameter("status", status);
+    }
+
+    private String exportFilters(String dateField, OffsetDateTime from, OffsetDateTime to, String status) {
+        StringBuilder sb = new StringBuilder();
+        if (from != null) sb.append(" AND ").append(dateField).append(" >= :from");
+        if (to != null) sb.append(" AND ").append(dateField).append(" <= :to");
+        if (status != null && !status.isBlank()) sb.append(" AND status = :status");
+        return sb.toString();
+    }
+
+    private Map<String, Object> row(Object... keyValues) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            m.put((String) keyValues[i], keyValues[i + 1]);
+        }
+        return m;
+    }
+
+    private String fmt(OffsetDateTime t) {
+        return t == null ? "" : com.alignedcardio.itsm.util.DateFormats.formatDateTime(t);
+    }
+
+    private String fmt(java.time.LocalDate d) {
+        return d == null ? "" : com.alignedcardio.itsm.util.DateFormats.formatDate(d);
+    }
+
+    private List<Map<String, Object>> exportIncidents(UUID orgId, OffsetDateTime from, OffsetDateTime to, String status) {
+        Incident.Status parsed = status != null && !status.isBlank()
+                ? Incident.Status.valueOf(status.trim().toUpperCase()) : null;
+        String jpql = """
+                SELECT i.number, i.title, i.status, p.name, c.name, a.displayName, r.displayName,
+                       l.name, i.createdAt, i.resolvedAt, i.closedAt
+                FROM Incident i
+                LEFT JOIN i.priority p LEFT JOIN i.category c LEFT JOIN i.assignee a
+                LEFT JOIN i.requester r LEFT JOIN i.location l
+                WHERE i.orgId = :org AND i.deletedAt IS NULL
+                """ + exportFilters("i.createdAt", from, to, null)
+                + (parsed != null ? " AND i.status = :status" : "")
+                + " ORDER BY i.createdAt DESC";
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class);
+        applyExportParams(q, orgId, from, to, parsed);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            rows.add(row(
+                    "number", "INC-" + t.get(0),
+                    "title", t.get(1),
+                    "status", t.get(2) != null ? t.get(2).toString() : "",
+                    "priority", t.get(3) != null ? t.get(3) : "",
+                    "category", t.get(4) != null ? t.get(4) : "",
+                    "assignee", t.get(5) != null ? t.get(5) : "",
+                    "requester", t.get(6) != null ? t.get(6) : "",
+                    "location", t.get(7) != null ? t.get(7) : "",
+                    "createdAt", fmt(t.get(8, OffsetDateTime.class)),
+                    "resolvedAt", fmt(t.get(9, OffsetDateTime.class)),
+                    "closedAt", fmt(t.get(10, OffsetDateTime.class))));
+        }
+        return rows;
+    }
+
+    private List<Map<String, Object>> exportServiceRequests(UUID orgId, OffsetDateTime from, OffsetDateTime to, String status) {
+        ServiceRequest.Status parsed = status != null && !status.isBlank()
+                ? ServiceRequest.Status.valueOf(status.trim().toUpperCase()) : null;
+        String jpql = """
+                SELECT s.number, ci.name, s.status, s.approvalDecision, r.displayName,
+                       ap.displayName, l.name, pr.name, s.createdAt, s.decidedAt,
+                       s.approvalBypassed, ba.displayName
+                FROM ServiceRequest s
+                LEFT JOIN s.catalogItem ci LEFT JOIN s.requester r LEFT JOIN s.approver ap
+                LEFT JOIN s.location l LEFT JOIN s.priority pr LEFT JOIN s.bypassedBy ba
+                WHERE s.orgId = :org AND s.deletedAt IS NULL
+                """ + exportFilters("s.createdAt", from, to, null)
+                + (parsed != null ? " AND s.status = :status" : "")
+                + " ORDER BY s.createdAt DESC";
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class);
+        applyExportParams(q, orgId, from, to, parsed);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            boolean bypassed = Boolean.TRUE.equals(t.get(10, Boolean.class));
+            rows.add(row(
+                    "number", t.get(0),
+                    "catalogItem", t.get(1) != null ? t.get(1) : "",
+                    "status", t.get(2) != null ? t.get(2).toString() : "",
+                    "approvalDecision", t.get(3) != null ? t.get(3).toString() : "",
+                    "requester", t.get(4) != null ? t.get(4) : "",
+                    "approver", t.get(5) != null ? t.get(5) : "",
+                    "location", t.get(6) != null ? t.get(6) : "",
+                    "priority", t.get(7) != null ? t.get(7) : "",
+                    "createdAt", fmt(t.get(8, OffsetDateTime.class)),
+                    "decidedAt", fmt(t.get(9, OffsetDateTime.class)),
+                    "approvalBypassed", bypassed ? "yes" : "",
+                    "bypassedBy", bypassed && t.get(11) != null ? t.get(11) : ""));
+        }
+        return rows;
+    }
+
+    private List<Map<String, Object>> exportProblems(UUID orgId, OffsetDateTime from, OffsetDateTime to, String status) {
+        Problem.Status parsed = status != null && !status.isBlank()
+                ? Problem.Status.valueOf(status.trim().toUpperCase()) : null;
+        String jpql = """
+                SELECT p.number, p.title, p.status, a.displayName, p.createdAt, p.resolvedAt, p.closedAt
+                FROM Problem p LEFT JOIN p.assignee a
+                WHERE p.orgId = :org AND p.deletedAt IS NULL
+                """ + exportFilters("p.createdAt", from, to, null)
+                + (parsed != null ? " AND p.status = :status" : "")
+                + " ORDER BY p.createdAt DESC";
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class);
+        applyExportParams(q, orgId, from, to, parsed);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            rows.add(row(
+                    "number", t.get(0),
+                    "title", t.get(1),
+                    "status", t.get(2) != null ? t.get(2).toString() : "",
+                    "assignee", t.get(3) != null ? t.get(3) : "",
+                    "createdAt", fmt(t.get(4, OffsetDateTime.class)),
+                    "resolvedAt", fmt(t.get(5, OffsetDateTime.class)),
+                    "closedAt", fmt(t.get(6, OffsetDateTime.class))));
+        }
+        return rows;
+    }
+
+    private List<Map<String, Object>> exportChanges(UUID orgId, OffsetDateTime from, OffsetDateTime to, String status) {
+        ChangeRequest.Status parsed = status != null && !status.isBlank()
+                ? ChangeRequest.Status.valueOf(status.trim().toUpperCase()) : null;
+        String jpql = """
+                SELECT c.number, c.title, c.status, c.changeType, c.risk,
+                       a.displayName, r.displayName, c.createdAt, c.plannedStart, c.plannedEnd
+                FROM ChangeRequest c LEFT JOIN c.assignee a LEFT JOIN c.requestedBy r
+                WHERE c.orgId = :org AND c.deletedAt IS NULL
+                """ + exportFilters("c.createdAt", from, to, null)
+                + (parsed != null ? " AND c.status = :status" : "")
+                + " ORDER BY c.createdAt DESC";
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class);
+        applyExportParams(q, orgId, from, to, parsed);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : q.getResultList()) {
+            rows.add(row(
+                    "number", t.get(0),
+                    "title", t.get(1),
+                    "status", t.get(2) != null ? t.get(2).toString() : "",
+                    "changeType", t.get(3) != null ? t.get(3).toString() : "",
+                    "risk", t.get(4) != null ? t.get(4).toString() : "",
+                    "assignee", t.get(5) != null ? t.get(5) : "",
+                    "requestedBy", t.get(6) != null ? t.get(6) : "",
+                    "createdAt", fmt(t.get(7, OffsetDateTime.class)),
+                    "plannedStart", fmt(t.get(8, OffsetDateTime.class)),
+                    "plannedEnd", fmt(t.get(9, OffsetDateTime.class))));
+        }
+        return rows;
+    }
+
+    private List<Map<String, Object>> exportSlaInstances(UUID orgId, OffsetDateTime from, OffsetDateTime to, String status) {
+        SlaInstance.BreachStatus parsed = status != null && !status.isBlank()
+                ? SlaInstance.BreachStatus.valueOf(status.trim().toUpperCase()) : null;
+        StringBuilder jpql = new StringBuilder(
+                "SELECT si FROM SlaInstance si WHERE si.orgId = :org");
+        if (from != null) jpql.append(" AND si.createdAt >= :from");
+        if (to != null) jpql.append(" AND si.createdAt <= :to");
+        if (parsed != null) jpql.append(" AND si.breachStatus = :status");
+        jpql.append(" ORDER BY si.createdAt DESC");
+        TypedQuery<SlaInstance> q = entityManager.createQuery(jpql.toString(), SlaInstance.class)
+                .setParameter("org", orgId);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+        if (parsed != null) q.setParameter("status", parsed);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (SlaInstance si : q.getResultList()) {
+            String kind = si.getIncident() != null ? "INCIDENT"
+                    : si.getServiceRequest() != null ? "SERVICE_REQUEST"
+                    : si.getProblem() != null ? "PROBLEM"
+                    : si.getChangeRequest() != null ? "CHANGE" : "";
+            String ticketRef = switch (kind) {
+                case "INCIDENT" -> "INC-" + si.getIncident().getNumber();
+                case "SERVICE_REQUEST" -> si.getServiceRequest().getNumber();
+                case "PROBLEM" -> si.getProblem().getNumber();
+                case "CHANGE" -> si.getChangeRequest().getNumber();
+                default -> "";
+            };
+            rows.add(row(
+                    "entityType", kind,
+                    "ticket", ticketRef,
+                    "policy", si.getPolicy() != null ? si.getPolicy().getName() : "",
+                    "breachStatus", si.getBreachStatus() != null ? si.getBreachStatus().name() : "",
+                    "responseDueAt", fmt(si.getResponseDueAt()),
+                    "responseMetAt", fmt(si.getResponseMetAt()),
+                    "resolutionDueAt", fmt(si.getResolutionDueAt()),
+                    "resolutionMetAt", fmt(si.getResolutionMetAt()),
+                    "pausedAt", fmt(si.getPausedAt()),
+                    "totalPausedMinutes", si.getTotalPausedMinutes()));
+        }
+        return rows;
     }
 }

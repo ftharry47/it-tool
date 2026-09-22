@@ -28,9 +28,8 @@ import { ChangeDetail } from '../pages/dashboard/ChangeDetail'
 import { ChangeCalendar } from '../pages/dashboard/ChangeCalendar'
 import { IncidentDetail } from '../pages/dashboard/IncidentDetail'
 import { ReportsDashboard } from '../pages/dashboard/ReportsDashboard'
-import { StandardReports } from '../pages/dashboard/StandardReports'
-import { SavedReportList } from '../pages/dashboard/SavedReportList'
 import { AdHocQueryBuilder } from '../pages/dashboard/AdHocQueryBuilder'
+import { DataExport } from '../pages/dashboard/DataExport'
 import { NotificationPreferences } from '../pages/dashboard/NotificationPreferences'
 import { SlaDetails } from '../pages/dashboard/SlaDetails'
 import { Settings } from '../pages/dashboard/Settings'
@@ -89,9 +88,11 @@ const dashboardRoutes: RouteDefinition[] = [
   { path: 'dashboard/kb', label: 'KB Articles', element: <KbArticleList />, group: 'Knowledge' },
   { path: 'dashboard/kb/:id', label: 'KB Editor', element: <KbArticleEditor /> },
   { path: 'dashboard/reports', label: 'Reports', element: <ReportsDashboard />, group: 'Insights' },
-  { path: 'dashboard/reports/standard', label: 'Standard Reports', element: <StandardReports />, group: 'Insights' },
-  { path: 'dashboard/reports/saved', label: 'Saved Reports', element: <SavedReportList />, group: 'Insights' },
-  { path: 'dashboard/reports/query', label: 'Ad-Hoc Query', element: <AdHocQueryBuilder />, group: 'Insights' },
+  // Standard Reports merged into Reports tabs; Saved Reports merged into Query Builder.
+  { path: 'dashboard/reports/standard', label: 'Standard Reports', element: <Navigate to="/dashboard/reports" replace />, hidden: true },
+  { path: 'dashboard/reports/saved', label: 'Saved Reports', element: <Navigate to="/dashboard/reports/query" replace />, hidden: true },
+  { path: 'dashboard/reports/query', label: 'Query Builder', element: <AdHocQueryBuilder />, group: 'Insights' },
+  { path: 'dashboard/reports/export', label: 'Data Export', element: <DataExport />, hidden: true },
   { path: 'dashboard/sla', label: 'SLA', element: <SlaDetails />, group: 'Insights' },
   { path: 'dashboard/notifications', label: 'Notifications', element: <NotificationPreferences />, group: 'Overview' },
   { path: 'dashboard/settings', label: 'Settings', element: <Settings />, hidden: true },

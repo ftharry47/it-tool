@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Download, FileQuestion, FolderOpen } from 'lucide-react'
+import { Download, FileQuestion } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { Loading } from '../../components/ui/Loading'
@@ -491,7 +491,30 @@ const TABS = [
   { key: 'agent', label: 'Agent Workload', endpoint: '/api/v1/reports/agent-workload' },
   { key: 'worked', label: 'Worked Tickets', endpoint: '/api/v1/reports/agent-performance/tickets' },
   { key: 'sprint', label: 'Sprint Velocity', endpoint: '/api/v1/reports/sprint-velocity' },
+  // Former "Standard Reports" page — consolidated here.
+  { key: 'category', label: 'Incidents by Category', endpoint: '/api/v1/reports/incidents-by-category' },
+  { key: 'catalog', label: 'Requests by Catalog', endpoint: '/api/v1/reports/requests-by-catalog' },
+  { key: 'slaPriority', label: 'SLA by Priority', endpoint: '/api/v1/reports/sla-by-priority' },
+  { key: 'approvals', label: 'Approval Backlog', endpoint: '/api/v1/reports/pending-approvals-backlog' },
 ]
+
+/** Generic table for the fixed-dimension standard reports (merged in from the old Standard Reports page). */
+function StandardTableView({ data }: { data: Record<string, unknown>[] }) {
+  const columns = Object.keys(data[0] ?? {}).map((k) => ({
+    key: k,
+    header: k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
+    render: (r: Record<string, unknown>) => String(r[k] ?? '—'),
+  }))
+  return (
+    <DataTable<Record<string, unknown>>
+      caption="Report results"
+      columns={columns}
+      data={data}
+      getRowKey={(r) => JSON.stringify(r)}
+      emptyText="No data."
+    />
+  )
+}
 
 export function ReportsDashboard() {
   const { instance, accounts } = useMsal()
@@ -525,13 +548,9 @@ export function ReportsDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">{isAdmin ? 'Reporting Dashboards' : 'My Reporting'}</h1>
           {isAdmin && (
             <div className="flex gap-2">
-              <Link to="/dashboard/reports/standard" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
-                <FileQuestion className="h-4 w-4" />
-                Standard Reports
-              </Link>
-              <Link to="/dashboard/reports/saved" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
-                <FolderOpen className="h-4 w-4" />
-                Saved Reports
+              <Link to="/dashboard/reports/export" className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
+                <Download className="h-4 w-4" />
+                Data Export
               </Link>
               <Link to="/dashboard/reports/query" className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
                 <FileQuestion className="h-4 w-4" />
@@ -572,6 +591,9 @@ export function ReportsDashboard() {
             {active === 'sla' && <SlaComplianceView data={query.data as SlaCompliance} mine={mine} />}
             {active === 'agent' && <AgentWorkloadView data={query.data as AgentWorkload[]} />}
             {active === 'sprint' && <SprintVelocityView data={query.data as SprintVelocity[]} />}
+            {['category', 'catalog', 'slaPriority', 'approvals'].includes(active) && (
+              <StandardTableView data={query.data as Record<string, unknown>[]} />
+            )}
           </>
         )}
         {active === 'worked' && <WorkedTicketsView isAdmin={isAdmin} />}

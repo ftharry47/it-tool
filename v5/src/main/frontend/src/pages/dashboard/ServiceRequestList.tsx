@@ -1,4 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
 import { Plus } from 'lucide-react'
@@ -43,6 +44,14 @@ export function ServiceRequestList() {
     location: '',
     approval: '',
   })
+
+  // Deep links (e.g. dashboard "N pending approvals") seed the status filter.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    const status = searchParams.get('status')
+    if (status) setFilter('status', status)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const requests = query.data ?? []
   const catalogItems = Array.from(new Set(requests.map((r) => r.catalogItemName))).sort()

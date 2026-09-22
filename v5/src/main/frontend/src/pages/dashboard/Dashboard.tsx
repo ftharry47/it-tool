@@ -159,6 +159,9 @@ interface ServiceRequestOps {
     rejectedNeedsReview: number
     unassignedTasks: number
   }
+  aging: { status: string; age0to1: number; age2to3: number; age4to7: number; age8plus: number }[]
+  slaAtRisk: number
+  approverBacklog: { approver: string; count: number; oldestDays: number }[]
 }
 
 interface EscalationEntry {
@@ -1514,7 +1517,7 @@ function NeedsAttentionCard({ data, isLoading }: { data: NeedsAttentionData | un
           </Link>
         )}
         {data.pendingApprovals > 0 && (
-          <Link to="/dashboard/approvals" className="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900">
+          <Link to="/dashboard/service-requests?status=PENDING_APPROVAL" className="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900">
             {data.pendingApprovals} pending approval{data.pendingApprovals === 1 ? '' : 's'}
           </Link>
         )}
@@ -1589,23 +1592,31 @@ function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | 
           const n = data.byStatus[s] ?? 0
           const hot = s === 'PENDING_APPROVAL' || s === 'REJECTED_NEEDS_REVIEW'
           return (
-            <span
+            <Link
               key={s}
-              className={`rounded-md px-2 py-1 text-xs font-medium ${
+              to={`/dashboard/service-requests?status=${s}`}
+              className={`rounded-md px-2 py-1 text-xs font-medium transition hover:opacity-80 ${
                 n === 0
                   ? 'bg-muted text-muted-foreground'
-                  : hot
+                  : s === 'ON_HOLD'
                     ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                    : 'bg-muted text-foreground'
+                    : hot
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                      : 'bg-muted text-foreground'
               }`}
             >
               {SR_STATUS_LABEL[s]}: {n}
-            </span>
+            </Link>
           )
         })}
         <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
           Open total: {openTotal}
         </span>
+        {(data.slaAtRisk ?? 0) > 0 && (
+          <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+            SLA at risk/breached: {data.slaAtRisk}
+          </span>
+        )}
       </div>
 
       {(attention.pendingApprovals > 0 || attention.rejectedNeedsReview > 0 || attention.unassignedTasks > 0) && (
@@ -1614,6 +1625,56 @@ function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | 
           {attention.pendingApprovals > 0 && ` ${attention.pendingApprovals} awaiting approval.`}
           {attention.rejectedNeedsReview > 0 && ` ${attention.rejectedNeedsReview} rejected needing review.`}
           {attention.unassignedTasks > 0 && ` ${attention.unassignedTasks} fulfillment task${attention.unassignedTasks === 1 ? '' : 's'} unassigned.`}
+        </div>
+      )}
+
+      {(data.approverBacklog ?? []).length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-muted-foreground">Pending approvals by approver</p>
+          <ul className="mt-1 space-y-1">
+            {data.approverBacklog.map((a) => (
+              <li key={a.approver} className="flex items-center justify-between text-xs">
+                <span className="truncate">{a.approver}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {a.count} pending{a.oldestDays > 0 ? ` · oldest ${a.oldestDays}d` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(data.aging ?? []).length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-muted-foreground">Open-request aging (days since submitted)</p>
+          <table className="mt-1 w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1 font-medium">Status</th>
+                <th className="py-1 text-right font-medium">0–1d</th>
+                <th className="py-1 text-right font-medium">2–3d</th>
+                <th className="py-1 text-right font-medium">4–7d</th>
+                <th className="py-1 text-right font-medium">8d+</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.aging.map((row) => (
+                <tr key={row.status} className="border-t border-border">
+                  <td className="py-1">
+                    <Link to={`/dashboard/service-requests?status=${row.status}`} className="hover:underline">
+                      {SR_STATUS_LABEL[row.status] ?? row.status}
+                    </Link>
+                  </td>
+                  <td className="py-1 text-right tabular-nums">{row.age0to1 || ''}</td>
+                  <td className="py-1 text-right tabular-nums">{row.age2to3 || ''}</td>
+                  <td className="py-1 text-right tabular-nums">{row.age4to7 || ''}</td>
+                  <td className={`py-1 text-right tabular-nums ${row.age8plus ? 'font-semibold text-red-600 dark:text-red-400' : ''}`}>
+                    {row.age8plus || ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

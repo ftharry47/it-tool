@@ -13,6 +13,7 @@ import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
 import { IncidentEditForm } from './IncidentEditForm'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { CopyButton } from '../../components/ui/CopyButton'
+import { TicketSlaPanel } from '../../components/sla/TicketSlaPanel'
 import { formatDateTime } from '../../lib/date'
 
 interface IncidentDetail {
@@ -1280,6 +1281,7 @@ const [confirmBack, setConfirmBack] = useState(false)
 
           {/* Sidebar */}
           <aside className="space-y-6">
+            <TicketSlaPanel entityType="incident" entityId={incident.id} ticketCreatedAt={incident.createdAt} />
             <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Status</h2>

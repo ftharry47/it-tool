@@ -40,13 +40,22 @@ public class SlaEngine {
 
     @Transactional
     public boolean onIncidentCreated(Incident incident) {
+        return onIncidentCreated(incident, null);
+    }
+
+    /**
+     * anchor overrides the clock start (used by SLA reset so recreated
+     * instances measure from reset time, not the original createdAt).
+     */
+    @Transactional
+    public boolean onIncidentCreated(Incident incident, OffsetDateTime anchor) {
         SlaPolicy policy = findBestPolicy(incident).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
             return false;
         }
 
         BusinessCalendar calendar = policy.getBusinessHoursCalendar();
-        ZonedDateTime start = Optional.ofNullable(incident.getCreatedAt())
+        ZonedDateTime start = Optional.ofNullable(anchor != null ? anchor : incident.getCreatedAt())
                 .orElse(OffsetDateTime.now())
                 .atZoneSameInstant(ZoneId.of(calendar.getTimezone()));
 
@@ -66,6 +75,11 @@ public class SlaEngine {
         instance.setResolutionDueAt(resolutionDue.toOffsetDateTime());
         instance.setCreatedBy(incident.getCreatedBy());
         instance.setUpdatedBy(incident.getUpdatedBy());
+        // A recreated clock for a ticket already in a paused status must start
+        // paused — otherwise it would breach while legitimately held.
+        if (PAUSED_STATUSES.contains(incident.getStatus())) {
+            instance.setPausedAt(OffsetDateTime.now());
+        }
 
         slaInstanceRepository.save(instance);
         return true;
@@ -182,13 +196,18 @@ public class SlaEngine {
 
     @Transactional
     public boolean onServiceRequestCreated(ServiceRequest serviceRequest) {
+        return onServiceRequestCreated(serviceRequest, null);
+    }
+
+    @Transactional
+    public boolean onServiceRequestCreated(ServiceRequest serviceRequest, OffsetDateTime anchor) {
         SlaPolicy policy = findBestServiceRequestPolicy(serviceRequest).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
             return false;
         }
 
         BusinessCalendar calendar = policy.getBusinessHoursCalendar();
-        ZonedDateTime start = Optional.ofNullable(serviceRequest.getCreatedAt())
+        ZonedDateTime start = Optional.ofNullable(anchor != null ? anchor : serviceRequest.getCreatedAt())
                 .orElse(OffsetDateTime.now())
                 .atZoneSameInstant(ZoneId.of(calendar.getTimezone()));
 
@@ -208,6 +227,9 @@ public class SlaEngine {
         instance.setResolutionDueAt(resolutionDue.toOffsetDateTime());
         instance.setCreatedBy(serviceRequest.getCreatedBy());
         instance.setUpdatedBy(serviceRequest.getUpdatedBy());
+        if (SR_PAUSED_STATUSES.contains(serviceRequest.getStatus())) {
+            instance.setPausedAt(OffsetDateTime.now());
+        }
 
         slaInstanceRepository.save(instance);
         return true;
@@ -279,12 +301,18 @@ public class SlaEngine {
 
     @Transactional
     public boolean onProblemCreated(Problem problem) {
+        return onProblemCreated(problem, null);
+    }
+
+    @Transactional
+    public boolean onProblemCreated(Problem problem, OffsetDateTime anchor) {
         SlaPolicy policy = findBestProblemPolicy(problem).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
             return false;
         }
         slaInstanceRepository.save(newInstance(
-                problem.getOrgId(), policy, problem.getCreatedAt(),
+                problem.getOrgId(), policy,
+                anchor != null ? anchor : problem.getCreatedAt(),
                 problem.getCreatedBy(), problem.getUpdatedBy(), i -> i.setProblem(problem)));
         return true;
     }
@@ -312,12 +340,18 @@ public class SlaEngine {
 
     @Transactional
     public boolean onChangeCreated(ChangeRequest change) {
+        return onChangeCreated(change, null);
+    }
+
+    @Transactional
+    public boolean onChangeCreated(ChangeRequest change, OffsetDateTime anchor) {
         SlaPolicy policy = findBestChangePolicy(change).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
             return false;
         }
         slaInstanceRepository.save(newInstance(
-                change.getOrgId(), policy, change.getCreatedAt(),
+                change.getOrgId(), policy,
+                anchor != null ? anchor : change.getCreatedAt(),
                 change.getCreatedBy(), change.getUpdatedBy(), i -> i.setChangeRequest(change)));
         return true;
     }

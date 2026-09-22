@@ -383,6 +383,7 @@ public class SlaBreachMonitorJob implements Job {
             afterState.put("tierLevel", tier.getLevel());
             if (downgradeSuppressed) {
                 afterState.put("downgradeSuppressed", true);
+                afterState.put("suppressedReason", currentIdx == targetIdx ? "SAME_TIER" : "DOWNGRADE");
             }
 
             try {

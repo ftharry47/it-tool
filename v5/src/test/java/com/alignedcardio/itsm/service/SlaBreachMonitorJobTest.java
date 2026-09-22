@@ -359,6 +359,41 @@ class SlaBreachMonitorJobTest {
         assertEquals("AUTO_ESCALATE_TIER", captor.getValue().getAction());
         assertTrue(captor.getValue().getAfterState().contains("downgradeSuppressed"));
         assertTrue(captor.getValue().getAfterState().contains("L3 Engineering"));
+        // Part C: the suppression is self-describing — DOWNGRADE, not same-tier.
+        assertTrue(captor.getValue().getAfterState().contains("\"suppressedReason\":\"DOWNGRADE\""));
+    }
+
+    @Test
+    void sameTierSuppressionIsRecordedAsSameTierNotEscalation() {
+        // Part C regression: policy targets the tier the ticket is already on —
+        // the audit must mark it SAME_TIER, never "escalated to itself".
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        Team l2 = new Team();
+        l2.setId(SupportTiers.L2_ID);
+        l2.setName("L2 Support");
+        incident.setAssignmentTeam(l2);
+
+        SlaInstance instance = instance(policy, incident);
+        instance.setEscalationLevel(1);
+        instance.setResponseDueAt(OffsetDateTime.now().minusMinutes(10));
+
+        SlaEscalationTier t2 = tier(policy, 2, SlaEscalationTier.TriggerType.ON_RESPONSE_BREACH);
+        t2.setReassignToTeamId(l2.getId());
+
+        when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t2));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+        when(teamRepository.findByOrgIdAndIdAndDeletedAtIsNull(ORG_ID, l2.getId()))
+                .thenReturn(Optional.of(l2));
+
+        job.execute(null);
+
+        assertSame(l2, incident.getAssignmentTeam());
+        verify(incidentRepository, never()).save(any());
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertTrue(captor.getValue().getAfterState().contains("\"suppressedReason\":\"SAME_TIER\""));
     }
 
     private SlaPolicy policy() {

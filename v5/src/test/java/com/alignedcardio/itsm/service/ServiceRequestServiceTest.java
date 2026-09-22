@@ -898,6 +898,73 @@ class ServiceRequestServiceTest {
                         && "FULFILLED".equals(sre.triggerType())));
     }
 
+    // --- Part K: held requests freeze fulfillment progression ---
+
+    @Test
+    void taskMutationsRejectedWhileRequestOnHold() {
+        AppUser fulfiller = user("Fulfiller");
+        ServiceRequest sr = pendingRequest(item("Laptop", false, null), user("Requester"), null);
+        sr.setStatus(ServiceRequest.Status.ON_HOLD);
+        FulfillmentTask task = assignedTask(sr, fulfiller);
+        task.setStatus(FulfillmentTask.Status.ORDERED);
+        stubTaskLookup(sr, task);
+
+        assertOnHold(() -> service.markOrdered(fulfiller, ORG_ID, sr.getId(), task.getId()));
+        assertOnHold(() -> service.setDeliveryDate(fulfiller, ORG_ID, sr.getId(), task.getId(),
+                java.time.LocalDate.now().plusDays(1)));
+        assertOnHold(() -> service.markDelivered(fulfiller, ORG_ID, sr.getId(), task.getId()));
+        assertOnHold(() -> service.completeTask(fulfiller, ORG_ID, sr.getId(), task.getId(), "done"));
+    }
+
+    private void assertOnHold(org.junit.jupiter.api.function.Executable action) {
+        IllegalStateException e = assertThrows(IllegalStateException.class, action);
+        assertTrue(e.getMessage().contains("on hold"));
+    }
+
+    // --- Part J: cancel ---
+
+    @Test
+    void requesterCanCancelOwnRequestWithReason() {
+        AppUser requester = user("Requester");
+        ServiceRequest sr = pendingRequest(item("Laptop", false, null), requester, null);
+        sr.setStatus(ServiceRequest.Status.IN_FULFILLMENT);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+
+        ServiceRequestResponse response = service.cancel(requester, ORG_ID, sr.getId(), "No longer needed");
+
+        assertEquals(ServiceRequest.Status.CANCELLED, response.status());
+        verify(slaEngine).onServiceRequestStatusChanged(sr);
+        var captor = org.mockito.ArgumentCaptor.forClass(com.alignedcardio.itsm.entity.AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertEquals("CANCELLED", captor.getValue().getAction());
+        assertTrue(captor.getValue().getAfterState().contains("No longer needed"));
+    }
+
+    @Test
+    void cancelRequiresReasonAndRejectsOutsiders() {
+        AppUser requester = user("Requester");
+        AppUser outsider = user("Outsider"); // no staff role
+        ServiceRequest sr = pendingRequest(item("Laptop", false, null), requester, null);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.cancel(requester, ORG_ID, sr.getId(), "   "));
+        assertThrows(IllegalStateException.class,
+                () -> service.cancel(outsider, ORG_ID, sr.getId(), "Try"));
+        assertEquals(ServiceRequest.Status.SUBMITTED, sr.getStatus());
+    }
+
+    @Test
+    void updateStatusRejectsCancelledWithoutReason() {
+        ServiceRequest sr = pendingRequest(item("Laptop", false, null), user("Requester"), null);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> service.updateStatus(superAdmin(), ORG_ID, sr.getId(), ServiceRequest.Status.CANCELLED));
+        assertTrue(e.getMessage().contains("reason"));
+    }
+
     @Test
     void sameFieldDifferentOptionsRouteDifferently() {
         AppUser requester = user("Requester");

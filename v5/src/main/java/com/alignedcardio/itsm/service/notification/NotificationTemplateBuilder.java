@@ -431,10 +431,11 @@ View full request:
                 """
 Hi {{recipientFirstName}},
 
-The following service request has been cancelled:
+The following service request has been cancelled by {{actorName}}:
 
 Request {{number}} — {{catalogItemName}}
 Status: Cancelled
+Reason: {{reason}}
 
 If you did not request this or have questions, please contact your IT team.
 

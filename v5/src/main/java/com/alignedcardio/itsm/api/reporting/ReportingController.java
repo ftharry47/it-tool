@@ -311,6 +311,87 @@ public class ReportingController {
         }
     }
 
+    /**
+     * Row-level data export for the Data Export page — full ticket/SLA rows
+     * with resolved display names, as CSV or XLSX. Admin-only.
+     */
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<byte[]> export(@AuthenticationPrincipal Jwt jwt,
+                                         @RequestParam String entity,
+                                         @RequestParam(defaultValue = "csv") String format,
+                                         @RequestParam(required = false) OffsetDateTime from,
+                                         @RequestParam(required = false) OffsetDateTime to,
+                                         @RequestParam(required = false) String status)
+            throws java.io.IOException {
+        AppUser user = userService.syncFromJwt(jwt);
+        List<Map<String, Object>> rows = reportingService.exportRows(
+                user.getOrgId(), entity, from, to, status);
+        String filename = entity + "-export." + ("xlsx".equals(format) ? "xlsx" : "csv");
+        if ("xlsx".equals(format)) {
+            return ResponseEntity.ok()
+                    .header("Content-Type",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .body(toXlsx(entity, rows));
+        }
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv")
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(toCsv(rows).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private static String toCsv(List<Map<String, Object>> rows) {
+        List<String> headers = rows.stream()
+                .flatMap(r -> r.keySet().stream())
+                .distinct()
+                .toList();
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.join(",", headers.stream().map(ReportingController::csvCell).toList()))
+                .append('\n');
+        for (Map<String, Object> r : rows) {
+            sb.append(String.join(",", headers.stream()
+                            .map(h -> csvCell(r.get(h) != null ? String.valueOf(r.get(h)) : ""))
+                            .toList()))
+                    .append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static String csvCell(String v) {
+        if (v == null) return "";
+        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
+            return '"' + v.replace("\"", "\"\"") + '"';
+        }
+        return v;
+    }
+
+    private static byte[] toXlsx(String sheetName, List<Map<String, Object>> rows)
+            throws java.io.IOException {
+        try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
+            java.util.List<String> headers = rows.stream()
+                    .flatMap(r -> r.keySet().stream())
+                    .distinct()
+                    .toList();
+            org.apache.poi.ss.usermodel.Row head = sheet.createRow(0);
+            for (int c = 0; c < headers.size(); c++) {
+                head.createCell(c).setCellValue(headers.get(c));
+            }
+            int r = 1;
+            for (Map<String, Object> row : rows) {
+                org.apache.poi.ss.usermodel.Row excelRow = sheet.createRow(r++);
+                for (int c = 0; c < headers.size(); c++) {
+                    Object v = row.get(headers.get(c));
+                    excelRow.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                }
+            }
+            wb.write(bos);
+            return bos.toByteArray();
+        }
+    }
+
     /** All agents' generated performance reports — SUPER_ADMIN aggregate view. */
     @GetMapping("/agent-performance/all")
     @PreAuthorize("hasRole('SUPER_ADMIN')")

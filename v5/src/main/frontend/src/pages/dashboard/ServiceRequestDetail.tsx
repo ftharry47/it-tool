@@ -17,6 +17,7 @@ import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { SchemaForm, isValidSchema } from '../../components/ui/SchemaForm'
 import { StatusBadge, formatStatusLabel } from '../../components/ui/StatusBadge'
+import { TicketSlaPanel } from '../../components/sla/TicketSlaPanel'
 import { formatDateTime } from '../../lib/date'
 
 interface FulfillmentTask {
@@ -74,6 +75,7 @@ const ACTION_LABELS: Record<string, string> = {
   SEND_REMINDER: 'Reminder sent',
   EDITED: 'Request edited by admin',
   APPROVAL_BYPASSED: 'Approval bypassed by admin',
+  CANCELLED: 'Cancelled',
 }
 
 function actionLabel(action: string): string {
@@ -100,6 +102,7 @@ interface ServiceRequestDetail {
   id: string
   number: number
   catalogItemName: string
+  requesterId: string
   requesterName: string
   status: string
   formData: string
@@ -147,6 +150,9 @@ export function ServiceRequestDetail() {
   const [sendToApprovalOpen, setSendToApprovalOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingTaskAction, setPendingTaskAction] = useState<PendingTaskAction | null>(null)
+  const [holdConfirm, setHoldConfirm] = useState<'hold' | 'resume' | null>(null)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   const requestQuery = useQuery<ServiceRequestDetail>({
     queryKey: ['service-request', id],
@@ -382,6 +388,29 @@ export function ServiceRequestDetail() {
     onError: (error) => setActionError(error.message),
   })
 
+  // Cancel — "withdrawn / no longer needed". Reason is mandatory; the
+  // requester may cancel their own request, staff may cancel any.
+  const cancelMutation = useMutation<ServiceRequestDetail, Error, string>({
+    mutationFn: async (reason) => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      setCancelOpen(false)
+      setCancelReason('')
+      setActionError(null)
+      invalidateTaskQueries()
+    },
+    onError: (error) => setActionError(error.message),
+  })
+
   // ---- SUPER_ADMIN: record edit + approval bypass ----
 
   const [editOpen, setEditOpen] = useState(false)
@@ -554,6 +583,22 @@ export function ServiceRequestDetail() {
         }}
         onCancel={() => setPendingTaskAction(null)}
       />
+      <ConfirmDialog
+        open={holdConfirm !== null}
+        title={holdConfirm === 'hold' ? 'Place request on hold?' : 'Resume request?'}
+        description={
+          holdConfirm === 'hold'
+            ? `Request #${request.number} will move to On Hold. Work pauses and the SLA clock stops until the request resumes.`
+            : `Request #${request.number} will return to fulfillment and the SLA clock resumes from where it paused.`
+        }
+        confirmLabel={holdConfirm === 'hold' ? 'Place on Hold' : 'Resume'}
+        pending={statusMutation.isPending}
+        onConfirm={() => {
+          statusMutation.mutate(request.status === 'ON_HOLD' ? 'IN_FULFILLMENT' : 'ON_HOLD')
+          setHoldConfirm(null)
+        }}
+        onCancel={() => setHoldConfirm(null)}
+      />
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <button
@@ -573,6 +618,11 @@ export function ServiceRequestDetail() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
+            {request.status === 'ON_HOLD' && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                On hold — work is paused and the SLA clock is stopped.
+              </div>
+            )}
             <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Details</h2>
@@ -581,7 +631,7 @@ export function ServiceRequestDetail() {
                     onClick={openEditDrawer}
                     className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
                   >
-                    Edit (admin)
+                    Edit
                   </button>
                 )}
               </div>
@@ -667,7 +717,7 @@ export function ServiceRequestDetail() {
                           aria-label={`Assign fulfiller for ${row.description}`}
                           className="rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
                         >
-                          <option value="">{row.assigneeName ? `${row.assigneeName} — reassign…` : 'Assign…'}</option>
+                          <option value="">{row.assigneeName ? 'Reassign to…' : 'Assign…'}</option>
                           {fulfillmentMembers.map((m) => (
                             <option key={m.userId} value={m.userId}>{m.displayName}</option>
                           ))}
@@ -682,6 +732,10 @@ export function ServiceRequestDetail() {
                     render: (row) => {
                       const workflow = row.workflow ?? 'FULL'
                       const btn = 'inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50'
+                      // Held request: progression is frozen — the SLA clock is paused.
+                      if (request.status === 'ON_HOLD' && row.status !== 'COMPLETED') {
+                        return <span className="text-xs text-muted-foreground">Paused — resume the request to continue</span>
+                      }
                       if (row.status === 'COMPLETED') {
                         return <span className="text-xs text-muted-foreground">Done</span>
                       }
@@ -784,6 +838,9 @@ export function ServiceRequestDetail() {
           </div>
 
           <aside className="space-y-6">
+            {canPostInternal && (
+              <TicketSlaPanel entityType="service-request" entityId={request.id} ticketCreatedAt={request.createdAt} />
+            )}
             {canPostInternal && ['APPROVED', 'IN_FULFILLMENT', 'ON_HOLD'].includes(request.status) && (
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-2 text-lg font-semibold">
@@ -795,11 +852,11 @@ export function ServiceRequestDetail() {
                     : 'Pauses work and stops the SLA clock until the request resumes.'}
                 </p>
                 <button
-                  onClick={() => statusMutation.mutate(request.status === 'ON_HOLD' ? 'IN_FULFILLMENT' : 'ON_HOLD')}
+                  onClick={() => setHoldConfirm(request.status === 'ON_HOLD' ? 'resume' : 'hold')}
                   disabled={statusMutation.isPending}
                   className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-50"
                 >
-                  {request.status === 'ON_HOLD' ? 'Resume (restart SLA clock)' : 'Place on Hold (pause SLA)'}
+                  {request.status === 'ON_HOLD' ? 'Resume Request' : 'Place on Hold'}
                 </button>
               </div>
             )}
@@ -869,6 +926,22 @@ export function ServiceRequestDetail() {
                   className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                 >
                   Send Reminder
+                </button>
+              </div>
+            )}
+
+            {!['FULFILLED', 'CANCELLED'].includes(request.status) &&
+              (canPostInternal || request.requesterId === currentUser?.id) && (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="mb-2 text-lg font-semibold">Cancel Request</h2>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Close this request because it's no longer needed — distinct from a rejection. A reason is required and recorded.
+                </p>
+                <button
+                  onClick={() => { setCancelReason(''); setActionError(null); setCancelOpen(true) }}
+                  className="w-full rounded-md border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/10"
+                >
+                  Cancel Request…
                 </button>
               </div>
             )}
@@ -952,7 +1025,26 @@ export function ServiceRequestDetail() {
         {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
       </FormDrawer>
 
-      <FormDrawer open={editOpen} title="Edit Request (admin)" dirty onClose={() => { setEditOpen(false); setActionError(null) }}>
+      <FormDrawer open={cancelOpen} title="Cancel Request" dirty={cancelReason.trim() !== ''} onClose={() => { setCancelOpen(false); setCancelReason(''); setActionError(null) }}>
+        <EntityForm
+          fields={[{ name: 'reason', label: 'Reason for cancelling (required)', type: 'textarea', required: true }]}
+          values={{ reason: cancelReason }}
+          onChange={(_, value) => setCancelReason(value)}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!cancelReason.trim()) {
+              setActionError('A reason is required to cancel a request')
+              return
+            }
+            cancelMutation.mutate(cancelReason.trim())
+          }}
+          submitLabel="Cancel Request"
+          pending={cancelMutation.isPending}
+        />
+        {actionError && <p className="mt-4 text-sm text-destructive">{actionError}</p>}
+      </FormDrawer>
+
+      <FormDrawer open={editOpen} title="Edit Request" dirty onClose={() => { setEditOpen(false); setActionError(null) }}>
         <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="edit-location" className="text-sm font-medium">Location</label>

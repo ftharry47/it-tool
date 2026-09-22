@@ -91,9 +91,9 @@ class ResetSlaServiceTest {
 
     @Test
     void commitWipesAndRecreatesOnlyOpenTickets() {
-        when(slaEngine.onIncidentCreated(openIncident)).thenReturn(true);
-        when(slaEngine.onServiceRequestCreated(openRequest)).thenReturn(true);
-        when(slaEngine.onProblemCreated(openProblem)).thenReturn(false); // no matching policy
+        when(slaEngine.onIncidentCreated(eq(openIncident), any())).thenReturn(true);
+        when(slaEngine.onServiceRequestCreated(eq(openRequest), any())).thenReturn(true);
+        when(slaEngine.onProblemCreated(eq(openProblem), any())).thenReturn(false); // no matching policy
 
         ResetSlaService.ResetResult result = service.reset(ORG_ID, false);
 
@@ -103,10 +103,34 @@ class ResetSlaServiceTest {
         assertEquals(1L, result.recreatedByType().get("incident"));
         assertEquals(1L, result.recreatedByType().get("service_request"));
         assertEquals(0L, result.recreatedByType().get("problem"));
-        verify(slaEngine).onIncidentCreated(openIncident);
-        verify(slaEngine).onServiceRequestCreated(openRequest);
-        verify(slaEngine).onProblemCreated(openProblem);
-        verify(slaEngine, never()).onChangeCreated(any());
+        verify(slaEngine).onIncidentCreated(eq(openIncident), any());
+        verify(slaEngine).onServiceRequestCreated(eq(openRequest), any());
+        verify(slaEngine).onProblemCreated(eq(openProblem), any());
+        verify(slaEngine, never()).onChangeCreated(any(), any());
         // closed incident was never fetched — terminal statuses filtered in JPQL
+    }
+
+    /**
+     * Regression: recreated clocks must anchor at reset time — anchoring at the
+     * ticket's original createdAt backdates every due date and instantly marks
+     * the just-reset instances breached.
+     */
+    @Test
+    void recreatedInstancesAnchorAtResetTimeNotCreatedAt() {
+        when(slaEngine.onIncidentCreated(eq(openIncident), any())).thenReturn(true);
+        when(slaEngine.onServiceRequestCreated(eq(openRequest), any())).thenReturn(true);
+        when(slaEngine.onProblemCreated(eq(openProblem), any())).thenReturn(false);
+
+        java.time.OffsetDateTime before = java.time.OffsetDateTime.now();
+        service.reset(ORG_ID, false);
+        java.time.OffsetDateTime after = java.time.OffsetDateTime.now();
+
+        var captor = org.mockito.ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+        verify(slaEngine).onIncidentCreated(eq(openIncident), captor.capture());
+        assertFalse(captor.getValue().isBefore(before));
+        assertFalse(captor.getValue().isAfter(after));
+        verify(slaEngine).onServiceRequestCreated(eq(openRequest), captor.capture());
+        assertFalse(captor.getValue().isBefore(before));
+        assertFalse(captor.getValue().isAfter(after));
     }
 }

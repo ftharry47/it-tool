@@ -45,7 +45,11 @@ public class SlaDetailsService {
                                               OffsetDateTime dateFrom,
                                               OffsetDateTime dateTo,
                                               AppUser user,
-                                              boolean mine) {
+                                              boolean mine,
+                                              UUID incidentId,
+                                              UUID serviceRequestId,
+                                              UUID problemId,
+                                              UUID changeId) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<SlaInstance> cq = cb.createQuery(SlaInstance.class);
         Root<SlaInstance> root = cq.from(SlaInstance.class);
@@ -70,6 +74,20 @@ public class SlaDetailsService {
                 cb.isNotNull(serviceRequest.get("id")),
                 cb.isNotNull(problem.get("id")),
                 cb.isNotNull(change.get("id"))));
+
+        // Single-ticket lookups for the detail-page SLA panel.
+        if (incidentId != null) {
+            predicates.add(cb.equal(incident.get("id"), incidentId));
+        }
+        if (serviceRequestId != null) {
+            predicates.add(cb.equal(serviceRequest.get("id"), serviceRequestId));
+        }
+        if (problemId != null) {
+            predicates.add(cb.equal(problem.get("id"), problemId));
+        }
+        if (changeId != null) {
+            predicates.add(cb.equal(change.get("id"), changeId));
+        }
 
         if (mine && user != null) {
             UUID userId = user.getId();

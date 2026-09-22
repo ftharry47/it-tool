@@ -107,27 +107,31 @@ public class ResetSlaService {
                 .executeUpdate();
         em.flush();
 
+        // Recreated clocks anchor at reset time — the ticket's original
+        // createdAt would backdate every due date into the past and make the
+        // just-reset instances instantly breached.
+        java.time.OffsetDateTime resetAt = java.time.OffsetDateTime.now();
         int recreated = 0;
         for (Incident i : openIncidents) {
-            if (slaEngine.onIncidentCreated(i)) {
+            if (slaEngine.onIncidentCreated(i, resetAt)) {
                 recreated++;
                 recreatedByType.merge("incident", 1L, Long::sum);
             }
         }
         for (ServiceRequest s : openRequests) {
-            if (slaEngine.onServiceRequestCreated(s)) {
+            if (slaEngine.onServiceRequestCreated(s, resetAt)) {
                 recreated++;
                 recreatedByType.merge("service_request", 1L, Long::sum);
             }
         }
         for (Problem p : openProblems) {
-            if (slaEngine.onProblemCreated(p)) {
+            if (slaEngine.onProblemCreated(p, resetAt)) {
                 recreated++;
                 recreatedByType.merge("problem", 1L, Long::sum);
             }
         }
         for (ChangeRequest c : openChanges) {
-            if (slaEngine.onChangeCreated(c)) {
+            if (slaEngine.onChangeCreated(c, resetAt)) {
                 recreated++;
                 recreatedByType.merge("change", 1L, Long::sum);
             }

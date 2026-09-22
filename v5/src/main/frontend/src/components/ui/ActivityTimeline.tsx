@@ -76,6 +76,11 @@ export function parseState(json: string | null): Record<string, unknown> {
 }
 
 export function auditTitle(entry: AuditEntry): string {
+  // A suppressed tier escalation never moved the ticket — say so instead of
+  // claiming it escalated.
+  if (entry.action === 'AUTO_ESCALATE_TIER' && parseState(entry.afterState).downgradeSuppressed === true) {
+    return 'Auto-escalation suppressed'
+  }
   return AUDIT_ACTION_LABELS[entry.action] ?? entry.action
 }
 
@@ -101,6 +106,12 @@ function formatNamedTransition(
   if (action === 'ESCALATE_TIER' || action === 'AUTO_ESCALATE_TIER') {
     const fromTeam = before.assignmentTeamName == null || before.assignmentTeamName === '' ? '—' : String(before.assignmentTeamName)
     const toTeam = after.assignmentTeamName == null || after.assignmentTeamName === '' ? '—' : String(after.assignmentTeamName)
+    if (after.downgradeSuppressed === true) {
+      const why = after.suppressedReason === 'SAME_TIER'
+        ? `already at ${fromTeam} — the policy target is the same tier`
+        : `already at ${fromTeam} — higher than the policy target tier`
+      return `stayed with ${fromTeam} · ${why}`
+    }
     return reason ? `from ${fromTeam} to ${toTeam} · Reason: ${reason}` : `from ${fromTeam} to ${toTeam}`
   }
 

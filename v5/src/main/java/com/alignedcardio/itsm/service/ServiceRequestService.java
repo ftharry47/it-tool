@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -827,6 +828,12 @@ public class ServiceRequestService {
         ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
                 .orElseThrow(() -> new NotFoundException("Service request not found"));
 
+        // Cancellation always requires a reason — it must go through the
+        // dedicated /cancel endpoint so the audit trail captures it.
+        if (newStatus == ServiceRequest.Status.CANCELLED) {
+            throw new IllegalStateException("Cancelling a request requires a reason — use the cancel action");
+        }
+
         boolean allCompleted = areAllTasksCompleted(sr);
         ServiceRequestStatusMachine.validate(sr, allCompleted, newStatus);
         sr.setStatus(newStatus);
@@ -840,6 +847,88 @@ public class ServiceRequestService {
 
         publishEvent(saved, newStatus.name());
         return toResponse(saved);
+    }
+
+    /**
+     * Cancel a request — distinct from a rejection (which is an approver's
+     * decision). The requester may cancel their own request; staff may cancel
+     * any. Reason is mandatory and goes on the audit trail. The designated
+     * approver (if still pending) and assigned fulfillers are notified so a
+     * pending item doesn't silently disappear from anyone's queue.
+     */
+    @Transactional
+    public ServiceRequestResponse cancel(AppUser user, UUID orgId, UUID id, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalStateException("A reason is required to cancel a request");
+        }
+        ServiceRequest sr = serviceRequestRepository.findByOrgIdAndId(orgId, id)
+                .orElseThrow(() -> new NotFoundException("Service request not found"));
+
+        boolean isRequester = sr.getRequester() != null
+                && sr.getRequester().getId().equals(user.getId());
+        if (!isRequester && !isStaff(user)) {
+            throw new IllegalStateException("Only the requester or IT staff can cancel a request");
+        }
+
+        ServiceRequest.Status previous = sr.getStatus();
+        ServiceRequestStatusMachine.validate(sr, areAllTasksCompleted(sr), ServiceRequest.Status.CANCELLED);
+        sr.setStatus(ServiceRequest.Status.CANCELLED);
+        sr.setUpdatedBy(user.getId());
+        sr.setUpdatedAt(OffsetDateTime.now());
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+
+        slaEngine.onServiceRequestStatusChanged(saved);
+        recordActivity(saved, user.getId(), "CANCELLED",
+                Map.of("status", previous.name()),
+                Map.of("status", "CANCELLED", "reason", reason.trim()));
+        publishEvent(saved, "CANCELLED");
+        notifyCancellation(saved, user, reason.trim(), previous);
+        return toResponse(saved);
+    }
+
+    private void notifyCancellation(ServiceRequest sr, AppUser actor, String reason,
+                                    ServiceRequest.Status previousStatus) {
+        java.util.Set<UUID> notified = new java.util.HashSet<>();
+        notified.add(actor.getId()); // the canceller already knows
+
+        List<AppUser> recipients = new ArrayList<>();
+        if (sr.getRequester() != null) recipients.add(sr.getRequester());
+        if (previousStatus == ServiceRequest.Status.PENDING_APPROVAL && sr.getApprover() != null) {
+            recipients.add(sr.getApprover());
+        }
+        for (FulfillmentTask task : fulfillmentTaskRepository
+                .findByServiceRequestIdOrderBySequenceOrderAsc(sr.getId())) {
+            if (task.getAssignee() != null && task.getDeletedAt() == null) {
+                recipients.add(task.getAssignee());
+            }
+        }
+
+        for (AppUser recipient : recipients) {
+            if (!notified.add(recipient.getId())) continue;
+            try {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("recipientFirstName", firstName(recipient.getDisplayName()));
+                payload.put("number", sr.getNumber());
+                payload.put("catalogItemName", sr.getCatalogItem() != null ? sr.getCatalogItem().getName() : "Service request");
+                payload.put("actorName", actor.getDisplayName());
+                payload.put("reason", reason);
+                payload.put("entityType", "SERVICE_REQUEST");
+                payload.put("entityId", sr.getId());
+                var content = notificationTemplateBuilder.forEvent("SERVICE_REQUEST_CANCELLED", payload);
+                notificationService.send(new NotificationRequest(
+                        sr.getOrgId(),
+                        recipient.getId(),
+                        "SERVICE_REQUEST_CANCELLED",
+                        content.inAppSubject(),
+                        content.inAppBody(),
+                        "SERVICE_REQUEST",
+                        sr.getId(),
+                        null,
+                        content));
+            } catch (Exception e) {
+                logger.warn("Failed to send cancellation notification to {}", recipient.getId(), e);
+            }
+        }
     }
 
     private boolean isSuperAdmin(AppUser user) {
@@ -860,6 +949,17 @@ public class ServiceRequestService {
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> ur.getRole().getName())
                 .anyMatch(name -> "ADMIN".equals(name) || "SUPER_ADMIN".equals(name));
+    }
+
+    /**
+     * A held request's fulfillment work is frozen — task progression resumes
+     * only when the request leaves ON_HOLD.
+     */
+    private void requireNotOnHold(ServiceRequest sr) {
+        if (sr.getStatus() == ServiceRequest.Status.ON_HOLD) {
+            throw new IllegalStateException(
+                    "Request is on hold — resume it before progressing fulfillment tasks");
+        }
     }
 
     private boolean isTaskActor(AppUser user, FulfillmentTask task) {
@@ -966,6 +1066,7 @@ public class ServiceRequestService {
         if (!task.getServiceRequest().getId().equals(sr.getId())) {
             throw new NotFoundException("Task does not belong to this request");
         }
+        requireNotOnHold(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task ordered");
         }
@@ -1022,6 +1123,7 @@ public class ServiceRequestService {
             throw new NotFoundException("Task does not belong to this request");
         }
 
+        requireNotOnHold(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can complete this task");
         }
@@ -1084,6 +1186,7 @@ public class ServiceRequestService {
         if (expectedDeliveryDate == null) {
             throw new IllegalStateException("expectedDeliveryDate is required");
         }
+        requireNotOnHold(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can set the delivery date");
         }
@@ -1131,6 +1234,7 @@ public class ServiceRequestService {
             throw new NotFoundException("Task does not belong to this request");
         }
 
+        requireNotOnHold(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task installed");
         }

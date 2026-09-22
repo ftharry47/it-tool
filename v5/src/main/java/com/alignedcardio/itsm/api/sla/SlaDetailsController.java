@@ -38,13 +38,23 @@ public class SlaDetailsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dateTo,
             @RequestParam(required = false, defaultValue = "false") boolean mine,
+            @RequestParam(required = false) java.util.UUID incidentId,
+            @RequestParam(required = false) java.util.UUID serviceRequestId,
+            @RequestParam(required = false) java.util.UUID problemId,
+            @RequestParam(required = false) java.util.UUID changeId,
             Authentication auth) {
         AppUser user = userService.syncFromJwt(jwt);
         // Non-admin staff can only ever see their own SLA instances — the
         // client-supplied mine flag is advisory for ADMIN/SUPER_ADMIN only.
+        // Exception: a single-ticket lookup (the detail-page SLA panel) is
+        // already gated by the ticket's own read permission, so mine is ignored.
         boolean isAdmin = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_SUPER_ADMIN"));
-        return slaDetailsService.list(user.getOrgId(), breachStatus, priority, dateFrom, dateTo, user, isAdmin ? mine : true);
+        boolean singleTicket = incidentId != null || serviceRequestId != null
+                || problemId != null || changeId != null;
+        return slaDetailsService.list(user.getOrgId(), breachStatus, priority, dateFrom, dateTo, user,
+                singleTicket ? false : (isAdmin ? mine : true),
+                incidentId, serviceRequestId, problemId, changeId);
     }
 }
