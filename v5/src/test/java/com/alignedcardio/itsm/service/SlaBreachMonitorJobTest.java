@@ -9,7 +9,9 @@ import com.alignedcardio.itsm.entity.SlaPolicy;
 import com.alignedcardio.itsm.entity.Team;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.AuditLogRepository;
+import com.alignedcardio.itsm.repository.IncidentCommentRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
+import com.alignedcardio.itsm.repository.ServiceRequestCommentRepository;
 import com.alignedcardio.itsm.repository.SlaEscalationTierRepository;
 import com.alignedcardio.itsm.repository.SlaInstanceRepository;
 import com.alignedcardio.itsm.repository.TeamRepository;
@@ -47,6 +49,8 @@ class SlaBreachMonitorJobTest {
     @Mock private TeamRepository teamRepository;
     @Mock private IncidentRepository incidentRepository;
     @Mock private AuditLogRepository auditLogRepository;
+    @Mock private IncidentCommentRepository incidentCommentRepository;
+    @Mock private ServiceRequestCommentRepository serviceRequestCommentRepository;
 
     private SlaBreachMonitorJob job;
 
@@ -57,7 +61,8 @@ class SlaBreachMonitorJobTest {
                 new com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder("http://localhost:8080"),
                 escalationTierRepository, appUserRepository,
                 teamRepository, incidentRepository,
-                auditLogRepository, new ObjectMapper());
+                auditLogRepository, incidentCommentRepository,
+                serviceRequestCommentRepository, new ObjectMapper());
     }
 
     @Test
@@ -185,6 +190,76 @@ class SlaBreachMonitorJobTest {
         job.execute(null);
 
         assertEquals(0, instance.getEscalationLevel());
+    }
+
+    @Test
+    void recentAssignmentAuditPreventsStuckEscalation() {
+        // Regression: assignment doesn't bump updated_at (DB-insert-only
+        // column), so a stale updatedAt made a just-assigned ticket look
+        // stuck. The audit entry for the ASSIGN must count as activity.
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        incident.setUpdatedAt(OffsetDateTime.now().minusMinutes(45)); // stale — pre-assignment
+        SlaInstance instance = instance(policy, incident);
+
+        SlaEscalationTier t1 = tier(policy, 1, SlaEscalationTier.TriggerType.ON_STUCK_STATUS);
+        t1.setStuckStatus("IN_PROGRESS");
+        t1.setStuckMinutes(30);
+        when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t1));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+        // The ASSIGN audit entry from 5 minutes ago resets the stuck timer.
+        when(auditLogRepository.findMaxCreatedAtByEntity(ORG_ID, "INCIDENT", incident.getId()))
+                .thenReturn(OffsetDateTime.now().minusMinutes(5));
+
+        job.execute(null);
+
+        assertEquals(0, instance.getEscalationLevel());
+    }
+
+    @Test
+    void recentCommentPreventsStuckEscalation() {
+        // Comments aren't audited — the comment table is the only signal that
+        // someone is actively working the ticket.
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        incident.setUpdatedAt(OffsetDateTime.now().minusMinutes(45));
+        SlaInstance instance = instance(policy, incident);
+
+        SlaEscalationTier t1 = tier(policy, 1, SlaEscalationTier.TriggerType.ON_STUCK_STATUS);
+        t1.setStuckStatus("IN_PROGRESS");
+        t1.setStuckMinutes(30);
+        when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t1));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+        when(incidentCommentRepository.findMaxCreatedAtByIncidentId(incident.getId()))
+                .thenReturn(OffsetDateTime.now().minusMinutes(5));
+
+        job.execute(null);
+
+        assertEquals(0, instance.getEscalationLevel());
+    }
+
+    @Test
+    void genuinelyNeglectedTicketStillEscalatesOnSchedule() {
+        // No audit entries, no comments — lastActivityAt falls back to the
+        // stale updatedAt and the tier fires exactly as before.
+        SlaPolicy policy = policy();
+        Incident incident = incident(Incident.Status.IN_PROGRESS);
+        incident.setUpdatedAt(OffsetDateTime.now().minusMinutes(45));
+        SlaInstance instance = instance(policy, incident);
+
+        SlaEscalationTier t1 = tier(policy, 1, SlaEscalationTier.TriggerType.ON_STUCK_STATUS);
+        t1.setStuckStatus("IN_PROGRESS");
+        t1.setStuckMinutes(30);
+        when(escalationTierRepository.findByPolicyIdOrderByLevelAsc(policy.getId()))
+                .thenReturn(List.of(t1));
+        when(slaInstanceRepository.findByBreachStatusIn(any())).thenReturn(List.of(instance));
+        // auditLogRepository / incidentCommentRepository unstubbed → null
+
+        job.execute(null);
+
+        assertEquals(1, instance.getEscalationLevel());
     }
 
     @Test

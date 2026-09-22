@@ -14,8 +14,10 @@ import com.alignedcardio.itsm.events.SlaBreachStatusChangedEvent;
 import com.alignedcardio.itsm.entity.AuditLog;
 import com.alignedcardio.itsm.repository.AppUserRepository;
 import com.alignedcardio.itsm.repository.AuditLogRepository;
+import com.alignedcardio.itsm.repository.IncidentCommentRepository;
 import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.SlaEscalationTierRepository;
+import com.alignedcardio.itsm.repository.ServiceRequestCommentRepository;
 import com.alignedcardio.itsm.repository.SlaInstanceRepository;
 import com.alignedcardio.itsm.repository.TeamRepository;
 import com.alignedcardio.itsm.service.notification.NotificationRequest;
@@ -58,6 +60,8 @@ public class SlaBreachMonitorJob implements Job {
     private final TeamRepository teamRepository;
     private final IncidentRepository incidentRepository;
     private final AuditLogRepository auditLogRepository;
+    private final IncidentCommentRepository incidentCommentRepository;
+    private final ServiceRequestCommentRepository serviceRequestCommentRepository;
     private final ObjectMapper objectMapper;
 
     public SlaBreachMonitorJob(SlaInstanceRepository slaInstanceRepository,
@@ -70,6 +74,8 @@ public class SlaBreachMonitorJob implements Job {
                                TeamRepository teamRepository,
                                IncidentRepository incidentRepository,
                                AuditLogRepository auditLogRepository,
+                               IncidentCommentRepository incidentCommentRepository,
+                               ServiceRequestCommentRepository serviceRequestCommentRepository,
                                ObjectMapper objectMapper) {
         this.slaInstanceRepository = slaInstanceRepository;
         this.slaEngine = slaEngine;
@@ -81,6 +87,8 @@ public class SlaBreachMonitorJob implements Job {
         this.teamRepository = teamRepository;
         this.incidentRepository = incidentRepository;
         this.auditLogRepository = auditLogRepository;
+        this.incidentCommentRepository = incidentCommentRepository;
+        this.serviceRequestCommentRepository = serviceRequestCommentRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -286,13 +294,45 @@ public class SlaBreachMonitorJob implements Job {
             // Paused statuses (ON_HOLD etc.) are excluded even if an admin
             // configures one as a stuck trigger — a deliberately paused clock
             // is not neglect.
+            // "Stuck" means no meaningful ACTIVITY for stuckMinutes — not just
+            // no status change. updated_at is DB-insert-only and isn't bumped
+            // by assignment or comments, so it alone would penalize tickets
+            // being actively worked. Last activity = latest of updatedAt,
+            // any audit entry (assignment, escalation, updates), and comments.
             case ON_STUCK_STATUS -> tier.getStuckStatus() != null
                     && tier.getStuckMinutes() != null
                     && instance.getPausedAt() == null
                     && tier.getStuckStatus().equals(ref.status())
-                    && ref.updatedAt() != null
-                    && !ref.updatedAt().plusMinutes(tier.getStuckMinutes()).isAfter(now);
+                    && !lastActivityAt(ref).plusMinutes(tier.getStuckMinutes()).isAfter(now);
         };
+    }
+
+    /**
+     * Most recent meaningful activity on the ticket: the later of its
+     * updatedAt, the newest audit-log entry (assignments and field updates
+     * are audited even though they don't bump updatedAt), and the newest
+     * comment for comment-capable entities. Falls back to createdAt when
+     * nothing has ever happened — a genuinely neglected ticket still
+     * escalates on schedule.
+     */
+    private OffsetDateTime lastActivityAt(TicketRef ref) {
+        OffsetDateTime last = ref.updatedAt() != null ? ref.updatedAt()
+                : ref.createdAt() != null ? ref.createdAt()
+                : OffsetDateTime.now();
+        OffsetDateTime audit = auditLogRepository.findMaxCreatedAtByEntity(
+                ref.orgId(), ref.entityType(), ref.id());
+        if (audit != null && audit.isAfter(last)) {
+            last = audit;
+        }
+        OffsetDateTime comment = switch (ref.entityType()) {
+            case "INCIDENT" -> incidentCommentRepository.findMaxCreatedAtByIncidentId(ref.id());
+            case "SERVICE_REQUEST" -> serviceRequestCommentRepository.findMaxCreatedAtByServiceRequestId(ref.id());
+            default -> null;
+        };
+        if (comment != null && comment.isAfter(last)) {
+            last = comment;
+        }
+        return last;
     }
 
     private void notifyTier(SlaEscalationTier tier, SlaInstance instance, TicketRef ref) {

@@ -11,4 +11,9 @@ import java.util.UUID;
 public interface ServiceRequestCommentRepository extends JpaRepository<ServiceRequestComment, UUID> {
 
     List<ServiceRequestComment> findByServiceRequestIdOrderByCreatedAtAsc(UUID serviceRequestId);
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT MAX(c.createdAt) FROM ServiceRequestComment c WHERE c.serviceRequest.id = :serviceRequestId")
+    java.time.OffsetDateTime findMaxCreatedAtByServiceRequestId(
+            @org.springframework.data.repository.query.Param("serviceRequestId") UUID serviceRequestId);
 }

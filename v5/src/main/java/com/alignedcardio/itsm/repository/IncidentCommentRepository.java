@@ -13,4 +13,9 @@ public interface IncidentCommentRepository extends JpaRepository<IncidentComment
     List<IncidentComment> findByIncidentIdAndIsPublicTrueOrderByCreatedAtAsc(UUID incidentId);
 
     List<IncidentComment> findByIncidentIdOrderByCreatedAtAsc(UUID incidentId);
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT MAX(c.createdAt) FROM IncidentComment c WHERE c.incident.id = :incidentId")
+    java.time.OffsetDateTime findMaxCreatedAtByIncidentId(
+            @org.springframework.data.repository.query.Param("incidentId") UUID incidentId);
 }

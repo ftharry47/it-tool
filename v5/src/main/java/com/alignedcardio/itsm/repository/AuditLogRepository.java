@@ -36,6 +36,13 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
     Page<AuditLog> findByOrgId(UUID orgId, Pageable pageable);
 
+    @Query("SELECT MAX(a.createdAt) FROM AuditLog a " +
+            "WHERE a.orgId = :orgId AND a.entityType = :entityType AND a.entityId = :entityId")
+    OffsetDateTime findMaxCreatedAtByEntity(
+            @Param("orgId") UUID orgId,
+            @Param("entityType") String entityType,
+            @Param("entityId") UUID entityId);
+
     List<AuditLog> findByOrgIdAndEntityTypeAndEntityIdOrderByCreatedAtAsc(
             UUID orgId, String entityType, UUID entityId);
 
