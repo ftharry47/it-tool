@@ -3,6 +3,7 @@ package com.alignedcardio.itsm.service.reporting;
 import com.alignedcardio.itsm.api.reporting.ReportMetadataResponse;
 import com.alignedcardio.itsm.api.reporting.TicketsByLocationResponse;
 import com.alignedcardio.itsm.entity.*;
+import com.alignedcardio.itsm.service.SupportTiers;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
@@ -379,12 +380,38 @@ public class ReportingService {
                 ? entityManager.createQuery(unassigned).getSingleResult()
                 : 0L;
 
+        // Open work across all four ticket types — admins need cross-entity
+        // visibility, not incidents-only.
+        Map<String, Object> openByType = new LinkedHashMap<>();
+        openByType.put("incidents", openCount);
+        openByType.put("serviceRequests", entityManager.createQuery(
+                "SELECT COUNT(s) FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL " +
+                        "AND s.status NOT IN :terminal", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("terminal", TERMINAL_REQUEST_STATUSES)
+                .getSingleResult());
+        openByType.put("problems", entityManager.createQuery(
+                "SELECT COUNT(p) FROM Problem p WHERE p.orgId = :org AND p.deletedAt IS NULL " +
+                        "AND p.status NOT IN :terminal", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("terminal", List.of(Problem.Status.RESOLVED, Problem.Status.CLOSED))
+                .getSingleResult());
+        openByType.put("changes", entityManager.createQuery(
+                "SELECT COUNT(c) FROM ChangeRequest c WHERE c.orgId = :org AND c.deletedAt IS NULL " +
+                        "AND c.status NOT IN :terminal", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("terminal", List.of(ChangeRequest.Status.COMPLETED, ChangeRequest.Status.FAILED,
+                        ChangeRequest.Status.ROLLED_BACK, ChangeRequest.Status.CANCELLED,
+                        ChangeRequest.Status.CLOSED, ChangeRequest.Status.REJECTED))
+                .getSingleResult());
+
         return Map.of(
                 "total", totalCount,
                 "open", openCount,
                 "inProgress", inProgressCount,
                 "resolvedToday", resolvedToday,
-                "unassigned", unassignedCount);
+                "unassigned", unassignedCount,
+                "openByType", openByType);
     }
 
     private Predicate[] baseIncidentPredicates(CriteriaBuilder cb, Root<Incident> root, UUID orgId, UUID mineUserId) {
@@ -1153,6 +1180,30 @@ public class ReportingService {
                         SlaInstance.BreachStatus.BREACHED))
                 .getSingleResult();
 
+        // Fulfillment tasks past their expected delivery date and still not
+        // delivered — the same population the reminder job emails about.
+        List<FulfillmentTask> overdue = entityManager.createQuery(
+                "SELECT ft FROM FulfillmentTask ft JOIN ft.serviceRequest sr " +
+                        "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                        "AND ft.expectedDeliveryDate IS NOT NULL AND ft.expectedDeliveryDate < :today " +
+                        "AND ft.deliveredAt IS NULL AND ft.status <> :done " +
+                        "ORDER BY ft.expectedDeliveryDate", FulfillmentTask.class)
+                .setParameter("org", orgId)
+                .setParameter("today", LocalDate.now())
+                .setParameter("done", FulfillmentTask.Status.COMPLETED)
+                .getResultList();
+        Map<String, Object> overdueDeliveries = new LinkedHashMap<>();
+        overdueDeliveries.put("count", overdue.size());
+        overdue.stream().findFirst().ifPresent(ft -> {
+            Map<String, Object> oldest = new LinkedHashMap<>();
+            oldest.put("taskId", ft.getId());
+            oldest.put("requestId", ft.getServiceRequest().getId());
+            oldest.put("requestNumber", ft.getServiceRequest().getNumber());
+            oldest.put("description", ft.getDescription());
+            oldest.put("expectedDeliveryDate", ft.getExpectedDeliveryDate());
+            overdueDeliveries.put("oldest", oldest);
+        });
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("byStatus", byStatus);
         out.put("oldestOpen", oldestOpen.stream().map(s -> queueRow(s.getId(), s.getNumber(),
@@ -1165,6 +1216,7 @@ public class ReportingService {
         out.put("needsAttention", attention);
         out.put("aging", agingRows);
         out.put("slaAtRisk", slaAtRisk);
+        out.put("overdueDeliveries", overdueDeliveries);
         out.put("approverBacklog", pendingApprovalsBacklog(orgId));
         return out;
     }
@@ -1220,6 +1272,97 @@ public class ReportingService {
                 .setParameter("org", orgId)
                 .setParameter("status", ServiceRequest.Status.PENDING_APPROVAL).getSingleResult();
         out.put("pendingApprovals", pendingApprovals);
+
+        // KB articles waiting on a publish/reject decision — governance
+        // visibility, same "needs attention" theme.
+        Long kbPending = entityManager.createQuery(
+                "SELECT COUNT(a) FROM KbArticle a WHERE a.orgId = :org AND a.status = :st", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("st", KbArticle.Status.PENDING_REVIEW)
+                .getSingleResult();
+        out.put("kbPendingReview", kbPending);
+
+        // Unassigned fulfillment tasks — work sitting with no owner.
+        Long unassignedTasks = entityManager.createQuery(
+                "SELECT COUNT(ft) FROM FulfillmentTask ft JOIN ft.serviceRequest sr " +
+                        "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
+                        "AND ft.assignee IS NULL AND ft.status IN :statuses", Long.class)
+                .setParameter("org", orgId)
+                .setParameter("statuses", WORKLOAD_TASK_STATUSES)
+                .getSingleResult();
+        out.put("unassignedFulfillmentTasks", unassignedTasks);
+
+        return out;
+    }
+
+    /**
+     * SUPER_ADMIN config audit — silently-broken setup that produces runtime
+     * failures or dead ends: empty support-tier teams, locations with no
+     * approval manager, approval-gated catalog items with no fallback
+     * approver, and SLA policies with no escalation tiers.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> configHealth(UUID orgId) {
+        Map<String, Object> out = new LinkedHashMap<>();
+
+        List<String> emptyTeams = new ArrayList<>();
+        for (UUID teamId : List.of(SupportTiers.L1_ID, SupportTiers.L2_ID,
+                SupportTiers.L3_ID, SupportTiers.IT_FULFILLMENT_ID)) {
+            List<Team> teams = entityManager.createQuery(
+                    "SELECT t FROM Team t WHERE t.id = :id", Team.class)
+                    .setParameter("id", teamId).getResultList();
+            Long members = entityManager.createQuery(
+                    "SELECT COUNT(m) FROM TeamMember m WHERE m.team.id = :id", Long.class)
+                    .setParameter("id", teamId).getSingleResult();
+            if (members == 0) {
+                emptyTeams.add(teams.isEmpty() ? teamId.toString() : teams.get(0).getName());
+            }
+        }
+        out.put("emptyTeams", emptyTeams);
+
+        List<String> locationsNoApprover = entityManager.createQuery(
+                "SELECT l.name FROM Location l WHERE l.orgId = :org AND l.deletedAt IS NULL " +
+                        "AND l.approvalManager IS NULL", String.class)
+                .setParameter("org", orgId).getResultList();
+        out.put("locationsWithoutApprover", locationsNoApprover);
+
+        // Catalog items where some form option requires approval but the item
+        // has no fallback approver — combined with a manager-less location,
+        // approval routing fails at submit time.
+        List<CatalogItem> items = entityManager.createQuery(
+                "SELECT c FROM CatalogItem c WHERE c.orgId = :org AND c.active = true",
+                CatalogItem.class)
+                .setParameter("org", orgId).getResultList();
+        List<String> itemsNeedingApprover = new ArrayList<>();
+        for (CatalogItem item : items) {
+            if (item.getApprover() != null || item.getFormSchema() == null || !item.getFormSchema().isArray()) {
+                continue;
+            }
+            for (com.fasterxml.jackson.databind.JsonNode field : item.getFormSchema()) {
+                boolean gated = field.hasNonNull("otherRequiresApproval")
+                        && field.get("otherRequiresApproval").asBoolean();
+                if (!gated && field.hasNonNull("options")) {
+                    for (com.fasterxml.jackson.databind.JsonNode opt : field.get("options")) {
+                        if (opt.isObject() && opt.hasNonNull("requiresApproval")
+                                && opt.get("requiresApproval").asBoolean()) {
+                            gated = true;
+                            break;
+                        }
+                    }
+                }
+                if (gated) {
+                    itemsNeedingApprover.add(item.getName());
+                    break;
+                }
+            }
+        }
+        out.put("itemsNeedingApprover", itemsNeedingApprover);
+
+        List<String> policiesNoTiers = entityManager.createQuery(
+                "SELECT p.name FROM SlaPolicy p WHERE p.orgId = :org AND NOT EXISTS " +
+                        "(SELECT 1 FROM SlaEscalationTier t WHERE t.policy = p)", String.class)
+                .setParameter("org", orgId).getResultList();
+        out.put("policiesWithoutTiers", policiesNoTiers);
 
         return out;
     }

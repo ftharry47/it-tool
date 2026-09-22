@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
 import { ArrowUpRight, RotateCcw } from 'lucide-react'
 import {
   Bar,
@@ -19,7 +18,6 @@ import {
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { DataTable } from '../../components/ui/DataTable'
-import { DateInput } from '../../components/ui/DateInput'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -47,6 +45,12 @@ interface TicketsSummary {
   inProgress: number
   resolvedToday: number
   unassigned: number
+  openByType?: {
+    incidents?: number
+    serviceRequests?: number
+    problems?: number
+    changes?: number
+  }
 }
 
 interface AdHocRow {
@@ -123,17 +127,6 @@ interface AgentWorkload {
   noSla: number
 }
 
-interface TicketsByLocationRow {
-  locationId: string
-  locationName: string
-  totalOpen: number
-  openIncidents: number
-  openServiceRequests: number
-  oldestOpenDays: number | null
-  resolvedCount: number
-  breachedCount: number
-}
-
 interface QueueTicket {
   id: string
   number: string
@@ -149,6 +142,28 @@ interface NeedsAttentionData {
   rejectedNeedsReview: QueueTicket[]
   escalationsAwaitingPickup: QueueTicket[]
   pendingApprovals: number
+  kbPendingReview: number
+  unassignedFulfillmentTasks: number
+}
+
+interface ConfigHealth {
+  emptyTeams: string[]
+  locationsWithoutApprover: string[]
+  itemsNeedingApprover: string[]
+  policiesWithoutTiers: string[]
+}
+
+interface ChangeCalendarData {
+  changes: {
+    id: string
+    number: string
+    title: string
+    locationId: string | null
+    locationName: string | null
+    plannedStart: string
+    plannedEnd: string
+  }[]
+  conflicts: { changeA: string; changeB: string }[]
 }
 
 interface ServiceRequestOps {
@@ -161,6 +176,10 @@ interface ServiceRequestOps {
   }
   aging: { status: string; age0to1: number; age2to3: number; age4to7: number; age8plus: number }[]
   slaAtRisk: number
+  overdueDeliveries?: {
+    count: number
+    oldest?: { taskId: string; requestId: string; requestNumber: string; description: string; expectedDeliveryDate: string }
+  }
   approverBacklog: { approver: string; count: number; oldestDays: number }[]
 }
 
@@ -464,52 +483,6 @@ function YourSlaTargets({ data, isLoading, fulfillmentOnly }: { data: SlaTarget[
   )
 }
 
-/** Part D: SUPER_ADMIN — top 5 agents by score from the latest monthly reports. */
-function TopPerformers({ reports }: { reports: AgentPerformanceReport[] }) {
-  const top = [...reports].sort((a, b) => b.score - a.score).slice(0, 5)
-  if (top.length === 0) return null
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground">Top Performers — {top[0].period}</h3>
-      <ul className="space-y-2">
-        {top.map((r, i) => (
-          <li key={r.agentId} className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2">
-              <span className="w-5 text-muted-foreground">{i + 1}.</span>
-              <span className="font-medium">{r.agentName}</span>
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="text-muted-foreground">{r.score}</span>
-              <GradeChip grade={r.grade} />
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** Part D: SUPER_ADMIN — SLA compliance delta, this month vs last month. */
-function SlaTrendDelta({ data }: { data: MonthlySla[] | undefined }) {
-  if (!data || data.length < 2) return null
-  const prev = data[data.length - 2]
-  const curr = data[data.length - 1]
-  const delta = Math.round((curr.compliancePercent - prev.compliancePercent) * 10) / 10
-  const up = delta >= 0
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="text-sm font-medium text-muted-foreground">SLA Trend</h3>
-      <div className="mt-2 flex items-baseline gap-2">
-        <p className="text-2xl font-bold">{curr.compliancePercent}%</p>
-        <span className={`text-sm font-medium ${up ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-          {up ? '▲' : '▼'} {Math.abs(delta)}% vs {prev.month}
-        </span>
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{curr.breached} of {curr.total} breached this month</p>
-    </div>
-  )
-}
-
 /** Part D: SUPER_ADMIN — all agents' latest monthly reports side-by-side. */
 function AgentPerformanceTable({ reports, isLoading }: { reports: AgentPerformanceReport[]; isLoading: boolean }) {
   if (isLoading) {
@@ -569,22 +542,26 @@ function AgentPerformanceTable({ reports, isLoading }: { reports: AgentPerforman
   )
 }
 
-function MetricCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-shadow duration-150 hover:shadow-md">
+function MetricCard({ label, value, to }: { label: string; value: number | string; to?: string }) {
+  const inner = (
+    <div className="h-full rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-shadow duration-150 hover:shadow-md">
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   )
+  return to ? <Link to={to} className="block">{inner}</Link> : inner
 }
 
 const ACTIVE_STATUSES = 'NEW,IN_PROGRESS,ON_HOLD,REOPENED'
 
-function SlaView({ data }: { data: SlaCompliance }) {
+function SlaView({ data, trend }: { data: SlaCompliance; trend?: MonthlySla[] }) {
+  const delta = trend != null && trend.length >= 2
+    ? Math.round((trend[trend.length - 1].compliancePercent - trend[trend.length - 2].compliancePercent) * 10) / 10
+    : null
   if (data.total === 0) {
     return (
       <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h3 className="text-sm font-medium text-muted-foreground">SLA Compliance</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">SLA Health</h3>
         <p className="text-sm text-muted-foreground">
           No SLA data yet. Once incidents have SLA policies, compliance will appear here.
         </p>
@@ -598,12 +575,22 @@ function SlaView({ data }: { data: SlaCompliance }) {
   ].filter((d) => d.value > 0)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="text-sm font-medium text-muted-foreground">SLA Compliance</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">SLA Health</h3>
+        <Link to="/dashboard/sla" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          SLA details →
+        </Link>
+      </div>
       <div className="grid grid-cols-3 gap-4">
         <MetricCard label="Compliance" value={`${data.compliancePercent}%`} />
         <MetricCard label="Total" value={data.total} />
-        <MetricCard label="Breached" value={data.breached} />
+        <MetricCard label="Breached" value={data.breached} to="/dashboard/sla?breachStatus=BREACHED" />
       </div>
+      {delta != null && (
+        <p className={`text-xs font-medium ${delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+          {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs {trend![trend!.length - 2].month} — {trend![trend!.length - 1].breached} of {trend![trend!.length - 1].total} breached this month
+        </p>
+      )}
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -619,7 +606,15 @@ function SlaView({ data }: { data: SlaCompliance }) {
   )
 }
 
-function TicketsView({ data }: { data: TicketsSummary }) {
+const OPEN_BY_TYPE_LINKS: { key: keyof NonNullable<TicketsSummary['openByType']>; label: string; to: string }[] = [
+  { key: 'incidents', label: 'Incidents', to: '/dashboard/incidents?status=NEW,IN_PROGRESS,ON_HOLD,REOPENED' },
+  { key: 'serviceRequests', label: 'Requests', to: '/dashboard/service-requests' },
+  { key: 'problems', label: 'Problems', to: '/dashboard/problems' },
+  { key: 'changes', label: 'Changes', to: '/dashboard/changes' },
+]
+
+/** Merged ticket health: queue metrics + status pie + open work by type + priority mix. */
+function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHocQueryResponse | undefined }) {
   const closed = Math.max(0, data.total - data.open - data.inProgress - data.resolvedToday)
   const chartData = [
     { name: 'Open', value: data.open },
@@ -627,51 +622,64 @@ function TicketsView({ data }: { data: TicketsSummary }) {
     { name: 'Resolved Today', value: data.resolvedToday },
     { name: 'Closed', value: closed },
   ].filter((d) => d.value > 0)
+  const priorityData = (priority?.rows ?? [])
+    .map((row) => ({ name: row.group ?? 'Unassigned', count: row.count }))
+    .filter((d) => d.count > 0)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="text-sm font-medium text-muted-foreground">Ticket Queue</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Ticket Pipeline</h3>
+        <Link to="/dashboard/incidents" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          View all incidents →
+        </Link>
+      </div>
+      {data.openByType && (
+        <div className="flex flex-wrap gap-2">
+          {OPEN_BY_TYPE_LINKS.map((t) => (
+            <Link
+              key={t.key}
+              to={t.to}
+              className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground transition hover:opacity-80"
+            >
+              {t.label}: {data.openByType?.[t.key] ?? 0} open
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <MetricCard label="Total" value={data.total} />
         <MetricCard label="Open" value={data.open} />
         <MetricCard label="In Progress" value={data.inProgress} />
         <MetricCard label="Resolved Today" value={data.resolvedToday} />
       </div>
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} label>
-              {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
-
-function PriorityView({ data, isLoading, error, onRetry }: { data: AdHocQueryResponse | undefined; isLoading: boolean; error: Error | null; onRetry: () => void }) {
-  if (isLoading) return <Loading compact />
-  if (error) return <ErrorFallback error={error} message="Could not load priority breakdown." onRetry={onRetry} />
-  if (!data) return <Loading compact />
-  const chartData = data.rows.map((row) => ({ name: row.group ?? 'Unassigned', count: row.count })).filter((d) => d.count > 0)
-  if (chartData.length === 0) {
-    return <p className="text-sm text-muted-foreground">No open incidents by priority.</p>
-  }
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-2 text-sm font-medium text-muted-foreground">Open incidents by priority</h3>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="count" name="Incidents" fill={COLORS[0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} label>
+                {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        {priorityData.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs text-muted-foreground">Open incidents by priority</p>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={priorityData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Incidents" fill={COLORS[0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1053,11 +1061,8 @@ export function Dashboard() {
   const account = accounts[0]
   const { currentUser } = useAuth()
 
-  const [locationFrom, setLocationFrom] = useState('')
-  const [locationTo, setLocationTo] = useState('')
-  const [locationStatus, setLocationStatus] = useState('OPEN')
-
   const isAdmin = !!currentUser?.roles.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r))
+  const isSuperAdmin = !!currentUser?.roles.includes('SUPER_ADMIN')
   const isStaff = !!currentUser?.roles.some((r) => ['AGENT', 'TEAM_LEAD', 'ADMIN', 'SUPER_ADMIN'].includes(r))
   const myTierTeams = TIER_TEAMS.filter((t) => currentUser?.teamIds?.includes(t.id))
   const isFulfillmentMember = !!currentUser?.teamIds?.includes(IT_FULFILLMENT_TEAM_ID)
@@ -1146,10 +1151,28 @@ export function Dashboard() {
     staleTime: 0,
   })
 
-  const allActiveQuery = useQuery<IncidentSummary[]>({
-    queryKey: ['dashboard', 'all-active'],
+  // SUPER_ADMIN config audit — empty tier teams, unresolvable approvals,
+  // tierless SLA policies.
+  const configHealthQuery = useQuery<ConfigHealth>({
+    queryKey: ['dashboard', 'config-health'],
     queryFn: async () => {
-      const res = await fetchWithToken(instance, account, `/api/v1/incidents?status=${ACTIVE_STATUSES}&limit=20`)
+      const res = await fetchWithToken(instance, account, '/api/v1/admin/config-health')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && isSuperAdmin,
+    refetchInterval: 60_000,
+    staleTime: 0,
+  })
+
+  // This week's scheduled changes + same-location overlap conflicts.
+  const changesWeekQuery = useQuery<ChangeCalendarData>({
+    queryKey: ['dashboard', 'changes-this-week'],
+    queryFn: async () => {
+      const from = new Date()
+      const to = new Date(Date.now() + 7 * 86_400_000)
+      const res = await fetchWithToken(instance, account,
+          `/api/v1/changes/calendar?from=${from.toISOString()}&to=${to.toISOString()}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -1169,8 +1192,6 @@ export function Dashboard() {
     refetchInterval: 60_000,
     staleTime: 0,
   })
-
-  const isSuperAdmin = !!currentUser?.roles.includes('SUPER_ADMIN')
 
   const myProblemsQuery = useQuery<ProblemSummary[]>({
     queryKey: ['dashboard', 'my-problems', currentUser?.id],
@@ -1230,7 +1251,7 @@ export function Dashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!account && isSuperAdmin,
+    enabled: !!account && isAdmin,
     refetchInterval: 60_000,
     staleTime: 0,
   })
@@ -1284,22 +1305,6 @@ export function Dashboard() {
     staleTime: 0,
   })
 
-  const ticketsByLocationQuery = useQuery<TicketsByLocationRow[]>({
-    queryKey: ['dashboard', 'tickets-by-location', locationStatus, locationFrom, locationTo],
-    queryFn: async () => {
-      const params = new URLSearchParams()
-      params.set('status', locationStatus || 'OPEN')
-      if (locationFrom) params.set('from', new Date(locationFrom).toISOString())
-      if (locationTo) params.set('to', new Date(`${locationTo}T23:59:59.999Z`).toISOString())
-      const res = await fetchWithToken(instance, account, `/api/v1/reports/tickets-by-location?${params}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return res.json()
-    },
-    enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
-    staleTime: 0,
-  })
-
   if (!currentUser) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -1319,6 +1324,22 @@ export function Dashboard() {
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
             <p className="text-sm text-muted-foreground">Welcome back, {currentUser.displayName ?? currentUser.email}.</p>
           </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <Link
+                to="/admin/import-tickets"
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground hover:shadow-sm"
+              >
+                Import Tickets
+              </Link>
+              <Link
+                to="/dashboard/reports/export"
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground hover:shadow-sm"
+              >
+                Data Export
+              </Link>
+            </div>
+          )}
         </div>
 
         {isLoading && <Loading />}
@@ -1328,59 +1349,44 @@ export function Dashboard() {
           <div className="space-y-6">
             {isAdmin && (
               <>
+                {/* Row 1 — KPI strip: the four triage numbers, each a drill link. */}
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  <MetricCard label="Open" value={ticketsQuery.data?.open ?? 0} />
-                  <MetricCard label="Breached SLAs" value={slaQuery.data?.breached ?? 0} />
-                  <MetricCard label="Unassigned" value={ticketsQuery.data?.unassigned ?? 0} />
-                  <MetricCard label="Resolved today" value={ticketsQuery.data?.resolvedToday ?? 0} />
+                  <MetricCard label="Open tickets" value={ticketsQuery.data?.open ?? 0} to="/dashboard/incidents?status=NEW,IN_PROGRESS,ON_HOLD,REOPENED" />
+                  <MetricCard label="Breached SLAs" value={slaQuery.data?.breached ?? 0} to="/dashboard/sla?breachStatus=BREACHED" />
+                  <MetricCard label="Pending approvals" value={needsAttentionQuery.data?.pendingApprovals ?? 0} to="/dashboard/service-requests?status=PENDING_APPROVAL" />
+                  <MetricCard label="Unassigned" value={ticketsQuery.data?.unassigned ?? 0} to="/dashboard/incidents?assignee=__unassigned__" />
                 </div>
 
-                <NeedsAttentionCard data={needsAttentionQuery.data} isLoading={needsAttentionQuery.isLoading} />
-
+                {/* Row 2 — triage + config audit. */}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  {slaQuery.data && <SlaView data={slaQuery.data} />}
-                  {ticketsQuery.data && <TicketsView data={ticketsQuery.data} />}
+                  <NeedsAttentionCard data={needsAttentionQuery.data} isLoading={needsAttentionQuery.isLoading} />
+                  {isSuperAdmin
+                    ? <ConfigHealthCard data={configHealthQuery.data} isLoading={configHealthQuery.isLoading} />
+                    : <div />}
                 </div>
 
+                {/* Row 3 — ticket + SLA health. */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {ticketsQuery.data && <TicketsView data={ticketsQuery.data} priority={priorityQuery.data} />}
+                  {slaQuery.data && <SlaView data={slaQuery.data} trend={slaTrendQuery.data} />}
+                </div>
+
+                {/* Row 4 — people: current workload snapshot + escalation history. */}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <WorkloadChart data={workloadQuery.data} isLoading={workloadQuery.isLoading} />
                   <EscalationsFeed data={escalationsQuery.data} isLoading={escalationsQuery.isLoading} />
                 </div>
 
-                <ServiceRequestOpsCard data={srOpsQuery.data} isLoading={srOpsQuery.isLoading} />
+                {/* Row 5 — requests & changes operations. */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <ServiceRequestOpsCard data={srOpsQuery.data} isLoading={srOpsQuery.isLoading} />
+                  <ChangesThisWeekCard data={changesWeekQuery.data} isLoading={changesWeekQuery.isLoading} />
+                </div>
 
-                <PriorityView data={priorityQuery.data} isLoading={priorityQuery.isLoading} error={priorityQuery.error} onRetry={() => priorityQuery.refetch()} />
-
-                <TicketsByLocationSection
-                  data={ticketsByLocationQuery.data}
-                  isLoading={ticketsByLocationQuery.isLoading}
-                  error={ticketsByLocationQuery.error}
-                  status={locationStatus}
-                  from={locationFrom}
-                  to={locationTo}
-                  onStatusChange={setLocationStatus}
-                  onFromChange={setLocationFrom}
-                  onToChange={setLocationTo}
-                  onRetry={() => ticketsByLocationQuery.refetch()}
-                />
-
+                {/* Row 6 — SUPER_ADMIN agent performance. */}
                 {isSuperAdmin && (
-                  <>
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                      <TopPerformers reports={parsePerfReports(allPerfQuery.data)} />
-                      <SlaTrendDelta data={slaTrendQuery.data} />
-                    </div>
-                    <AgentPerformanceTable reports={parsePerfReports(allPerfQuery.data)} isLoading={allPerfQuery.isLoading} />
-                  </>
+                  <AgentPerformanceTable reports={parsePerfReports(allPerfQuery.data)} isLoading={allPerfQuery.isLoading} />
                 )}
-
-                <IncidentSection
-                  title="All Active Incidents"
-                  caption="All active incidents across the organization"
-                  data={allActiveQuery.data}
-                  isLoading={allActiveQuery.isLoading}
-                  emptyText="No active incidents."
-                />
               </>
             )}
 
@@ -1458,6 +1464,111 @@ function ageDays(createdAt: string | null): number | null {
   return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000))
 }
 
+/** SUPER_ADMIN — silently-broken configuration that would fail at runtime. */
+function ConfigHealthCard({ data, isLoading }: { data: ConfigHealth | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <Loading compact />
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const groups: { label: string; items: string[]; to: string }[] = [
+    { label: 'Support/fulfillment teams with no members', items: data.emptyTeams, to: '/admin/support-tiers' },
+    { label: 'Locations with no approval manager', items: data.locationsWithoutApprover, to: '/admin/locations' },
+    { label: 'Approval-gated catalog items with no fallback approver', items: data.itemsNeedingApprover, to: '/admin/catalog' },
+    { label: 'SLA policies with no escalation tiers', items: data.policiesWithoutTiers, to: '/dashboard/sla' },
+  ]
+  const total = groups.reduce((n, g) => n + g.items.length, 0)
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Configuration Health</h3>
+        {total > 0 && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            {total} issue{total === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+      {total === 0 ? (
+        <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">
+          All clear — teams staffed, approval routing resolvable, SLA tiers configured.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {groups.filter((g) => g.items.length > 0).map((g) => (
+            <li key={g.label}>
+              <Link to={g.to} className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">
+                {g.label} ({g.items.length}) →
+              </Link>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{g.items.join(', ')}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** This week's scheduled changes + location/time conflicts from the calendar. */
+function ChangesThisWeekCard({ data, isLoading }: { data: ChangeCalendarData | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <Loading compact />
+      </div>
+    )
+  }
+  if (!data) return null
+
+  const conflictIds = new Set(data.conflicts.flatMap((c) => [c.changeA, c.changeB]))
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">Changes This Week</h3>
+        <Link to="/dashboard/changes/calendar" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          Calendar →
+        </Link>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link to="/dashboard/changes/calendar" className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground transition hover:opacity-80">
+          {data.changes.length} scheduled
+        </Link>
+        {data.conflicts.length > 0 && (
+          <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+            {data.conflicts.length} conflict{data.conflicts.length === 1 ? '' : 's'} — same location, overlapping window
+          </span>
+        )}
+      </div>
+      {data.changes.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">No changes scheduled this week.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border">
+          {data.changes.slice(0, 6).map((c) => (
+            <li key={c.id} className="flex items-center gap-3 py-1.5 text-sm">
+              <Link to={`/dashboard/changes/${c.id}`} className="w-24 shrink-0 font-medium hover:underline">
+                {c.number}
+              </Link>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{c.title}</span>
+              {conflictIds.has(c.id) && (
+                <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950 dark:text-red-300">
+                  CONFLICT
+                </span>
+              )}
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {formatDate(c.plannedStart)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /** Part K: admin triage — what needs attention right now across all ticket types. */
 function NeedsAttentionCard({ data, isLoading }: { data: NeedsAttentionData | undefined; isLoading: boolean }) {
   if (isLoading) {
@@ -1492,7 +1603,8 @@ function NeedsAttentionCard({ data, isLoading }: { data: NeedsAttentionData | un
       tone: 'amber',
     },
   ]
-  const totalFlags = groups.reduce((n, g) => n + g.count, 0) + data.breachedSlaCount + data.pendingApprovals
+  const totalFlags = groups.reduce((n, g) => n + g.count, 0) + data.breachedSlaCount
+      + data.pendingApprovals + (data.kbPendingReview ?? 0) + (data.unassignedFulfillmentTasks ?? 0)
   if (totalFlags === 0) {
     return (
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -1519,6 +1631,16 @@ function NeedsAttentionCard({ data, isLoading }: { data: NeedsAttentionData | un
         {data.pendingApprovals > 0 && (
           <Link to="/dashboard/service-requests?status=PENDING_APPROVAL" className="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900">
             {data.pendingApprovals} pending approval{data.pendingApprovals === 1 ? '' : 's'}
+          </Link>
+        )}
+        {(data.unassignedFulfillmentTasks ?? 0) > 0 && (
+          <Link to="/dashboard/service-requests?status=IN_FULFILLMENT" className="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-700 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900">
+            {data.unassignedFulfillmentTasks} fulfillment task{data.unassignedFulfillmentTasks === 1 ? '' : 's'} unassigned
+          </Link>
+        )}
+        {(data.kbPendingReview ?? 0) > 0 && (
+          <Link to="/dashboard/kb" className="rounded-md bg-muted px-2 py-1 font-medium text-foreground transition hover:opacity-80">
+            {data.kbPendingReview} KB article{data.kbPendingReview === 1 ? '' : 's'} pending review
           </Link>
         )}
       </div>
@@ -1576,7 +1698,6 @@ function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | 
 
   const OPEN_STATUSES = ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED_NEEDS_REVIEW', 'IN_FULFILLMENT', 'ON_HOLD']
   const openTotal = OPEN_STATUSES.reduce((n, s) => n + (data.byStatus[s] ?? 0), 0)
-  const attention = data.needsAttention
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -1617,16 +1738,20 @@ function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | 
             SLA at risk/breached: {data.slaAtRisk}
           </span>
         )}
+        {(data.overdueDeliveries?.count ?? 0) > 0 && (
+          <Link
+            to={data.overdueDeliveries?.oldest
+              ? `/dashboard/service-requests/${data.overdueDeliveries.oldest.requestId}`
+              : '/dashboard/service-requests?status=IN_FULFILLMENT'}
+            className="rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900"
+            title={data.overdueDeliveries?.oldest
+              ? `Oldest: ${data.overdueDeliveries.oldest.requestNumber} — ${data.overdueDeliveries.oldest.description} (due ${data.overdueDeliveries.oldest.expectedDeliveryDate})`
+              : undefined}
+          >
+            Overdue deliveries: {data.overdueDeliveries!.count}
+          </Link>
+        )}
       </div>
-
-      {(attention.pendingApprovals > 0 || attention.rejectedNeedsReview > 0 || attention.unassignedTasks > 0) && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300">
-          Needs attention:
-          {attention.pendingApprovals > 0 && ` ${attention.pendingApprovals} awaiting approval.`}
-          {attention.rejectedNeedsReview > 0 && ` ${attention.rejectedNeedsReview} rejected needing review.`}
-          {attention.unassignedTasks > 0 && ` ${attention.unassignedTasks} fulfillment task${attention.unassignedTasks === 1 ? '' : 's'} unassigned.`}
-        </div>
-      )}
 
       {(data.approverBacklog ?? []).length > 0 && (
         <div className="mt-3">
@@ -1700,109 +1825,6 @@ function ServiceRequestOpsCard({ data, isLoading }: { data: ServiceRequestOps | 
               )
             })}
           </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TicketsByLocationSection({
-  data,
-  isLoading,
-  error,
-  status,
-  from,
-  to,
-  onStatusChange,
-  onFromChange,
-  onToChange,
-  onRetry,
-}: {
-  data: TicketsByLocationRow[] | undefined
-  isLoading: boolean
-  error: Error | null
-  status: string
-  from: string
-  to: string
-  onStatusChange: (status: string) => void
-  onFromChange: (from: string) => void
-  onToChange: (to: string) => void
-  onRetry: () => void
-}) {
-  const rows = data ?? []
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Tickets by Location</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={status}
-            onChange={(e) => onStatusChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="OPEN">Open</option>
-            <option value="ALL">All</option>
-          </select>
-          <DateInput
-            value={from}
-            onChange={(e) => onFromChange(e.target.value)}
-            placeholder="From"
-            className="px-2 py-1"
-          />
-          <DateInput
-            value={to}
-            onChange={(e) => onToChange(e.target.value)}
-            placeholder="To"
-            className="px-2 py-1"
-          />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <Loading compact />
-      ) : error ? (
-        <ErrorFallback error={error} message="Could not load tickets by location." onRetry={onRetry} />
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tickets match the selected filters.</p>
-      ) : (
-        <div className="space-y-4">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="locationName"
-                  interval={0}
-                  angle={-35}
-                  textAnchor="end"
-                  height={70}
-                  tick={{ fontSize: 11 }}
-                />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="openIncidents" name="Incidents" stackId="a" fill={COLORS[0]} />
-                <Bar dataKey="openServiceRequests" name="Service Requests" stackId="a" fill={COLORS[1]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <DataTable<TicketsByLocationRow>
-            caption="Tickets by location"
-            columns={[
-              { key: 'locationName', header: 'Location' },
-              { key: 'totalOpen', header: 'Total Open' },
-              { key: 'openIncidents', header: 'Incidents' },
-              { key: 'openServiceRequests', header: 'Service Requests' },
-              { key: 'oldestOpenDays', header: 'Oldest Open (days)', render: (row) => row.oldestOpenDays ?? '—' },
-              { key: 'resolvedCount', header: 'Resolved' },
-              { key: 'breachedCount', header: 'Breached' },
-            ]}
-            data={rows}
-            getRowKey={(row) => row.locationId}
-            emptyText="No tickets match the selected filters."
-          />
         </div>
       )}
     </div>

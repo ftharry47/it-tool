@@ -1,7 +1,10 @@
 package com.alignedcardio.itsm.service.reporting;
 
+import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.ChangeRequest;
+import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Incident;
+import com.alignedcardio.itsm.entity.Team;
 import com.alignedcardio.itsm.entity.Problem;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import jakarta.persistence.EntityManager;
@@ -501,5 +504,140 @@ class ReportingServiceTest {
 
         verify(instanceQuery).setParameter("cancelled",
                 com.alignedcardio.itsm.entity.ServiceRequest.Status.CANCELLED);
+    }
+
+    // --- Dashboard consolidation additions -------------------------------
+
+    /** Stubs a JPQL createQuery call matched by substring + result class. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <T> TypedQuery<T> stubJpql(EntityManager em, String jpqlPart, Class<T> cls,
+                                     Object single, List<?> list) {
+        TypedQuery<T> q = mock(TypedQuery.class);
+        lenient().when(em.createQuery(contains(jpqlPart), eq(cls))).thenReturn(q);
+        lenient().when(q.setParameter(anyString(), any())).thenReturn(q);
+        lenient().when(q.setMaxResults(anyInt())).thenReturn(q);
+        lenient().when(q.getSingleResult()).thenReturn((T) single);
+        lenient().when(q.getResultList()).thenReturn((List<T>) list);
+        return q;
+    }
+
+    /** Config health flags an empty tier team, a manager-less location, an
+     * approval-gated catalog item with no fallback approver, and a tierless
+     * SLA policy — the exact silent-misconfiguration class it exists for. */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void configHealthFlagsBrokenSetup() throws Exception {
+        EntityManager em = mock(EntityManager.class);
+        UUID orgId = UUID.randomUUID();
+
+        Team team = new Team();
+        team.setId(com.alignedcardio.itsm.service.SupportTiers.L2_ID);
+        team.setName("L2 Support");
+        stubJpql(em, "FROM Team t WHERE t.id", Team.class, null, List.of(team));
+        stubJpql(em, "FROM TeamMember m", Long.class, 0L, List.of());
+        stubJpql(em, "FROM Location l", String.class, null, List.of("HQ"));
+
+        com.fasterxml.jackson.databind.JsonNode schema = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree("[{\"name\":\"access\",\"type\":\"select_with_other\",\"options\":"
+                        + "[{\"value\":\"EHR\",\"label\":\"EHR\",\"requiresApproval\":true}]}]");
+        CatalogItem item = new CatalogItem();
+        item.setName("EHR Access");
+        item.setActive(true);
+        item.setFormSchema(schema);
+        stubJpql(em, "FROM CatalogItem c", CatalogItem.class, null, List.of(item));
+
+        stubJpql(em, "FROM SlaPolicy p", String.class, null, List.of("Critical Policy"));
+
+        ReportingService service = new ReportingService(em);
+        Map<String, Object> health = service.configHealth(orgId);
+
+        assertEquals(4, ((List<?>) health.get("emptyTeams")).size()); // all four teams empty
+        assertEquals(List.of("HQ"), health.get("locationsWithoutApprover"));
+        assertEquals(List.of("EHR Access"), health.get("itemsNeedingApprover"));
+        assertEquals(List.of("Critical Policy"), health.get("policiesWithoutTiers"));
+    }
+
+    /** Clean config → every list empty (the frontend renders the green
+     * all-clear state from this). */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void configHealthAllClearWhenNothingBroken() {
+        EntityManager em = mock(EntityManager.class);
+
+        Team team = new Team();
+        team.setId(UUID.randomUUID());
+        team.setName("L1 Support");
+        stubJpql(em, "FROM Team t WHERE t.id", Team.class, null, List.of(team));
+        stubJpql(em, "FROM TeamMember m", Long.class, 3L, List.of());
+        stubJpql(em, "FROM Location l", String.class, null, List.of());
+        stubJpql(em, "FROM CatalogItem c", CatalogItem.class, null, List.of());
+        stubJpql(em, "FROM SlaPolicy p", String.class, null, List.of());
+
+        ReportingService service = new ReportingService(em);
+        Map<String, Object> health = service.configHealth(UUID.randomUUID());
+
+        assertEquals(List.of(), health.get("emptyTeams"));
+        assertEquals(List.of(), health.get("locationsWithoutApprover"));
+        assertEquals(List.of(), health.get("itemsNeedingApprover"));
+        assertEquals(List.of(), health.get("policiesWithoutTiers"));
+    }
+
+    /** Overdue deliveries: a task past expectedDeliveryDate with deliveredAt
+     * null surfaces with count + oldest; a delivered task does not. */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void serviceRequestOpsReportsOverdueDeliveries() {
+        EntityManager em = mock(EntityManager.class);
+
+        stubJpql(em, "GROUP BY s.status", Tuple.class, null, List.of());
+        stubJpql(em, "SELECT s FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL "
+                + "AND s.status NOT IN :terminal", com.alignedcardio.itsm.entity.ServiceRequest.class,
+                null, List.of());
+        stubJpql(em, "ft.assignee IS NULL", Long.class, 0L, List.of());
+        stubJpql(em, "SELECT s.status, s.createdAt", Tuple.class, null, List.of());
+        stubJpql(em, "COUNT(si) FROM SlaInstance", Long.class, 0L, List.of());
+        stubJpql(em, "a.displayName", Tuple.class, null, List.of());
+
+        com.alignedcardio.itsm.entity.ServiceRequest sr =
+                new com.alignedcardio.itsm.entity.ServiceRequest();
+        sr.setId(UUID.randomUUID());
+        sr.setNumber("SR-9");
+        FulfillmentTask overdue = new FulfillmentTask();
+        overdue.setId(UUID.randomUUID());
+        overdue.setServiceRequest(sr);
+        overdue.setDescription("Ship replacement laptop");
+        overdue.setExpectedDeliveryDate(java.time.LocalDate.now().minusDays(3));
+        overdue.setStatus(FulfillmentTask.Status.PENDING);
+        stubJpql(em, "expectedDeliveryDate < :today", FulfillmentTask.class, null, List.of(overdue));
+
+        ReportingService service = new ReportingService(em);
+        Map<String, Object> ops = service.serviceRequestOps(UUID.randomUUID());
+
+        Map<String, Object> deliveries = (Map<String, Object>) ops.get("overdueDeliveries");
+        assertEquals(1, deliveries.get("count"));
+        Map<String, Object> oldest = (Map<String, Object>) deliveries.get("oldest");
+        assertEquals("SR-9", oldest.get("requestNumber"));
+        assertEquals("Ship replacement laptop", oldest.get("description"));
+    }
+
+    /** Needs-attention payload now carries KB review + unassigned-task counts. */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void needsAttentionIncludesKbAndUnassignedTasks() {
+        EntityManager em = mock(EntityManager.class);
+
+        stubJpql(em, "FROM Incident i", Incident.class, null, List.of());
+        stubJpql(em, "FROM SlaInstance si", Tuple.class, null, List.of());
+        stubJpql(em, "FROM ServiceRequest s", com.alignedcardio.itsm.entity.ServiceRequest.class,
+                null, List.of());
+        stubJpql(em, "COUNT(s) FROM ServiceRequest", Long.class, 0L, List.of());
+        stubJpql(em, "FROM KbArticle a", Long.class, 3L, List.of());
+        stubJpql(em, "FROM FulfillmentTask ft", Long.class, 2L, List.of());
+
+        ReportingService service = new ReportingService(em);
+        Map<String, Object> out = service.needsAttention(UUID.randomUUID());
+
+        assertEquals(3L, out.get("kbPendingReview"));
+        assertEquals(2L, out.get("unassignedFulfillmentTasks"));
     }
 }
