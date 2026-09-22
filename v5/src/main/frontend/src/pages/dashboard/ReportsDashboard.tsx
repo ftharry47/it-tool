@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -30,6 +30,7 @@ interface SlaCompliance {
 }
 
 interface AgentWorkload {
+  agentId: string
   agentName: string
   openCount: number
   incidents: number
@@ -83,9 +84,13 @@ interface AdHocQueryResponse {
   rows: AdHocRow[]
 }
 
+const INCIDENTS_BASE = '/dashboard/incidents'
+const OPEN_BUCKET = 'NEW,IN_PROGRESS,ON_HOLD,WAITING_ON_CUSTOMER,RESOLVED,REOPENED'
+
 function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine: boolean; userId: string | undefined }) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
+  const navigate = useNavigate()
   const [days, setDays] = useState(30)
 
   const trendQuery = useQuery<TrendPoint[]>({
@@ -163,19 +168,21 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
 
   const closed = Math.max(0, data.total - data.open - data.inProgress - data.resolvedToday)
   const statusChartData = [
-    { name: 'Open', value: data.open },
-    { name: 'In Progress', value: data.inProgress },
-    { name: 'Resolved Today', value: data.resolvedToday },
-    { name: 'Closed', value: closed },
+    { name: 'Open', value: data.open, statusParam: OPEN_BUCKET },
+    { name: 'In Progress', value: data.inProgress, statusParam: 'IN_PROGRESS' },
+    { name: 'Resolved Today', value: data.resolvedToday, statusParam: 'RESOLVED' },
+    { name: 'Closed', value: closed, statusParam: 'CLOSED' },
   ].filter((d) => d.value > 0)
+
+  const drillToIncidents = (params: string) => navigate(`${INCIDENTS_BASE}?${params}`)
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <MetricCard label="Total" value={data.total} />
-        <MetricCard label="Open" value={data.open} />
-        <MetricCard label="In Progress" value={data.inProgress} />
-        <MetricCard label="Resolved Today" value={data.resolvedToday} />
+        <MetricCard label="Total" value={data.total} onClick={() => drillToIncidents('')} />
+        <MetricCard label="Open" value={data.open} onClick={() => drillToIncidents(`status=${OPEN_BUCKET}`)} />
+        <MetricCard label="In Progress" value={data.inProgress} onClick={() => drillToIncidents('status=IN_PROGRESS')} />
+        <MetricCard label="Resolved Today" value={data.resolvedToday} onClick={() => drillToIncidents('status=RESOLVED')} />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
@@ -197,12 +204,16 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
         ) : (
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendQuery.data}>
+              <LineChart data={trendQuery.data}
+                onClick={(s) => {
+                  const date = (s as { activePayload?: { payload?: TrendPoint }[] })?.activePayload?.[0]?.payload?.date
+                  if (date) drillToIncidents(`createdFrom=${date}&createdTo=${date}`)
+                }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis />
                 <Tooltip />
-                <Line type="monotone" dataKey="count" stroke={COLORS[0]} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="count" stroke={COLORS[0]} strokeWidth={2} dot={{ r: 3, cursor: 'pointer' }} activeDot={{ r: 5, cursor: 'pointer' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -215,7 +226,13 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={statusChartData} dataKey="value" nameKey="name" outerRadius={70} label>
+                <Pie data={statusChartData} dataKey="value" nameKey="name" outerRadius={70} label
+                  onClick={(d) => {
+                    const p = (d as { statusParam?: string; payload?: { statusParam?: string } })
+                    const sp = p.statusParam ?? p.payload?.statusParam
+                    if (sp) drillToIncidents(`status=${sp}`)
+                  }}
+                  className="cursor-pointer">
                   {statusChartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
@@ -224,8 +241,10 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
             </ResponsiveContainer>
           </div>
         </div>
-        <BreakdownBarChart title="Tickets by category" query={categoryQuery} />
-        <BreakdownBarChart title="Tickets by priority" query={priorityQuery} />
+        <BreakdownBarChart title="Tickets by category" query={categoryQuery}
+          linkFor={(name) => `${INCIDENTS_BASE}?category=${encodeURIComponent(name)}`} />
+        <BreakdownBarChart title="Tickets by priority" query={priorityQuery}
+          linkFor={(name) => `${INCIDENTS_BASE}?priority=${encodeURIComponent(name)}`} />
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
@@ -243,8 +262,18 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
                 <YAxis allowDecimals={false} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="created" name="Created" fill={COLORS[0]} maxBarSize={40} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="closed" name="Closed" fill={COLORS[2]} maxBarSize={40} radius={[4, 4, 0, 0]} />
+                {[['created', 'Created', COLORS[0]], ['closed', 'Closed', COLORS[2]]].map(([key, name, fill]) => (
+                  <Bar key={key} dataKey={key} name={name} fill={fill} maxBarSize={40} radius={[4, 4, 0, 0]}
+                    className="cursor-pointer"
+                    onClick={(d) => {
+                      const month = (d as { payload?: MonthlyPoint }).payload?.month
+                      if (month) {
+                        const [y, m] = month.split('-').map(Number)
+                        const last = new Date(y, m, 0).toISOString().slice(0, 10)
+                        drillToIncidents(`createdFrom=${month}-01&createdTo=${last}`)
+                      }
+                    }} />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -266,14 +295,20 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Imported (legacy)', value: legacyQuery.data!.legacy },
-                      { name: 'Current system', value: legacyQuery.data!.current },
+                      { name: 'Imported (legacy)', value: legacyQuery.data!.legacy, legacy: 'true' },
+                      { name: 'Current system', value: legacyQuery.data!.current, legacy: 'false' },
                     ].filter((d) => d.value > 0)}
                     dataKey="value"
                     nameKey="name"
                     innerRadius={45}
                     outerRadius={70}
                     label
+                    className="cursor-pointer"
+                    onClick={(d) => {
+                      const p = (d as { legacy?: string; payload?: { legacy?: string } })
+                      const l = p.legacy ?? p.payload?.legacy
+                      if (l) drillToIncidents(`legacy=${l}`)
+                    }}
                   >
                     <Cell fill={COLORS[4]} />
                     <Cell fill={COLORS[0]} />
@@ -302,8 +337,18 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="legacy" name="Imported (legacy)" stackId="split" fill={COLORS[4]} />
-                  <Bar dataKey="current" name="Current" stackId="split" fill={COLORS[0]} />
+                  <Bar dataKey="legacy" name="Imported (legacy)" stackId="split" fill={COLORS[4]}
+                    className="cursor-pointer"
+                    onClick={(d) => {
+                      const c = (d as { payload?: { category?: string } }).payload?.category
+                      if (c) drillToIncidents(`category=${encodeURIComponent(c)}&legacy=true`)
+                    }} />
+                  <Bar dataKey="current" name="Current" stackId="split" fill={COLORS[0]}
+                    className="cursor-pointer"
+                    onClick={(d) => {
+                      const c = (d as { payload?: { category?: string } }).payload?.category
+                      if (c) drillToIncidents(`category=${encodeURIComponent(c)}&legacy=false`)
+                    }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -317,6 +362,7 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
 function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean }) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
+  const navigate = useNavigate()
   const [days, setDays] = useState(30)
 
   const trendQuery = useQuery<TrendPoint[]>({
@@ -334,8 +380,8 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
 
   const nonBreached = Math.max(0, data.total - data.breached)
   const chartData = [
-    { name: 'Compliant', value: nonBreached },
-    { name: 'Breached', value: data.breached },
+    { name: 'Compliant', value: nonBreached, breach: 'ON_TRACK,AT_RISK' },
+    { name: 'Breached', value: data.breached, breach: 'BREACHED' },
   ].filter((d) => d.value > 0)
 
   return (
@@ -381,7 +427,13 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
         <h3 className="mb-2 text-sm font-medium text-muted-foreground">SLA breaches</h3>
         <ResponsiveContainer width="100%" height="90%">
           <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={80} label>
+            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={80} label
+              className="cursor-pointer"
+              onClick={(d) => {
+                const p = (d as { breach?: string; payload?: { breach?: string } })
+                const b = p.breach ?? p.payload?.breach
+                if (b) navigate(`/dashboard/sla?breachStatus=${b}`)
+              }}>
               {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
             </Pie>
             <Tooltip />
@@ -393,7 +445,8 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
   )
 }
 
-function BreakdownBarChart({ title, query }: { title: string; query: { data?: AdHocQueryResponse; isLoading: boolean; error: Error | null; refetch: () => void } }) {
+function BreakdownBarChart({ title, query, linkFor }: { title: string; query: { data?: AdHocQueryResponse; isLoading: boolean; error: Error | null; refetch: () => void }; linkFor?: (name: string) => string }) {
+  const navigate = useNavigate()
   const chartData = (query.data?.rows ?? [])
     .map((r) => ({ name: r.group ?? 'Unassigned', count: r.count }))
     .filter((d) => d.count > 0)
@@ -415,7 +468,13 @@ function BreakdownBarChart({ title, query }: { title: string; query: { data?: Ad
               <XAxis dataKey="name" tick={{ fontSize: 12 }} />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" name="Tickets" fill={COLORS[0]} maxBarSize={60} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" name="Tickets" fill={COLORS[0]} maxBarSize={60} radius={[4, 4, 0, 0]}
+                className={linkFor ? 'cursor-pointer' : undefined}
+                onClick={(d) => {
+                  const name = (d as { payload?: { name?: string }; name?: string }).payload?.name
+                    ?? (d as { name?: string }).name
+                  if (linkFor && name) navigate(linkFor(name))
+                }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -425,6 +484,7 @@ function BreakdownBarChart({ title, query }: { title: string; query: { data?: Ad
 }
 
 function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
+  const navigate = useNavigate()
   if (data.length === 0) {
     return (
       <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm flex items-center justify-center">
@@ -435,16 +495,20 @@ function AgentWorkloadView({ data }: { data: AgentWorkload[] }) {
   return (
     <div className="h-96 rounded-xl border border-border bg-card p-4 shadow-sm">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+          onClick={(s) => {
+            const id = (s as { activePayload?: { payload?: AgentWorkload }[] })?.activePayload?.[0]?.payload?.agentId
+            if (id) navigate(`/dashboard/reports/agent-queue?agentId=${id}`)
+          }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="agentName" tick={{ fontSize: 12 }} />
           <YAxis />
           <Tooltip />
           <Legend />
-          <Bar dataKey="incidents" name="Incidents" stackId="work" fill={COLORS[0]} />
-          <Bar dataKey="serviceRequests" name="Requests" stackId="work" fill={COLORS[1]} />
-          <Bar dataKey="problems" name="Problems" stackId="work" fill={COLORS[4]} />
-          <Bar dataKey="changes" name="Changes" stackId="work" fill={COLORS[3]} />
+          <Bar dataKey="incidents" name="Incidents" stackId="work" fill={COLORS[0]} className="cursor-pointer" />
+          <Bar dataKey="serviceRequests" name="Requests" stackId="work" fill={COLORS[1]} className="cursor-pointer" />
+          <Bar dataKey="problems" name="Problems" stackId="work" fill={COLORS[4]} className="cursor-pointer" />
+          <Bar dataKey="changes" name="Changes" stackId="work" fill={COLORS[3]} className="cursor-pointer" />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -476,9 +540,12 @@ function SprintVelocityView({ data }: { data: SprintVelocity[] }) {
   )
 }
 
-function MetricCard({ label, value }: { label: string; value: number | string }) {
+function MetricCard({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 text-center shadow-sm">
+    <div
+      onClick={onClick}
+      className={`rounded-xl border border-border bg-card p-4 text-center shadow-sm ${onClick ? 'cursor-pointer transition hover:border-primary/50 hover:shadow' : ''}`}
+    >
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>
@@ -498,16 +565,34 @@ const TABS = [
   { key: 'approvals', label: 'Approval Backlog', endpoint: '/api/v1/reports/pending-approvals-backlog' },
 ]
 
+/** Which column drills where, per standard-report tab. */
+const STANDARD_LINK: Record<string, { key: string; linkFor: (v: string) => string }> = {
+  category: { key: 'group', linkFor: (v) => `${INCIDENTS_BASE}?category=${encodeURIComponent(v)}` },
+  catalog: { key: 'group', linkFor: (v) => `/dashboard/service-requests?catalogItem=${encodeURIComponent(v)}` },
+  slaPriority: { key: 'priority', linkFor: (v) => `/dashboard/sla?priority=${encodeURIComponent(v)}` },
+  approvals: { key: 'approver', linkFor: () => '/dashboard/service-requests?status=PENDING_APPROVAL' },
+}
+
 /** Generic table for the fixed-dimension standard reports (merged in from the old Standard Reports page). */
-function StandardTableView({ data }: { data: Record<string, unknown>[] }) {
+function StandardTableView({ data, linkKey, linkFor }: {
+  data: Record<string, unknown>[]
+  linkKey?: string
+  linkFor?: (value: string) => string
+}) {
   const columns = Object.keys(data[0] ?? {}).map((k) => ({
     key: k,
     header: k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()),
-    render: (r: Record<string, unknown>) => String(r[k] ?? '—'),
+    render: (r: Record<string, unknown>) => {
+      const v = String(r[k] ?? '—')
+      if (linkKey === k && linkFor && r[k] != null) {
+        return <Link to={linkFor(v)} className="font-medium text-primary hover:underline">{v}</Link>
+      }
+      return v
+    },
   }))
   return (
     <DataTable<Record<string, unknown>>
-      caption="Report results"
+      caption={linkKey ? 'Report results — click a row to see the tickets' : 'Report results'}
       columns={columns}
       data={data}
       getRowKey={(r) => JSON.stringify(r)}
@@ -592,7 +677,11 @@ export function ReportsDashboard() {
             {active === 'agent' && <AgentWorkloadView data={query.data as AgentWorkload[]} />}
             {active === 'sprint' && <SprintVelocityView data={query.data as SprintVelocity[]} />}
             {['category', 'catalog', 'slaPriority', 'approvals'].includes(active) && (
-              <StandardTableView data={query.data as Record<string, unknown>[]} />
+              <StandardTableView
+                data={query.data as Record<string, unknown>[]}
+                linkKey={STANDARD_LINK[active]?.key}
+                linkFor={STANDARD_LINK[active]?.linkFor}
+              />
             )}
           </>
         )}
@@ -610,6 +699,7 @@ interface WorkedTicket {
   status: string
   createdAt: string | null
   resolvedAt: string | null
+  workedAt: string | null
 }
 
 const WORKED_TYPE_LINK: Record<string, string> = {
@@ -619,7 +709,11 @@ const WORKED_TYPE_LINK: Record<string, string> = {
   CHANGE: '/dashboard/changes',
 }
 
-/** Part C: every ticket the agent worked, filterable by range/type/status. */
+/**
+ * Tickets the agent took an action on — status changes, assignments,
+ * escalations, task work — within the date range. Audit-driven, so work on
+ * older tickets still counts.
+ */
 function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
@@ -661,7 +755,7 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium text-muted-foreground">Worked Tickets</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Tickets I Worked On</h3>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {isAdmin && (
             <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectCls}>
@@ -697,6 +791,9 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
           )}
         </div>
       </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Tickets the agent took an action on (status change, assignment, escalation, task work) during the range — not filtered by when the ticket was created.
+      </p>
       {query.isLoading ? (
         <Loading compact />
       ) : query.error ? (
@@ -711,6 +808,7 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
             { key: 'type', header: 'Type', render: (r) => r.type.replace(/_/g, ' ') },
             { key: 'title', header: 'Title', render: (r) => r.title ?? '—' },
             { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+            { key: 'workedAt', header: 'Last Worked', render: (r) => r.workedAt ? formatDateTime(r.workedAt) : '—' },
             { key: 'createdAt', header: 'Created', render: (r) => formatDate(r.createdAt) },
             { key: 'resolvedAt', header: 'Resolved', render: (r) => r.resolvedAt ? formatDateTime(r.resolvedAt) : '—' },
           ]}

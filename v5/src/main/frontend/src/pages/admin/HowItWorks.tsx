@@ -91,8 +91,9 @@ export function HowItWorks() {
             Reporting is consolidated into three places:
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            <li><strong>Reports</strong> — pre-built views: Tickets Summary, SLA Compliance, Agent Workload, Worked Tickets, Sprint Velocity, plus Incidents by Category, Requests by Catalog, SLA by Priority, and Approval Backlog.</li>
-            <li><strong>Query Builder</strong> — build grouped custom reports, save them, and re-run them; results export to CSV/XLSX.</li>
+            <li><strong>Reports</strong> — pre-built views: Tickets Summary, SLA Compliance, Agent Workload, Tickets I Worked On, Sprint Velocity, plus Incidents by Category, Requests by Catalog, SLA by Priority, and Approval Backlog. Every chart slice, bar, metric card, and table row drills into the real filtered ticket list.</li>
+            <li><strong>Tickets I Worked On</strong> — audit-driven: shows tickets the agent took an action on (status change, assignment, escalation, task work) within the date range — regardless of when the ticket was created.</li>
+            <li><strong>Query Builder</strong> — Grouped mode counts tickets by a field; Detailed mode returns the actual matching rows with links, 50 per page. Clicking a grouped result drills into the detailed rows behind it. Filters accept names or ids (e.g. priority "Critical"), and the date range can target Created/Resolved/Closed/Decided dates. Includes starter templates (open-by-agent, SLA breaches by location, pending approvals &gt;3 days, and more) plus canned SLA compliance-by-agent/location reports — service-request SLA is attributed to the fulfiller.</li>
             <li><strong>Data Export</strong> (ADMIN/SUPER_ADMIN) — row-level CSV/XLSX pulls of Incidents, Service Requests, Problems, Changes, or SLA Instances, filtered by date range and status.</li>
           </ul>
           <p className="mt-2 text-sm text-muted-foreground">

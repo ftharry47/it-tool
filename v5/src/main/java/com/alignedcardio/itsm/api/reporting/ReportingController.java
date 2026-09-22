@@ -98,6 +98,20 @@ public class ReportingController {
         return reportingService.slaComplianceBreakdown(user.getOrgId());
     }
 
+    /**
+     * Canned SLA-compliance templates: compliance grouped by agent (incident/
+     * problem/change assignee, SR fulfillment-task assignees) or location.
+     * Query builder can't express this — SLA instances aren't queryable there.
+     */
+    @GetMapping("/sla-compliance/by-dimension")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public List<Map<String, Object>> slaComplianceByDimension(@AuthenticationPrincipal Jwt jwt,
+                                                              @RequestParam String entity,
+                                                              @RequestParam String dimension) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceByDimension(user.getOrgId(), entity, dimension);
+    }
+
     /** Agent view: SLA policies governing the caller's own work. */
     @GetMapping("/my-sla-targets")
     public List<Map<String, Object>> mySlaTargets(@AuthenticationPrincipal Jwt jwt) {

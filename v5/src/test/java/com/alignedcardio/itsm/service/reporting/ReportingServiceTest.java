@@ -60,7 +60,7 @@ class ReportingServiceTest {
         ReportingService service = new ReportingService(entityManager);
 
         AdHocQueryRequest request = new AdHocQueryRequest(
-                "unknown_entity", List.of(), null, null);
+                "unknown_entity", List.of(), null, null, null, null, null);
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
@@ -77,7 +77,7 @@ class ReportingServiceTest {
                 "incident",
                 List.of(new AdHocQueryFilter("injectionField", "eq", "P1")),
                 null,
-                null);
+                null, null, null, null);
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
@@ -97,7 +97,8 @@ class ReportingServiceTest {
                 "incident",
                 List.of(),
                 null,
-                new AdHocQueryRequest.DateRange(from, to));
+                new AdHocQueryRequest.DateRange(from, to, null),
+                null, null, null);
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
@@ -124,7 +125,8 @@ class ReportingServiceTest {
         when(typedQuery.setMaxResults(anyInt())).thenReturn(typedQuery);
         when(typedQuery.getResultList()).thenReturn(List.of(tuple));
         when(tuple.get(0)).thenReturn(Incident.Status.NEW);
-        when(tuple.get(1)).thenReturn(5L);
+        when(tuple.get(1)).thenReturn(Incident.Status.NEW); // groupKey — raw value for drill-down
+        when(tuple.get(2)).thenReturn(5L);
 
         ReportingService service = new ReportingService(entityManager);
         UUID orgId = UUID.randomUUID();
@@ -133,7 +135,7 @@ class ReportingServiceTest {
                 "incident",
                 List.of(new AdHocQueryFilter("status", "eq", "NEW")),
                 "status",
-                null);
+                null, null, null, null);
 
         AdHocQueryResponse response = service.adHocQuery(orgId, request, null);
 
@@ -144,6 +146,7 @@ class ReportingServiceTest {
 
         Map<String, Object> row = response.rows().get(0);
         assertEquals(Incident.Status.NEW.name(), row.get("group"));
+        assertEquals(Incident.Status.NEW.name(), row.get("groupKey"));
         assertEquals(5L, row.get("count"));
 
         verify(criteriaBuilder).equal(path, orgId);
@@ -179,13 +182,13 @@ class ReportingServiceTest {
         UUID orgId = UUID.randomUUID();
         UUID agentId = UUID.randomUUID();
 
-        service.adHocQuery(orgId, new AdHocQueryRequest("problem", List.of(), null, null), agentId);
+        service.adHocQuery(orgId, new AdHocQueryRequest("problem", List.of(), null, null, null, null, null), agentId);
         verify(criteriaBuilder).equal(path, agentId);
         verify(criteriaQuery).from(Problem.class);
 
         clearInvocations(criteriaBuilder, criteriaQuery);
 
-        service.adHocQuery(orgId, new AdHocQueryRequest("change", List.of(), null, null), agentId);
+        service.adHocQuery(orgId, new AdHocQueryRequest("change", List.of(), null, null, null, null, null), agentId);
         verify(criteriaBuilder).equal(path, agentId);
         verify(criteriaQuery).from(ChangeRequest.class);
     }
@@ -302,5 +305,201 @@ class ReportingServiceTest {
 
         assertNotNull(result);
         verify(typedQuery, never()).setParameter(anyString(), isNull());
+    }
+
+    /**
+     * Detailed mode: real rows with a working detailUrl, plus a total count —
+     * previously only aggregate counts were possible.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void detailedQueryReturnsRealRowsWithDetailUrlAndTotal() {
+        EntityManager em = mock(EntityManager.class, Mockito.RETURNS_DEEP_STUBS);
+
+        // Count query vs select query resolve to distinct CriteriaQuery mocks.
+        CriteriaQuery<Long> countQ = em.getCriteriaBuilder().createQuery(Long.class);
+        CriteriaQuery<Object> selectQ = em.getCriteriaBuilder().createQuery(Object.class);
+        TypedQuery<Long> countTyped = mock(TypedQuery.class);
+        TypedQuery<Object> selectTyped = mock(TypedQuery.class);
+        when(em.createQuery(countQ)).thenReturn(countTyped);
+        when(em.createQuery(selectQ)).thenReturn(selectTyped);
+        when(countTyped.getSingleResult()).thenReturn(7L);
+        when(selectTyped.setFirstResult(anyInt())).thenReturn(selectTyped);
+        when(selectTyped.setMaxResults(anyInt())).thenReturn(selectTyped);
+
+        // Field type for the status filter — deep stubs return null otherwise.
+        Root<?> selectRoot = selectQ.from(Incident.class);
+        Root<?> countRoot = countQ.from(Incident.class);
+        Path<Object> anyPath = mock(Path.class);
+        when(selectRoot.get(anyString())).thenReturn(anyPath);
+        when(countRoot.get(anyString())).thenReturn(anyPath);
+        when(anyPath.getJavaType()).thenAnswer(inv -> String.class);
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setNumber(42L);
+        incident.setTitle("VPN drops");
+        incident.setStatus(Incident.Status.IN_PROGRESS);
+        incident.setCreatedAt(OffsetDateTime.now());
+        when(selectTyped.getResultList()).thenReturn(List.of(incident));
+
+        ReportingService service = new ReportingService(em);
+        AdHocQueryRequest request = new AdHocQueryRequest(
+                "incident",
+                List.of(new AdHocQueryFilter("status", "eq", "IN_PROGRESS")),
+                null, null, true, 0, 50);
+
+        AdHocQueryResponse response = service.adHocQuery(UUID.randomUUID(), request, null);
+
+        assertEquals(7L, response.total());
+        assertEquals(0, response.page());
+        assertEquals(1, response.rows().size());
+        Map<String, Object> row = response.rows().get(0);
+        assertEquals("INC-42", row.get("ref"));
+        assertEquals("VPN drops", row.get("title"));
+        assertEquals("IN_PROGRESS", row.get("status"));
+        assertEquals("/dashboard/incidents/" + incident.getId(), row.get("detailUrl"));
+        verify(selectTyped).setFirstResult(0);
+        verify(selectTyped).setMaxResults(50);
+    }
+
+    /**
+     * Entity-valued filters accept display names ("Critical") not just UUIDs —
+     * required for templates like "Open Critical Incidents".
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void entityFilterAcceptsNameNotJustUuid() {
+        EntityManager em = mock(EntityManager.class, Mockito.RETURNS_DEEP_STUBS);
+        CriteriaQuery<Object> selectQ = em.getCriteriaBuilder().createQuery(Object.class);
+        TypedQuery<Object> selectTyped = mock(TypedQuery.class);
+        when(em.createQuery(any(CriteriaQuery.class))).thenReturn(selectTyped);
+        when(selectTyped.setFirstResult(anyInt())).thenReturn(selectTyped);
+        when(selectTyped.setMaxResults(anyInt())).thenReturn(selectTyped);
+        when(selectTyped.getResultList()).thenReturn(List.of());
+        when(selectTyped.getSingleResult()).thenReturn(0L);
+
+        // The "priority" filter resolves to a Priority entity type → name matching.
+        CriteriaQuery<Long> countQ = em.getCriteriaBuilder().createQuery(Long.class);
+        Root<?> selectRoot = selectQ.from(Incident.class);
+        Root<?> countRoot = countQ.from(Incident.class);
+        Path<Object> anyPath = mock(Path.class);
+        when(selectRoot.get(anyString())).thenReturn(anyPath);
+        when(countRoot.get(anyString())).thenReturn(anyPath);
+        when(anyPath.getJavaType()).thenReturn((Class) com.alignedcardio.itsm.entity.Priority.class);
+        lenient().when(anyPath.get(anyString())).thenReturn(anyPath);
+        lenient().doReturn(anyPath).when(anyPath).as(any(Class.class));
+
+        ReportingService service = new ReportingService(em);
+        service.adHocQuery(UUID.randomUUID(), new AdHocQueryRequest(
+                "incident",
+                List.of(new AdHocQueryFilter("priority", "eq", "Critical")),
+                null, null, true, 0, 50), null);
+
+        // Name-based match: lower(name) = 'critical' — no UUID lookup attempted.
+        verify(em.getCriteriaBuilder(), atLeastOnce()).lower(any());
+        verify(em, never()).getReference(eq(com.alignedcardio.itsm.entity.Priority.class), any());
+    }
+
+    /**
+     * "Tickets I Worked On" is audit-driven: a ticket the agent acted on shows
+     * up even when it was created outside the range.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void workedTicketsSurfaceOldTicketsWorkedInRange() {
+        EntityManager em = mock(EntityManager.class);
+        TypedQuery<Tuple> auditQuery = mock(TypedQuery.class);
+        TypedQuery<Incident> incidentQuery = mock(TypedQuery.class);
+        when(em.createQuery(contains("FROM AuditLog"), eq(Tuple.class))).thenReturn(auditQuery);
+        when(em.createQuery(contains("FROM Incident i"), eq(Incident.class))).thenReturn(incidentQuery);
+        when(auditQuery.setParameter(anyString(), any())).thenReturn(auditQuery);
+        when(incidentQuery.setParameter(anyString(), any())).thenReturn(incidentQuery);
+
+        UUID agentId = UUID.randomUUID();
+        UUID incidentId = UUID.randomUUID();
+        OffsetDateTime workedAt = OffsetDateTime.now().minusDays(2);
+        Tuple t = mock(Tuple.class);
+        when(t.get(0, String.class)).thenReturn("INCIDENT");
+        when(t.get(1, UUID.class)).thenReturn(incidentId);
+        when(t.get(2, OffsetDateTime.class)).thenReturn(workedAt);
+        when(auditQuery.getResultList()).thenReturn(List.of(t));
+
+        Incident old = new Incident();
+        old.setId(incidentId);
+        old.setNumber(9L);
+        old.setTitle("Old ticket, recently worked");
+        old.setStatus(Incident.Status.IN_PROGRESS);
+        old.setCreatedAt(OffsetDateTime.now().minusMonths(6)); // created long before the range
+        when(incidentQuery.getResultList()).thenReturn(List.of(old));
+
+        ReportingService service = new ReportingService(em);
+        OffsetDateTime from = OffsetDateTime.now().minusDays(7);
+        OffsetDateTime to = OffsetDateTime.now();
+        List<Map<String, Object>> rows = service.agentPerformanceTickets(
+                UUID.randomUUID(), agentId, from, to, null, null);
+
+        assertEquals(1, rows.size());
+        Map<String, Object> row = rows.get(0);
+        assertEquals("INCIDENT", row.get("type"));
+        assertEquals("INC-9", row.get("number"));
+        assertEquals(workedAt, row.get("workedAt"));
+        // The audit query — not a createdAt filter — decided inclusion.
+        verify(auditQuery).setParameter("from", from);
+        verify(auditQuery).setParameter("agent", agentId);
+    }
+
+    /** SLA compliance grouped by agent, with fulfiller attribution for SRs. */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void slaComplianceByDimensionGroupsByAgent() {
+        EntityManager em = mock(EntityManager.class);
+        TypedQuery<SlaInstance> instanceQuery = mock(TypedQuery.class);
+        when(em.createQuery(contains("FROM SlaInstance"), eq(SlaInstance.class))).thenReturn(instanceQuery);
+        when(instanceQuery.setParameter(anyString(), any())).thenReturn(instanceQuery);
+
+        com.alignedcardio.itsm.entity.AppUser alice = new com.alignedcardio.itsm.entity.AppUser();
+        alice.setDisplayName("Alice Agent");
+        Incident breached = new Incident();
+        breached.setAssignee(alice);
+        breached.setStatus(Incident.Status.IN_PROGRESS);
+        Incident ok = new Incident();
+        ok.setAssignee(alice);
+        ok.setStatus(Incident.Status.IN_PROGRESS);
+
+        SlaInstance siBreached = new SlaInstance();
+        siBreached.setIncident(breached);
+        siBreached.setResolutionDueAt(OffsetDateTime.now().minusHours(1));
+        SlaInstance siOk = new SlaInstance();
+        siOk.setIncident(ok);
+        siOk.setResolutionDueAt(OffsetDateTime.now().plusDays(1));
+        when(instanceQuery.getResultList()).thenReturn(List.of(siBreached, siOk));
+
+        ReportingService service = new ReportingService(em);
+        List<Map<String, Object>> rows = service.slaComplianceByDimension(
+                UUID.randomUUID(), "incident", "agent");
+
+        assertEquals(1, rows.size());
+        assertEquals("Alice Agent", rows.get(0).get("name"));
+        assertEquals(2L, rows.get(0).get("total"));
+        assertEquals(1L, rows.get(0).get("breached"));
+        assertEquals(50.0, rows.get(0).get("compliancePercent"));
+    }
+
+    /** Cancelled SRs are excluded from the SLA dimension report. */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void slaComplianceByDimensionExcludesCancelledRequests() {
+        EntityManager em = mock(EntityManager.class);
+        TypedQuery<SlaInstance> instanceQuery = mock(TypedQuery.class);
+        when(em.createQuery(contains("FROM SlaInstance"), eq(SlaInstance.class))).thenReturn(instanceQuery);
+        when(instanceQuery.setParameter(anyString(), any())).thenReturn(instanceQuery);
+        when(instanceQuery.getResultList()).thenReturn(List.of());
+
+        ReportingService service = new ReportingService(em);
+        service.slaComplianceByDimension(UUID.randomUUID(), "service_request", "agent");
+
+        verify(instanceQuery).setParameter("cancelled",
+                com.alignedcardio.itsm.entity.ServiceRequest.Status.CANCELLED);
     }
 }

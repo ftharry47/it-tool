@@ -99,10 +99,69 @@ public class ReportingService {
             }
         }
 
+        if (request.isDetailed()) {
+            return detailedQuery(orgId, entityClass, allowedFields, request, mineUserId);
+        }
+
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> cq = cb.createTupleQuery();
         Root<?> root = cq.from(entityClass);
+        cq.where(buildQueryPredicates(cb, root, orgId, request, mineUserId).toArray(new Predicate[0]));
 
+        boolean hasGroupBy = request.groupBy() != null && !request.groupBy().isBlank();
+
+        Expression<?> keyExpr = null;
+        if (hasGroupBy) {
+            Path<?> rawPath = root.get(request.groupBy());
+            Expression<?> groupExpr;
+            if (BaseEntity.class.isAssignableFrom(rawPath.getJavaType())) {
+                Join<?, ?> join = root.join(request.groupBy(), JoinType.LEFT);
+                // AppUser has displayName, not name.
+                Path<String> namePath = AppUser.class.isAssignableFrom(rawPath.getJavaType())
+                        ? join.get("displayName")
+                        : join.get("name");
+                groupExpr = cb.coalesce(namePath, cb.literal("Unassigned"));
+                // The raw id is the drill-down key — a display name can't be
+                // re-filtered on an entity-valued field.
+                keyExpr = join.get("id");
+            } else {
+                groupExpr = rawPath;
+                keyExpr = rawPath;
+            }
+            cq.groupBy(groupExpr, keyExpr);
+            cq.multiselect(groupExpr, keyExpr, cb.count(root));
+        } else {
+            cq.multiselect(cb.count(root));
+        }
+
+        TypedQuery<Tuple> query = entityManager.createQuery(cq);
+        if (hasGroupBy) {
+            query.setMaxResults(MAX_RESULT_ROWS);
+        }
+
+        List<Tuple> tuples = query.getResultList();
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Tuple t : tuples) {
+            Map<String, Object> row = new HashMap<>();
+            if (hasGroupBy) {
+                row.put("group", formatGroupValue(t.get(0)));
+                Object key = t.get(1);
+                row.put("groupKey", key == null ? null : key.toString());
+                row.put("count", t.get(2));
+            } else {
+                row.put("group", null);
+                row.put("count", t.get(0));
+            }
+            rows.add(row);
+        }
+
+        return new AdHocQueryResponse(orgId, request.entity(), request.groupBy(), rows);
+    }
+
+    /** Shared where-clause for grouped and detailed modes. */
+    private List<Predicate> buildQueryPredicates(CriteriaBuilder cb, Root<?> root, UUID orgId,
+                                               AdHocQueryRequest request, UUID mineUserId) {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("orgId"), orgId));
         predicates.add(cb.isNull(root.get("deletedAt")));
@@ -123,51 +182,122 @@ public class ReportingService {
 
         if (request.filters() != null) {
             for (AdHocQueryFilter filter : request.filters()) {
-                predicates.add(buildPredicate(cb, root, filter, entityClass));
+                predicates.add(buildPredicate(cb, root, filter, ENTITY_WHITELIST.get(request.entity())));
             }
         }
+        return predicates;
+    }
 
-        cq.where(predicates.toArray(new Predicate[0]));
+    /**
+     * Detailed mode: the same predicates, but returning real entity rows with
+     * display-ready fields and a detailUrl for click-through. Paginated.
+     */
+    private AdHocQueryResponse detailedQuery(UUID orgId, Class<?> entityClass, Set<String> allowedFields,
+                                             AdHocQueryRequest request, UUID mineUserId) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
-        boolean hasGroupBy = request.groupBy() != null && !request.groupBy().isBlank();
+        CriteriaQuery<Long> countQ = cb.createQuery(Long.class);
+        Root<?> countRoot = countQ.from(entityClass);
+        countQ.select(cb.count(countRoot))
+                .where(buildQueryPredicates(cb, countRoot, orgId, request, mineUserId).toArray(new Predicate[0]));
+        long total = entityManager.createQuery(countQ).getSingleResult();
 
-        if (hasGroupBy) {
-            Path<?> rawPath = root.get(request.groupBy());
-            Expression<?> groupExpr;
-            if (BaseEntity.class.isAssignableFrom(rawPath.getJavaType())) {
-                Join<?, ?> join = root.join(request.groupBy(), JoinType.LEFT);
-                Path<String> namePath = join.get("name");
-                groupExpr = cb.coalesce(namePath, cb.literal("Unassigned"));
-            } else {
-                groupExpr = rawPath;
-            }
-            cq.groupBy(groupExpr);
-            cq.multiselect(groupExpr, cb.count(root));
-        } else {
-            cq.multiselect(cb.count(root));
-        }
+        CriteriaQuery<Object> selectQ = cb.createQuery(Object.class);
+        Root<?> root = selectQ.from(entityClass);
+        selectQ.select(root)
+                .where(buildQueryPredicates(cb, root, orgId, request, mineUserId).toArray(new Predicate[0]))
+                .orderBy(cb.desc(root.get("createdAt")));
 
-        TypedQuery<Tuple> query = entityManager.createQuery(cq);
-        if (hasGroupBy) {
-            query.setMaxResults(MAX_RESULT_ROWS);
-        }
-
-        List<Tuple> tuples = query.getResultList();
+        int page = request.pageOrDefault();
+        int pageSize = request.pageSizeOrDefault();
+        List<?> entities = entityManager.createQuery(selectQ)
+                .setFirstResult(page * pageSize)
+                .setMaxResults(pageSize)
+                .getResultList();
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Tuple t : tuples) {
-            Map<String, Object> row = new HashMap<>();
-            if (hasGroupBy) {
-                row.put("group", formatGroupValue(t.get(0)));
-                row.put("count", t.get(1));
-            } else {
-                row.put("group", null);
-                row.put("count", t.get(0));
-            }
-            rows.add(row);
+        for (Object entity : entities) {
+            rows.add(detailRow(request.entity(), entity));
         }
+        return new AdHocQueryResponse(orgId, request.entity(), request.groupBy(), rows,
+                total, page, pageSize);
+    }
 
-        return new AdHocQueryResponse(orgId, request.entity(), request.groupBy(), rows);
+    /** Display-ready row for detailed-mode results, with a click-through URL. */
+    private Map<String, Object> detailRow(String entity, Object o) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        switch (entity) {
+            case "incident" -> {
+                Incident i = (Incident) o;
+                r.put("id", i.getId());
+                r.put("ref", "INC-" + i.getNumber());
+                r.put("title", i.getTitle());
+                r.put("status", i.getStatus() != null ? i.getStatus().name() : "");
+                r.put("priority", i.getPriority() != null ? i.getPriority().getName() : "");
+                r.put("category", i.getCategory() != null ? i.getCategory().getName() : "");
+                r.put("location", i.getLocation() != null ? i.getLocation().getName() : "");
+                r.put("assignee", i.getAssignee() != null ? i.getAssignee().getDisplayName() : "");
+                r.put("requester", i.getRequester() != null ? i.getRequester().getDisplayName() : "");
+                r.put("createdAt", i.getCreatedAt());
+                r.put("resolvedAt", i.getResolvedAt());
+                r.put("detailUrl", "/dashboard/incidents/" + i.getId());
+            }
+            case "service_request" -> {
+                ServiceRequest s = (ServiceRequest) o;
+                r.put("id", s.getId());
+                r.put("ref", s.getNumber());
+                r.put("title", s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request");
+                r.put("status", s.getStatus() != null ? s.getStatus().name() : "");
+                r.put("priority", s.getPriority() != null ? s.getPriority().getName() : "");
+                r.put("location", s.getLocation() != null ? s.getLocation().getName() : "");
+                r.put("requester", s.getRequester() != null ? s.getRequester().getDisplayName() : "");
+                r.put("approver", s.getApprover() != null ? s.getApprover().getDisplayName() : "");
+                r.put("createdAt", s.getCreatedAt());
+                r.put("decidedAt", s.getDecidedAt());
+                r.put("detailUrl", "/dashboard/service-requests/" + s.getId());
+            }
+            case "problem" -> {
+                Problem p = (Problem) o;
+                r.put("id", p.getId());
+                r.put("ref", p.getNumber());
+                r.put("title", p.getTitle());
+                r.put("status", p.getStatus() != null ? p.getStatus().name() : "");
+                r.put("assignee", p.getAssignee() != null ? p.getAssignee().getDisplayName() : "");
+                r.put("createdAt", p.getCreatedAt());
+                r.put("resolvedAt", p.getResolvedAt());
+                r.put("detailUrl", "/dashboard/problems/" + p.getId());
+            }
+            case "change" -> {
+                ChangeRequest c = (ChangeRequest) o;
+                r.put("id", c.getId());
+                r.put("ref", c.getNumber());
+                r.put("title", c.getTitle());
+                r.put("status", c.getStatus() != null ? c.getStatus().name() : "");
+                r.put("changeType", c.getChangeType() != null ? c.getChangeType().name() : "");
+                r.put("risk", c.getRisk() != null ? c.getRisk().name() : "");
+                r.put("assignee", c.getAssignee() != null ? c.getAssignee().getDisplayName() : "");
+                r.put("requestedBy", c.getRequestedBy() != null ? c.getRequestedBy().getDisplayName() : "");
+                r.put("createdAt", c.getCreatedAt());
+                r.put("detailUrl", "/dashboard/changes/" + c.getId());
+            }
+            case "issue" -> {
+                Issue i = (Issue) o;
+                r.put("id", i.getId());
+                r.put("ref", i.getKey());
+                r.put("title", i.getSummary());
+                r.put("status", i.getWorkflowStatus() != null ? i.getWorkflowStatus().getName() : "");
+                r.put("priority", i.getPriority() != null ? i.getPriority().name() : "");
+                r.put("assignee", i.getAssignee() != null ? i.getAssignee().getDisplayName() : "");
+                r.put("reporter", i.getReporter() != null ? i.getReporter().getDisplayName() : "");
+                r.put("createdAt", i.getCreatedAt());
+                r.put("detailUrl", i.getProject() != null
+                        ? "/dashboard/projects/" + i.getProject().getId() + "/issues/" + i.getId()
+                        : "/dashboard/projects");
+            }
+            default -> {
+            }
+        }
+        return r;
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -756,88 +886,187 @@ public class ReportingService {
     }
 
     /**
-     * Full worked-ticket list for an agent over a period — incidents/problems/
-     * changes by assignee+created range, service requests via fulfillment-task
-     * assignment in range. Same "worked" definition as the monthly report.
+     * SLA compliance grouped by a ticket dimension — agent (incident/problem/
+     * change assignee, or service-request fulfillment-task assignees) or
+     * location (incident/request location). Cancelled requests are excluded.
+     * Powers the canned SLA-compliance templates; the generic query builder
+     * can't express this because SLA instances aren't a whitelisted entity.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> slaComplianceByDimension(UUID orgId, String entity, String dimension) {
+        if (!Set.of("incident", "service_request", "problem", "change").contains(entity)) {
+            throw new IllegalArgumentException("Unknown entity for SLA dimension report: " + entity);
+        }
+        if (!Set.of("agent", "location").contains(dimension)) {
+            throw new IllegalArgumentException("Unknown dimension: " + dimension);
+        }
+        String fk = switch (entity) {
+            case "incident" -> "incident";
+            case "service_request" -> "serviceRequest";
+            case "problem" -> "problem";
+            default -> "changeRequest";
+        };
+
+        String jpql = "SELECT si FROM SlaInstance si WHERE si.orgId = :org AND si." + fk + " IS NOT NULL";
+        if ("service_request".equals(entity)) {
+            jpql += " AND si.serviceRequest.status <> :cancelled";
+        }
+        TypedQuery<SlaInstance> q = entityManager.createQuery(jpql, SlaInstance.class)
+                .setParameter("org", orgId);
+        if ("service_request".equals(entity)) {
+            q.setParameter("cancelled", ServiceRequest.Status.CANCELLED);
+        }
+        List<SlaInstance> instances = q.getResultList();
+
+        // SR agent attribution: distinct fulfillment-task assignees per request.
+        Map<UUID, List<String>> taskOwners = new HashMap<>();
+        if ("service_request".equals(entity) && "agent".equals(dimension)) {
+            List<UUID> ids = instances.stream()
+                    .map(si -> si.getServiceRequest().getId()).toList();
+            if (!ids.isEmpty()) {
+                for (Tuple t : entityManager.createQuery(
+                        "SELECT DISTINCT ft.serviceRequest.id, a.displayName FROM FulfillmentTask ft " +
+                                "JOIN ft.assignee a WHERE ft.serviceRequest.id IN :ids AND ft.deletedAt IS NULL",
+                        Tuple.class)
+                        .setParameter("ids", ids).getResultList()) {
+                    taskOwners.computeIfAbsent(t.get(0, UUID.class), k -> new ArrayList<>())
+                            .add(t.get(1, String.class));
+                }
+            }
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        Map<String, long[]> byName = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (SlaInstance si : instances) {
+            boolean breached = isBreachedAtDue(si.getResolutionDueAt(), si.getResolutionMetAt(), now);
+            List<String> names = switch (entity) {
+                case "incident" -> "agent".equals(dimension)
+                        ? List.of(si.getIncident().getAssignee() != null
+                                ? si.getIncident().getAssignee().getDisplayName() : "Unassigned")
+                        : List.of(si.getIncident().getLocation() != null
+                                ? si.getIncident().getLocation().getName() : "No location");
+                case "service_request" -> "agent".equals(dimension)
+                        ? taskOwners.getOrDefault(si.getServiceRequest().getId(), List.of("Unassigned"))
+                        : List.of(si.getServiceRequest().getLocation() != null
+                                ? si.getServiceRequest().getLocation().getName() : "No location");
+                case "problem" -> "agent".equals(dimension)
+                        ? List.of(si.getProblem().getAssignee() != null
+                                ? si.getProblem().getAssignee().getDisplayName() : "Unassigned")
+                        : List.of("No location");
+                default -> "agent".equals(dimension)
+                        ? List.of(si.getChangeRequest().getAssignee() != null
+                                ? si.getChangeRequest().getAssignee().getDisplayName() : "Unassigned")
+                        : List.of("No location");
+            };
+            for (String name : names) {
+                long[] counts = byName.computeIfAbsent(name, k -> new long[2]);
+                counts[0]++;
+                if (breached) counts[1]++;
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map.Entry<String, long[]> e : byName.entrySet()) {
+            long total = e.getValue()[0];
+            long breached = e.getValue()[1];
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("name", e.getKey());
+            r.put("total", total);
+            r.put("breached", breached);
+            r.put("compliancePercent", Math.round((total - breached) * 10000.0 / total) / 100.0);
+            rows.add(r);
+        }
+        return rows;
+    }
+
+    /**
+     * "Tickets I Worked On": tickets the agent took an action on within the
+     * range — status changes, assignments, escalations, task work — sourced
+     * from audit_log (actorUserId). This is the true "worked" definition: the
+     * previous version filtered by ticket creation date, so anything worked on
+     * outside its creation window silently disappeared.
      */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> agentPerformanceTickets(UUID orgId, UUID agentId,
                                                              OffsetDateTime from, OffsetDateTime to,
                                                              String entityType, String status) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        boolean want = entityType == null || entityType.isBlank() ? true : false;
+        // audit entityType → lower-case report entity key.
+        Map<String, String> auditTypes = Map.of(
+                "INCIDENT", "incident",
+                "SERVICE_REQUEST", "service_request",
+                "PROBLEM", "problem",
+                "CHANGE_REQUEST", "change");
+        List<String> wanted = auditTypes.entrySet().stream()
+                .filter(e -> entityType == null || entityType.isBlank() || entityType.equals(e.getValue()))
+                .map(Map.Entry::getKey).toList();
 
-        if (want || "incident".equals(entityType)) {
-            for (Incident i : incidentRepositoryFilter(orgId, agentId, from, to, status)) {
-                out.add(workedRow("INCIDENT", i.getId(), "INC-" + i.getNumber(), i.getTitle(),
-                        i.getStatus().name(), i.getCreatedAt(), i.getResolvedAt()));
-            }
+        // Distinct tickets the agent acted on in range + when they last acted.
+        List<Tuple> auditRows = entityManager.createQuery(
+                "SELECT a.entityType, a.entityId, MAX(a.createdAt) FROM AuditLog a " +
+                        "WHERE a.orgId = :org AND a.actorUserId = :agent " +
+                        "AND a.createdAt >= :from AND a.createdAt < :to " +
+                        "AND a.entityType IN :types " +
+                        "GROUP BY a.entityType, a.entityId", Tuple.class)
+                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("from", from).setParameter("to", to)
+                .setParameter("types", wanted)
+                .getResultList();
+
+        Map<String, Map<UUID, OffsetDateTime>> idsByType = new HashMap<>();
+        for (Tuple t : auditRows) {
+            String type = auditTypes.get(t.get(0, String.class));
+            if (type == null) continue;
+            idsByType.computeIfAbsent(type, k -> new HashMap<>())
+                    .put(t.get(1, UUID.class), t.get(2, OffsetDateTime.class));
         }
-        if (want || "service_request".equals(entityType)) {
-            List<ServiceRequest> srs = entityManager.createQuery(
-                    "SELECT DISTINCT sr FROM FulfillmentTask ft JOIN ft.assignee a JOIN ft.serviceRequest sr " +
-                            "WHERE sr.orgId = :org AND sr.deletedAt IS NULL AND ft.deletedAt IS NULL " +
-                            "AND a.id = :agent AND ft.assignedAt >= :from AND ft.assignedAt < :to " +
-                            "ORDER BY sr.createdAt DESC", ServiceRequest.class)
-                    .setParameter("org", orgId).setParameter("agent", agentId)
-                    .setParameter("from", from).setParameter("to", to).getResultList();
-            for (ServiceRequest s : srs) {
-                if (status != null && !status.isBlank() && !s.getStatus().name().equals(status)) continue;
-                out.add(workedRow("SERVICE_REQUEST", s.getId(), s.getNumber(),
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        addWorked(out, "INCIDENT", idsByType.get("incident"), status,
+                "SELECT i FROM Incident i WHERE i.orgId = :org AND i.deletedAt IS NULL AND i.id IN :ids",
+                Incident.class, orgId,
+                i -> workedRow("INCIDENT", i.getId(), "INC-" + i.getNumber(), i.getTitle(),
+                        i.getStatus().name(), i.getCreatedAt(), i.getResolvedAt()));
+        addWorked(out, "SERVICE_REQUEST", idsByType.get("service_request"), status,
+                "SELECT s FROM ServiceRequest s WHERE s.orgId = :org AND s.deletedAt IS NULL AND s.id IN :ids",
+                ServiceRequest.class, orgId,
+                s -> workedRow("SERVICE_REQUEST", s.getId(), s.getNumber(),
                         s.getCatalogItem() != null ? s.getCatalogItem().getName() : "Service request",
                         s.getStatus().name(), s.getCreatedAt(), null));
-            }
-        }
-        if (want || "problem".equals(entityType)) {
-            for (Problem p : problemListFor(orgId, agentId, from, to, status)) {
-                out.add(workedRow("PROBLEM", p.getId(), p.getNumber(), p.getTitle(),
+        addWorked(out, "PROBLEM", idsByType.get("problem"), status,
+                "SELECT p FROM Problem p WHERE p.orgId = :org AND p.deletedAt IS NULL AND p.id IN :ids",
+                Problem.class, orgId,
+                p -> workedRow("PROBLEM", p.getId(), p.getNumber(), p.getTitle(),
                         p.getStatus().name(), p.getCreatedAt(), p.getResolvedAt()));
-            }
-        }
-        if (want || "change".equals(entityType)) {
-            for (ChangeRequest c : changeListFor(orgId, agentId, from, to, status)) {
-                out.add(workedRow("CHANGE", c.getId(), c.getNumber(), c.getTitle(),
+        addWorked(out, "CHANGE", idsByType.get("change"), status,
+                "SELECT c FROM ChangeRequest c WHERE c.orgId = :org AND c.deletedAt IS NULL AND c.id IN :ids",
+                ChangeRequest.class, orgId,
+                c -> workedRow("CHANGE", c.getId(), c.getNumber(), c.getTitle(),
                         c.getStatus().name(), c.getCreatedAt(), null));
-            }
-        }
-        out.sort((a, b) -> ((OffsetDateTime) b.get("createdAt")).compareTo((OffsetDateTime) a.get("createdAt")));
+
+        out.sort((a, b) -> {
+            OffsetDateTime wa = (OffsetDateTime) a.get("workedAt");
+            OffsetDateTime wb = (OffsetDateTime) b.get("workedAt");
+            return wb.compareTo(wa);
+        });
         return out;
     }
 
-    private List<Incident> incidentRepositoryFilter(UUID orgId, UUID agentId,
-                                                    OffsetDateTime from, OffsetDateTime to, String status) {
-        List<Incident> all = entityManager.createQuery(
-                "SELECT i FROM Incident i WHERE i.orgId = :org AND i.deletedAt IS NULL " +
-                        "AND i.assignee.id = :agent AND i.createdAt >= :from AND i.createdAt < :to " +
-                        "ORDER BY i.createdAt DESC", Incident.class)
-                .setParameter("org", orgId).setParameter("agent", agentId)
-                .setParameter("from", from).setParameter("to", to).getResultList();
-        return status == null || status.isBlank() ? all
-                : all.stream().filter(i -> i.getStatus().name().equals(status)).toList();
+    private interface WorkedRowMapper<T> {
+        Map<String, Object> map(T entity);
     }
 
-    private List<Problem> problemListFor(UUID orgId, UUID agentId,
-                                         OffsetDateTime from, OffsetDateTime to, String status) {
-        List<Problem> all = entityManager.createQuery(
-                "SELECT p FROM Problem p WHERE p.orgId = :org AND p.deletedAt IS NULL " +
-                        "AND p.assignee.id = :agent AND p.createdAt >= :from AND p.createdAt < :to " +
-                        "ORDER BY p.createdAt DESC", Problem.class)
-                .setParameter("org", orgId).setParameter("agent", agentId)
-                .setParameter("from", from).setParameter("to", to).getResultList();
-        return status == null || status.isBlank() ? all
-                : all.stream().filter(p -> p.getStatus().name().equals(status)).toList();
-    }
-
-    private List<ChangeRequest> changeListFor(UUID orgId, UUID agentId,
-                                              OffsetDateTime from, OffsetDateTime to, String status) {
-        List<ChangeRequest> all = entityManager.createQuery(
-                "SELECT c FROM ChangeRequest c WHERE c.orgId = :org AND c.deletedAt IS NULL " +
-                        "AND c.assignee.id = :agent AND c.createdAt >= :from AND c.createdAt < :to " +
-                        "ORDER BY c.createdAt DESC", ChangeRequest.class)
-                .setParameter("org", orgId).setParameter("agent", agentId)
-                .setParameter("from", from).setParameter("to", to).getResultList();
-        return status == null || status.isBlank() ? all
-                : all.stream().filter(c -> c.getStatus().name().equals(status)).toList();
+    private <T> void addWorked(List<Map<String, Object>> out, String typeLabel,
+                               Map<UUID, OffsetDateTime> idToWorkedAt, String status,
+                               String jpql, Class<T> type, UUID orgId, WorkedRowMapper<T> mapper) {
+        if (idToWorkedAt == null || idToWorkedAt.isEmpty()) return;
+        List<T> entities = entityManager.createQuery(jpql, type)
+                .setParameter("org", orgId).setParameter("ids", idToWorkedAt.keySet()).getResultList();
+        for (T e : entities) {
+            Map<String, Object> row = mapper.map(e);
+            if (status != null && !status.isBlank() && !status.equals(row.get("status"))) continue;
+            row.put("workedAt", idToWorkedAt.get(row.get("id")));
+            out.add(row);
+        }
     }
 
     private Map<String, Object> workedRow(String type, UUID id, String number, String title,
@@ -1589,13 +1818,26 @@ public class ReportingService {
         }
     }
 
+    /** Date fields an entity may be ranged on (for the dateField override). */
+    private static final Map<String, Set<String>> DATE_FIELDS_BY_ENTITY = Map.of(
+            "incident", Set.of("createdAt", "resolvedAt", "closedAt"),
+            "issue", Set.of("createdAt"),
+            "problem", Set.of("createdAt", "resolvedAt", "closedAt"),
+            "change", Set.of("createdAt"),
+            "service_request", Set.of("createdAt", "decidedAt"));
+
     private Optional<Predicate> applyDateRange(CriteriaBuilder cb, Root<?> root, String entity, AdHocQueryRequest.DateRange dateRange) {
         if (dateRange == null || dateRange.from() == null || dateRange.to() == null) {
             return Optional.empty();
         }
-        String dateField = DATE_FIELD_BY_ENTITY.get(entity);
+        String dateField = dateRange.dateField() != null && !dateRange.dateField().isBlank()
+                ? dateRange.dateField()
+                : DATE_FIELD_BY_ENTITY.get(entity);
         if (dateField == null) {
             return Optional.empty();
+        }
+        if (!DATE_FIELDS_BY_ENTITY.getOrDefault(entity, Set.of()).contains(dateField)) {
+            throw new IllegalArgumentException("Field not allowed for date range on " + entity + ": " + dateField);
         }
         Path<OffsetDateTime> path = root.get(dateField);
         return Optional.of(cb.between(path, dateRange.from(), dateRange.to()));
@@ -1604,6 +1846,15 @@ public class ReportingService {
     private Predicate buildPredicate(CriteriaBuilder cb, Root<?> root, AdHocQueryFilter filter, Class<?> entityClass) {
         Path<Object> path = root.get(filter.field());
         Class<?> fieldClass = path.getJavaType();
+
+        // Blank value = "unassigned"/empty group (drill-down from a null groupKey).
+        if (filter.value() == null || filter.value().isBlank()) {
+            return switch (filter.op()) {
+                case "eq" -> cb.isNull(path);
+                case "ne" -> cb.isNotNull(path);
+                default -> throw new IllegalArgumentException("Blank filter value only supports eq/ne: " + filter.op());
+            };
+        }
 
         if (BaseEntity.class.isAssignableFrom(fieldClass)) {
             return buildEntityPredicate(cb, path, filter, fieldClass);
@@ -1628,17 +1879,32 @@ public class ReportingService {
     @SuppressWarnings("unchecked")
     private Predicate buildEntityPredicate(CriteriaBuilder cb, Path<Object> path, AdHocQueryFilter filter, Class<?> fieldClass) {
         return switch (filter.op()) {
-            case "eq" -> cb.equal(path, entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(filter.value())));
-            case "ne" -> cb.notEqual(path, entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(filter.value())));
+            case "eq" -> entityEquals(cb, path, filter.value(), fieldClass);
+            case "ne" -> cb.not(entityEquals(cb, path, filter.value(), fieldClass));
             case "in" -> {
-                List<BaseEntity> values = Arrays.stream(filter.value().split(","))
+                List<Predicate> values = Arrays.stream(filter.value().split(","))
                         .map(String::trim)
-                        .map(v -> entityManager.getReference((Class<? extends BaseEntity>) fieldClass, UUID.fromString(v)))
+                        .map(v -> entityEquals(cb, path, v, fieldClass))
                         .collect(Collectors.toList());
-                yield path.in(values);
+                yield cb.or(values.toArray(new Predicate[0]));
             }
             default -> throw new IllegalArgumentException("Unsupported operator: " + filter.op());
         };
+    }
+
+    /**
+     * Entity-valued filters accept either the id (UUID) or the display name —
+     * "Critical", "Main Clinic", a person's name — so report templates and
+     * drill-downs don't need to know ids.
+     */
+    private Predicate entityEquals(CriteriaBuilder cb, Path<Object> path, String value, Class<?> fieldClass) {
+        try {
+            UUID id = UUID.fromString(value);
+            return cb.equal(path, entityManager.getReference((Class<? extends BaseEntity>) fieldClass, id));
+        } catch (IllegalArgumentException notUuid) {
+            String nameField = AppUser.class.isAssignableFrom(fieldClass) ? "displayName" : "name";
+            return cb.equal(cb.lower(path.get(nameField).as(String.class)), value.trim().toLowerCase());
+        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

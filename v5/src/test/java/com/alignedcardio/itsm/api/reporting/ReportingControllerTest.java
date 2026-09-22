@@ -93,7 +93,8 @@ class ReportingControllerTest {
                 "incident",
                 List.of(new AdHocQueryFilter("status", "eq", "NEW")),
                 "status",
-                new AdHocQueryRequest.DateRange(OffsetDateTime.now().minusMonths(1), OffsetDateTime.now()));
+                new AdHocQueryRequest.DateRange(OffsetDateTime.now().minusMonths(1), OffsetDateTime.now(), null),
+                null, null, null);
 
         mockMvc.perform(post("/api/v1/reports/query")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -154,7 +155,7 @@ class ReportingControllerTest {
         when(reportingService.adHocQuery(eq(user.getOrgId()), any(AdHocQueryRequest.class), eq(user.getId())))
                 .thenReturn(new AdHocQueryResponse(user.getOrgId(), "problem", null, List.of()));
 
-        AdHocQueryRequest request = new AdHocQueryRequest("problem", List.of(), null, null);
+        AdHocQueryRequest request = new AdHocQueryRequest("problem", List.of(), null, null, null, null, null);
 
         mockMvc.perform(post("/api/v1/reports/query")
                         .contentType(MediaType.APPLICATION_JSON)

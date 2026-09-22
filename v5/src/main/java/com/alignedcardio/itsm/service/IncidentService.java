@@ -1267,7 +1267,8 @@ public class IncidentService {
                 sla != null ? sla.getResolutionDueAt() : null,
                 sla != null ? sla.getResponseMetAt() : null,
                 sla != null ? sla.getResolutionMetAt() : null,
-                hasBeenTierEscalated
+                hasBeenTierEscalated,
+                incident.isLegacyImport()
         );
     }
 

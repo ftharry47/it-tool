@@ -176,6 +176,7 @@ class GlobalSearchControllerTest {
                 null,
                 null,
                 null,
+                false,
                 false
         );
     }

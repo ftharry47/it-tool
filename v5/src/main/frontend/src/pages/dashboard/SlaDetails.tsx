@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { AccountInfo, IPublicClientApplication } from '@azure/msal-browser'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -379,6 +379,24 @@ export function SlaDetails() {
     dateFrom: '',
     dateTo: '',
   })
+
+  // Deep links (e.g. SLA compliance report → breached slice) seed the filters.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    const breach = searchParams.get('breachStatus')
+    const priority = searchParams.get('priority')
+    if (breach || priority) {
+      setFilters((prev) => ({
+        ...prev,
+        breachStatus: breach
+          ? new Set(breach.split(',').filter((s): s is BreachStatus =>
+              ['ON_TRACK', 'AT_RISK', 'BREACHED'].includes(s)))
+          : prev.breachStatus,
+        priority: priority ?? prev.priority,
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [editing, setEditing] = useState<Record<string, PolicyEditState>>({})
   const [showCreate, setShowCreate] = useState(false)

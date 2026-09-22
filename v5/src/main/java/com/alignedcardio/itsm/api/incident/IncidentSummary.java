@@ -21,6 +21,7 @@ public record IncidentSummary(
         OffsetDateTime resolutionDueAt,
         OffsetDateTime responseMetAt,
         OffsetDateTime resolutionMetAt,
-        boolean hasBeenTierEscalated
+        boolean hasBeenTierEscalated,
+        boolean legacyImport
 ) {
 }

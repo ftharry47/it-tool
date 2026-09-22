@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
@@ -34,6 +34,7 @@ interface Incident {
   phone: string | null
   createdAt: string
   hasBeenTierEscalated: boolean
+  legacyImport: boolean
 }
 
 export function Incidents() {
@@ -84,7 +85,20 @@ export function Incidents() {
     category: '',
     location: '',
     assignee: '',
+    createdFrom: '',
+    createdTo: '',
+    legacy: '',
   })
+
+  // Deep links (dashboard charts, reports drill-down) seed filters from the URL.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    for (const key of ['status', 'priority', 'category', 'location', 'assignee', 'createdFrom', 'createdTo', 'legacy']) {
+      const v = searchParams.get(key)
+      if (v) setFilter(key as keyof typeof filters, v)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const pushToast = (type: ToastItem['type'], message: string) => {
     setToasts((prev) => [...prev, { id: crypto.randomUUID(), type, message }])
@@ -221,7 +235,9 @@ export function Incidents() {
   const incidents = listQuery.data ?? []
   const assigneeOptions = Array.from(new Set(incidents.map((i) => i.assignee).filter((a): a is string => !!a))).sort()
   const filteredIncidents = incidents.filter((i) => {
-    if (filters.status && i.status !== filters.status) return false
+    // Comma-separated values allowed so report drill-downs can express buckets
+    // like "all open" (everything except CLOSED).
+    if (filters.status && !filters.status.split(',').includes(i.status)) return false
     if (filters.priority && i.priority !== filters.priority) return false
     if (filters.category && i.category !== filters.category) return false
     if (filters.location && i.location !== filters.location) return false
@@ -229,6 +245,9 @@ export function Incidents() {
     if (!isEndUser && filters.assignee) {
       if (filters.assignee === UNASSIGNED ? i.assignee !== null : i.assignee !== filters.assignee) return false
     }
+    if (filters.createdFrom && i.createdAt.slice(0, 10) < filters.createdFrom) return false
+    if (filters.createdTo && i.createdAt.slice(0, 10) > filters.createdTo) return false
+    if (filters.legacy === 'true' ? !i.legacyImport : filters.legacy === 'false' && i.legacyImport) return false
     return true
   })
 
@@ -470,6 +489,33 @@ export function Incidents() {
                   onChange={(v) => setFilter('assignee', v)}
                 />
               )}
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Created from
+                <input
+                  type="date"
+                  value={filters.createdFrom}
+                  onChange={(e) => setFilter('createdFrom', e.target.value)}
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Created to
+                <input
+                  type="date"
+                  value={filters.createdTo}
+                  onChange={(e) => setFilter('createdTo', e.target.value)}
+                  className="rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                />
+              </label>
+              <FilterSelect
+                label="Source"
+                value={filters.legacy}
+                options={[
+                  { value: 'false', label: 'Current system' },
+                  { value: 'true', label: 'Imported (legacy)' },
+                ]}
+                onChange={(v) => setFilter('legacy', v)}
+              />
             </FilterBar>
           </div>
           {isLoading ? (

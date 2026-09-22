@@ -45,11 +45,13 @@ export function ServiceRequestList() {
     approval: '',
   })
 
-  // Deep links (e.g. dashboard "N pending approvals") seed the status filter.
+  // Deep links (dashboard "N pending approvals", report drill-downs) seed filters.
   const [searchParams] = useSearchParams()
   useEffect(() => {
-    const status = searchParams.get('status')
-    if (status) setFilter('status', status)
+    for (const key of ['status', 'catalogItem', 'location', 'approval']) {
+      const v = searchParams.get(key)
+      if (v) setFilter(key as keyof typeof filters, v)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
