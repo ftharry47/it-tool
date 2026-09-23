@@ -148,17 +148,15 @@ export function IssueDetail() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-4xl space-y-6">
-        <div>
-          <button
-            onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-        </div>
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-4">
+            <button
+              onClick={smartBack}
+              className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
             <div>
               <div className="text-sm text-muted-foreground">{issue.key}</div>
               <h1 className="text-2xl font-semibold tracking-tight">{issue.summary}</h1>

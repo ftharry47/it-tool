@@ -89,17 +89,21 @@ export function Approvals() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
-        <button
-          onClick={smartBack}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
-        <p className="text-sm text-muted-foreground">
-          Service requests waiting for your approval.
-        </p>
+        <div className="flex items-center gap-3">
+          <button
+                    onClick={smartBack}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
+            <p className="text-sm text-muted-foreground">
+                      Service requests waiting for your approval.
+                    </p>
+          </div>
+        </div>
 
         <DataTable<PendingApproval>
           caption="Requests pending your approval"

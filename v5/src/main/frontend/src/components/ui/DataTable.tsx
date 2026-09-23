@@ -17,6 +17,10 @@ interface DataTableProps<T> {
   selectable?: boolean
   selectedIds?: Set<string>
   onSelectionChange?: (ids: Set<string>) => void
+  sortable?: boolean
+  sortKey?: string
+  sortDir?: 'asc' | 'desc'
+  onSort?: (key: string) => void
 }
 
 export function DataTable<T>({
@@ -30,6 +34,10 @@ export function DataTable<T>({
   selectable,
   selectedIds = new Set(),
   onSelectionChange,
+  sortable,
+  sortKey,
+  sortDir,
+  onSort,
 }: DataTableProps<T>) {
   const allSelected = data.length > 0 && data.every((row) => selectedIds.has(getRowKey(row)))
   const someSelected = data.some((row) => selectedIds.has(getRowKey(row))) && !allSelected
@@ -81,7 +89,17 @@ export function DataTable<T>({
             )}
             {columns.map((col) => (
               <th key={col.key} scope="col" className="py-2 pr-4 font-medium">
-                {col.header}
+                {sortable && onSort ? (
+                  <button
+                    onClick={() => onSort(col.key)}
+                    className="inline-flex items-center gap-1 font-medium hover:text-foreground"
+                  >
+                    {col.header}
+                    {sortKey === col.key && (sortDir === 'desc' ? ' ▼' : ' ▲')}
+                  </button>
+                ) : (
+                  col.header
+                )}
               </th>
             ))}
           </tr>

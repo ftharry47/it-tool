@@ -9,6 +9,14 @@ export default defineConfig({
     outDir: '../resources/static',
     emptyOutDir: true,
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          msal: ['@azure/msal-browser', '@azure/msal-react'],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

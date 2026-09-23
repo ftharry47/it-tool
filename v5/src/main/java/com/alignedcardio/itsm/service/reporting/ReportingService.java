@@ -335,12 +335,25 @@ public class ReportingService {
     }
 
     public Map<String, Object> ticketsSummary(UUID orgId, UUID mineUserId) {
+        return ticketsSummary(orgId, mineUserId, null, null);
+    }
+
+    /**
+     * Tickets summary. `from`/`to` scope the *activity* metrics (created-in-
+     * range total, resolved-in-range) — snapshot counts (open, in-progress,
+     * unassigned, open-by-type) are always current state.
+     */
+    public Map<String, Object> ticketsSummary(UUID orgId, UUID mineUserId,
+                                              OffsetDateTime from, OffsetDateTime to) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
         CriteriaQuery<Long> total = cb.createQuery(Long.class);
         Root<Incident> root = total.from(Incident.class);
         total.select(cb.count(root));
-        total.where(baseIncidentPredicates(cb, root, orgId, mineUserId));
+        List<Predicate> totalPreds = new ArrayList<>(List.of(baseIncidentPredicates(cb, root, orgId, mineUserId)));
+        if (from != null) totalPreds.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+        if (to != null) totalPreds.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+        total.where(totalPreds.toArray(new Predicate[0]));
         long totalCount = entityManager.createQuery(total).getSingleResult();
 
         CriteriaQuery<Long> open = cb.createQuery(Long.class);
@@ -368,6 +381,21 @@ public class ReportingService {
                 cb.isNotNull(resRoot.get("resolvedAt")),
                 cb.greaterThanOrEqualTo(resRoot.get("resolvedAt"), startOfDay));
         long resolvedToday = entityManager.createQuery(resolved).getSingleResult();
+
+        // Resolved-in-range — only meaningful when the caller scoped a period.
+        Long resolvedInRange = null;
+        if (from != null || to != null) {
+            CriteriaQuery<Long> rr = cb.createQuery(Long.class);
+            Root<Incident> rrRoot = rr.from(Incident.class);
+            rr.select(cb.count(rrRoot));
+            List<Predicate> rrPreds = new ArrayList<>(
+                    List.of(baseIncidentPredicates(cb, rrRoot, orgId, mineUserId)));
+            rrPreds.add(cb.isNotNull(rrRoot.get("resolvedAt")));
+            if (from != null) rrPreds.add(cb.greaterThanOrEqualTo(rrRoot.get("resolvedAt"), from));
+            if (to != null) rrPreds.add(cb.lessThanOrEqualTo(rrRoot.get("resolvedAt"), to));
+            rr.where(rrPreds.toArray(new Predicate[0]));
+            resolvedInRange = entityManager.createQuery(rr).getSingleResult();
+        }
 
         CriteriaQuery<Long> unassigned = cb.createQuery(Long.class);
         Root<Incident> unRoot = unassigned.from(Incident.class);
@@ -405,13 +433,17 @@ public class ReportingService {
                         ChangeRequest.Status.CLOSED, ChangeRequest.Status.REJECTED))
                 .getSingleResult());
 
-        return Map.of(
-                "total", totalCount,
-                "open", openCount,
-                "inProgress", inProgressCount,
-                "resolvedToday", resolvedToday,
-                "unassigned", unassignedCount,
-                "openByType", openByType);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", totalCount);
+        result.put("open", openCount);
+        result.put("inProgress", inProgressCount);
+        result.put("resolvedToday", resolvedToday);
+        result.put("unassigned", unassignedCount);
+        result.put("openByType", openByType);
+        if (resolvedInRange != null) {
+            result.put("resolvedInRange", resolvedInRange);
+        }
+        return result;
     }
 
     private Predicate[] baseIncidentPredicates(CriteriaBuilder cb, Root<Incident> root, UUID orgId, UUID mineUserId) {
@@ -480,9 +512,22 @@ public class ReportingService {
         YearMonth month = YearMonth.now();
         OffsetDateTime from = month.atDay(1).atStartOfDay().atOffset(now.getOffset());
 
+        // JOIN FETCH avoids a lazy-load per instance (N+1): associations are
+        // populated in the single query. All targets are ManyToOne, so no
+        // MultipleBagFetchException risk.
         List<SlaInstance> instances = entityManager.createQuery(
-                "SELECT si FROM SlaInstance si WHERE si.orgId = :org AND si.createdAt >= :from " +
-                        "AND (si.serviceRequest IS NULL OR si.serviceRequest.status <> :cancelled)",
+                "SELECT si FROM SlaInstance si " +
+                        "LEFT JOIN FETCH si.incident i " +
+                        "LEFT JOIN FETCH i.assignee " +
+                        "LEFT JOIN FETCH i.assignmentTeam " +
+                        "LEFT JOIN FETCH si.serviceRequest sr " +
+                        "LEFT JOIN FETCH sr.requester " +
+                        "LEFT JOIN FETCH si.problem p " +
+                        "LEFT JOIN FETCH p.assignee " +
+                        "LEFT JOIN FETCH si.changeRequest c " +
+                        "LEFT JOIN FETCH c.assignee " +
+                        "WHERE si.orgId = :org AND si.createdAt >= :from " +
+                        "AND (sr IS NULL OR sr.status <> :cancelled)",
                 SlaInstance.class)
                 .setParameter("org", orgId)
                 .setParameter("from", from)
@@ -2329,14 +2374,26 @@ public class ReportingService {
      * "Full Detail Export" template — the ad-hoc engine is single-entity, so
      * this union lives here.
      */
-    public List<Map<String, Object>> fullDetailExport(UUID orgId, OffsetDateTime from, OffsetDateTime to) {
-        List<Map<String, Object>> rows = new ArrayList<>();
+    /**
+     * Cross-entity detailed export — two row sets keyed "incidents" and
+     * "serviceRequests" so callers can render separate sheets/files. Each row
+     * carries full SLA + escalation detail (policy, due/met timestamps,
+     * escalation level, and the tier/priority escalation audit trail).
+     */
+    public Map<String, List<Map<String, Object>>> fullDetailExport(UUID orgId, OffsetDateTime from, OffsetDateTime to) {
+        List<Map<String, Object>> incidentRows = new ArrayList<>();
+        List<Map<String, Object>> requestRows = new ArrayList<>();
 
-        // SLA status + first response, keyed by "TYPE:entityId".
+        // SLA detail per entity, keyed by "TYPE:entityId".
+        // 0 incidentId | 1 serviceRequestId | 2 breachStatus | 3 responseMetAt
+        // 4 responseDueAt | 5 resolutionDueAt | 6 resolutionMetAt
+        // 7 escalationLevel | 8 policyName
         Map<String, Tuple> slaByEntity = new HashMap<>();
         for (Tuple t : entityManager.createQuery(
-                "SELECT si.incident.id, si.serviceRequest.id, si.breachStatus, si.responseMetAt "
-                        + "FROM SlaInstance si WHERE si.orgId = :org", Tuple.class)
+                "SELECT si.incident.id, si.serviceRequest.id, si.breachStatus, si.responseMetAt, "
+                        + "si.responseDueAt, si.resolutionDueAt, si.resolutionMetAt, "
+                        + "si.escalationLevel, pol.name "
+                        + "FROM SlaInstance si LEFT JOIN si.policy pol WHERE si.orgId = :org", Tuple.class)
                 .setParameter("org", orgId).getResultList()) {
             if (t.get(0) != null) slaByEntity.put("INCIDENT:" + t.get(0), t);
             if (t.get(1) != null) slaByEntity.put("SERVICE_REQUEST:" + t.get(1), t);
@@ -2368,50 +2425,89 @@ public class ReportingService {
         incidents.forEach(t -> ticketIds.add(t.get(0, UUID.class)));
         requests.forEach(t -> ticketIds.add(t.get(0, UUID.class)));
         Map<String, String> lastWorkedBy = ticketIds.isEmpty() ? Map.of() : lastWorkedByMap(orgId, ticketIds);
+        Map<String, List<Tuple>> escalations = ticketIds.isEmpty() ? Map.of() : escalationHistoryMap(orgId, ticketIds);
 
         for (Tuple t : incidents) {
             UUID id = t.get(0, UUID.class);
             Tuple sla = slaByEntity.get("INCIDENT:" + id);
-            rows.add(row(
-                    "type", "INCIDENT",
+            Map<String, Object> r = row(
                     "number", "INC-" + t.get(1),
                     "title", t.get(2) != null ? t.get(2) : "",
                     "status", t.get(3) != null ? t.get(3).toString() : "",
                     "priority", t.get(4) != null ? t.get(4) : "",
                     "category", t.get(5) != null ? t.get(5) : "",
-                    "catalogItem", "",
                     "location", t.get(6) != null ? t.get(6) : "",
                     "assignee", t.get(7) != null ? t.get(7) : "",
-                    "approver", "",
                     "requester", t.get(8) != null ? t.get(8) : "",
                     "createdAt", fmt(t.get(9, OffsetDateTime.class)),
-                    "resolvedOrDecidedAt", fmt(t.get(10, OffsetDateTime.class)),
-                    "slaStatus", sla != null && sla.get(2) != null ? sla.get(2).toString() : "",
-                    "firstResponseAt", sla != null ? fmt(sla.get(3, OffsetDateTime.class)) : "",
-                    "lastWorkedBy", lastWorkedBy.getOrDefault("INCIDENT:" + id, "")));
+                    "resolvedAt", fmt(t.get(10, OffsetDateTime.class)),
+                    "lastWorkedBy", lastWorkedBy.getOrDefault("INCIDENT:" + id, ""));
+            r.putAll(slaColumns(sla, escalations.getOrDefault("INCIDENT:" + id, List.of())));
+            incidentRows.add(r);
         }
         for (Tuple t : requests) {
             UUID id = t.get(0, UUID.class);
             Tuple sla = slaByEntity.get("SERVICE_REQUEST:" + id);
-            rows.add(row(
-                    "type", "SERVICE_REQUEST",
+            Map<String, Object> r = row(
                     "number", t.get(1),
-                    "title", t.get(2) != null ? t.get(2) : "",
+                    "catalogItem", t.get(2) != null ? t.get(2) : "",
                     "status", t.get(3) != null ? t.get(3).toString() : "",
                     "priority", t.get(4) != null ? t.get(4) : "",
-                    "category", "",
-                    "catalogItem", t.get(2) != null ? t.get(2) : "",
                     "location", t.get(5) != null ? t.get(5) : "",
-                    "assignee", "",
                     "approver", t.get(6) != null ? t.get(6) : "",
                     "requester", t.get(7) != null ? t.get(7) : "",
                     "createdAt", fmt(t.get(8, OffsetDateTime.class)),
-                    "resolvedOrDecidedAt", fmt(t.get(9, OffsetDateTime.class)),
-                    "slaStatus", sla != null && sla.get(2) != null ? sla.get(2).toString() : "",
-                    "firstResponseAt", sla != null ? fmt(sla.get(3, OffsetDateTime.class)) : "",
-                    "lastWorkedBy", lastWorkedBy.getOrDefault("SERVICE_REQUEST:" + id, "")));
+                    "decidedAt", fmt(t.get(9, OffsetDateTime.class)),
+                    "lastWorkedBy", lastWorkedBy.getOrDefault("SERVICE_REQUEST:" + id, ""));
+            r.putAll(slaColumns(sla, escalations.getOrDefault("SERVICE_REQUEST:" + id, List.of())));
+            requestRows.add(r);
         }
-        return rows;
+        return Map.of("incidents", incidentRows, "serviceRequests", requestRows);
+    }
+
+    /** SLA + escalation columns appended to every export row. */
+    private Map<String, Object> slaColumns(Tuple sla, List<Tuple> escalationEvents) {
+        Map<String, Object> cols = new LinkedHashMap<>();
+        OffsetDateTime resDue = sla != null ? sla.get(5, OffsetDateTime.class) : null;
+        OffsetDateTime resMet = sla != null ? sla.get(6, OffsetDateTime.class) : null;
+        cols.put("slaPolicy", sla != null && sla.get(8) != null ? sla.get(8) : "");
+        cols.put("slaStatus", sla != null && sla.get(2) != null ? sla.get(2).toString() : "");
+        cols.put("responseDueAt", sla != null ? fmt(sla.get(4, OffsetDateTime.class)) : "");
+        cols.put("responseMetAt", sla != null ? fmt(sla.get(3, OffsetDateTime.class)) : "");
+        cols.put("resolutionDueAt", resDue != null ? fmt(resDue) : "");
+        cols.put("resolutionMetAt", resMet != null ? fmt(resMet) : "");
+        cols.put("breachDurationMinutes",
+                resDue != null && resMet != null && resMet.isAfter(resDue)
+                        ? java.time.Duration.between(resDue, resMet).toMinutes() : "");
+        cols.put("escalationLevel", sla != null ? sla.get(7) : "");
+        cols.put("escalationCount", escalationEvents.size());
+        cols.put("escalationHistory", escalationEvents.stream()
+                .map(e -> {
+                    Object detail = e.get(3);
+                    return fmt(e.get(4, OffsetDateTime.class)) + " " + e.get(2)
+                            + (detail != null ? " — " + detail : "");
+                })
+                .collect(Collectors.joining("; ")));
+        return cols;
+    }
+
+    /**
+     * Escalation audit trail per entity ("TYPE:id" → ordered events).
+     * One grouped query — no per-ticket round-trips.
+     */
+    private Map<String, List<Tuple>> escalationHistoryMap(UUID orgId, Set<UUID> entityIds) {
+        Map<String, List<Tuple>> byEntity = new HashMap<>();
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.entityType, a.entityId, a.action, a.detail, a.createdAt FROM AuditLog a "
+                        + "WHERE a.orgId = :org AND a.entityId IN :ids "
+                        + "AND a.action IN ('ESCALATE_PRIORITY','ESCALATE_TIER','AUTO_ESCALATE_TIER','REOPEN') "
+                        + "ORDER BY a.createdAt", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", entityIds).getResultList()) {
+            byEntity.computeIfAbsent(
+                    t.get(0, String.class) + ":" + t.get(1, UUID.class), k -> new ArrayList<>())
+                    .add(t);
+        }
+        return byEntity;
     }
 
     /** Latest-audit-actor display name per entityId ("TYPE:id" → name). */

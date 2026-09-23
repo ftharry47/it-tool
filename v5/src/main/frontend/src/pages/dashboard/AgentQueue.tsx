@@ -75,18 +75,19 @@ export function AgentQueue() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div>
-          <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-            ← Dashboard
-          </Link>
-          <button
-            onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Agent Queue</h1>
-          <p className="text-sm text-muted-foreground">{total} open item{total === 1 ? '' : 's'} across all work types.</p>
+          <div className="flex items-center gap-3">
+            <button
+                        onClick={smartBack}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                      </button>
+            <div>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">Agent Queue</h1>
+              <p className="text-sm text-muted-foreground">{total} open item{total === 1 ? '' : 's'} across all work types.</p>
+            </div>
+          </div>
         </div>
 
         {queueQuery.isLoading && <Loading />}

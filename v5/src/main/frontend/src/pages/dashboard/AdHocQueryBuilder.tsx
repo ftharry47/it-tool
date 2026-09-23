@@ -72,7 +72,7 @@ const DATE_FIELDS_BY_ENTITY: Record<string, { value: string; label: string }[]> 
   issue: [{ value: 'createdAt', label: 'Created' }],
 }
 
-const OPEN_INCIDENT = 'NEW,ASSIGNED,IN_PROGRESS,ON_HOLD,WAITING_ON_CUSTOMER,REOPENED'
+const OPEN_INCIDENT = 'NEW,IN_PROGRESS,ON_HOLD,WAITING_ON_CUSTOMER,REOPENED'
 const OPEN_REQUEST = 'SUBMITTED,PENDING_APPROVAL,APPROVED,IN_FULFILLMENT,ON_HOLD,REJECTED_NEEDS_REVIEW'
 
 interface BuilderTemplate {
@@ -421,17 +421,21 @@ export function AdHocQueryBuilder() {
         onCancel={() => setPendingDelete(null)}
       />
       <div className="mx-auto max-w-5xl space-y-6">
-        <button
-          onClick={smartBack}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="text-2xl font-semibold tracking-tight">Query Builder</h1>
-        <p className="text-sm text-muted-foreground">
-          Build a grouped or row-level report, save it for reuse, or start from a template. Click any grouped result to drill into the actual records.
-        </p>
+        <div className="flex items-center gap-3">
+          <button
+                    onClick={smartBack}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Query Builder</h1>
+            <p className="text-sm text-muted-foreground">
+                      Build a grouped or row-level report, save it for reuse, or start from a template. Click any grouped result to drill into the actual records.
+                    </p>
+          </div>
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-lg font-semibold">Templates</h2>
@@ -812,27 +816,36 @@ export function AdHocQueryBuilder() {
 }
 
 interface FullDetailRow {
-  type: string
   number: string
-  title: string
+  title?: string
+  catalogItem?: string
   status: string
   priority: string
-  category: string
-  catalogItem: string
+  category?: string
   location: string
-  assignee: string
-  approver: string
+  assignee?: string
+  approver?: string
   requester: string
   createdAt: string
-  resolvedOrDecidedAt: string
+  resolvedAt?: string
+  decidedAt?: string
+  slaPolicy: string
   slaStatus: string
-  firstResponseAt: string
+  responseDueAt: string
+  responseMetAt: string
+  resolutionDueAt: string
+  resolutionMetAt: string
+  breachDurationMinutes: number | ''
+  escalationLevel: number | ''
+  escalationCount: number
+  escalationHistory: string
   lastWorkedBy: string
 }
 
 /**
- * Cross-entity export — Incidents + Service Requests in one union table with
- * a `type` discriminator, SLA status, and last-worked-by attribution.
+ * Cross-entity export — Incidents and Service Requests as separate sheets
+ * (XLSX) or files (CSV ZIP), with full SLA + escalation detail and
+ * last-worked-by attribution.
  * Backed by /api/v1/reports/full-detail-export (the ad-hoc engine is
  * single-entity, so this template has its own endpoint).
  */
@@ -851,7 +864,7 @@ function FullDetailExportCard({ instance, account }: {
   if (from) params.set('from', new Date(`${from}T00:00:00Z`).toISOString())
   if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
 
-  const previewQuery = useQuery<FullDetailRow[]>({
+  const previewQuery = useQuery<{ incidents: FullDetailRow[]; serviceRequests: FullDetailRow[] }>({
     queryKey: ['full-detail-export', from, to],
     queryFn: async () => {
       const res = await fetchWithToken(instance, account!, `/api/v1/reports/full-detail-export?${params}&format=json`)
@@ -870,7 +883,8 @@ function FullDetailExportCard({ instance, account }: {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `full-detail-export.${format}`
+      // CSV arrives as a ZIP — one file per entity sheet.
+      a.download = format === 'csv' ? 'full-detail-export.zip' : 'full-detail-export.xlsx'
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
@@ -898,8 +912,8 @@ function FullDetailExportCard({ instance, account }: {
           >
             Preview
           </button>
-          <button onClick={() => download('csv')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">CSV</button>
-          <button onClick={() => download('xlsx')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">XLSX</button>
+          <button onClick={() => download('csv')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted" title="ZIP containing one CSV per entity">CSV (ZIP)</button>
+          <button onClick={() => download('xlsx')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted" title="Workbook with an Incidents and a Service Requests sheet">XLSX</button>
         </div>
       </div>
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
@@ -910,24 +924,30 @@ function FullDetailExportCard({ instance, account }: {
           ) : previewQuery.error ? (
             <p className="text-sm text-destructive">Could not load preview.</p>
           ) : (
-            <DataTable<FullDetailRow>
-              caption={`Full detail export — ${previewQuery.data?.length ?? 0} rows`}
-              columns={[
-                { key: 'number', header: '#' },
-                { key: 'type', header: 'Type' },
-                { key: 'title', header: 'Title' },
-                { key: 'status', header: 'Status' },
-                { key: 'priority', header: 'Priority' },
-                { key: 'location', header: 'Location' },
-                { key: 'assignee', header: 'Assignee' },
-                { key: 'slaStatus', header: 'SLA' },
-                { key: 'lastWorkedBy', header: 'Last Worked By' },
-                { key: 'createdAt', header: 'Created' },
-              ]}
-              data={(previewQuery.data ?? []).slice(0, 50)}
-              getRowKey={(r) => `${r.type}:${r.number}`}
-              emptyText="No tickets in this range."
-            />
+            <div className="space-y-4">
+              {(['incidents', 'serviceRequests'] as const).map((key) => (
+                <div key={key}>
+                  <h4 className="mb-1 text-xs font-medium uppercase text-muted-foreground">
+                    {key === 'incidents' ? 'Incidents' : 'Service Requests'} — {(previewQuery.data?.[key] ?? []).length} rows
+                  </h4>
+                  <DataTable<FullDetailRow>
+                    caption={`${key === 'incidents' ? 'Incidents' : 'Service requests'} preview`}
+                    columns={[
+                      { key: 'number', header: '#' },
+                      { key: 'title', header: 'Title' },
+                      { key: 'status', header: 'Status' },
+                      { key: 'priority', header: 'Priority' },
+                      { key: 'slaStatus', header: 'SLA' },
+                      { key: 'escalationLevel', header: 'Esc Level' },
+                      { key: 'lastWorkedBy', header: 'Last Worked By' },
+                    ]}
+                    data={(previewQuery.data?.[key] ?? []).slice(0, 25)}
+                    getRowKey={(r) => `${key}:${r.number}`}
+                    emptyText="None in this range."
+                  />
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

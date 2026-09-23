@@ -1,57 +1,59 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useRoutes, Navigate } from 'react-router-dom'
 import type { RouteObject } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Loading } from '../components/ui/Loading'
 import { AppLayout } from '../components/layout/AppLayout'
 import { highestRole } from './utils'
-import { Login } from '../pages/shared/Login'
-import { Home } from '../pages/home/Home'
-import { CatalogBrowse } from '../pages/home/CatalogBrowse'
-import { MyRequests } from '../pages/home/MyRequests'
-import { MyRequestDetail } from '../pages/home/MyRequestDetail'
-import { ApprovedRequests } from '../pages/shared/ApprovedRequests'
-import { ApprovedRequestDetail } from '../pages/shared/ApprovedRequestDetail'
-import { KbBrowse } from '../pages/home/KbBrowse'
-import { KbArticleView } from '../pages/home/KbArticleView'
-import { Dashboard } from '../pages/dashboard/Dashboard'
-import { AgentQueue } from '../pages/dashboard/AgentQueue'
-import { ProblemList } from '../pages/dashboard/ProblemList'
-import { ProblemDetail } from '../pages/dashboard/ProblemDetail'
-import { ServiceRequestList } from '../pages/dashboard/ServiceRequestList'
-import { Approvals } from '../pages/dashboard/Approvals'
-import { ServiceRequestDetail } from '../pages/dashboard/ServiceRequestDetail'
-import { KbArticleList } from '../pages/dashboard/KbArticleList'
-import { KbArticleEditor } from '../pages/dashboard/KbArticleEditor'
-import { ChangeList } from '../pages/dashboard/ChangeList'
-import { ChangeDetail } from '../pages/dashboard/ChangeDetail'
-import { ChangeCalendar } from '../pages/dashboard/ChangeCalendar'
-import { IncidentDetail } from '../pages/dashboard/IncidentDetail'
-import { ReportsDashboard } from '../pages/dashboard/ReportsDashboard'
-import { AdHocQueryBuilder } from '../pages/dashboard/AdHocQueryBuilder'
-import { DataExport } from '../pages/dashboard/DataExport'
-import { NotificationPreferences } from '../pages/dashboard/NotificationPreferences'
-import { SlaDetails } from '../pages/dashboard/SlaDetails'
-import { Settings } from '../pages/dashboard/Settings'
-import { ProjectList } from '../pages/dashboard/ProjectList'
-import { ProjectDetail } from '../pages/dashboard/ProjectDetail'
-import { BoardPage } from '../pages/dashboard/BoardPage'
-import { IssueDetail } from '../pages/dashboard/IssueDetail'
-import { Incidents } from '../pages/shared/Incidents'
-import { AdminHome } from '../pages/admin/AdminHome'
-import { UserAdmin } from '../pages/admin/UserAdmin'
-import { CatalogAdmin } from '../pages/admin/CatalogAdmin'
-import { WorkflowAdmin } from '../pages/admin/WorkflowAdmin'
-import { AutomationAdmin } from '../pages/admin/AutomationAdmin'
-import { BusinessCalendars } from '../pages/admin/BusinessCalendars'
-import { LocationAdmin } from '../pages/admin/LocationAdmin'
-import { CategoryAdmin } from '../pages/admin/CategoryAdmin'
-import { SupportTiers } from '../pages/admin/SupportTiers'
-import { HowItWorks } from '../pages/admin/HowItWorks'
-import { ImportTickets } from '../pages/admin/ImportTickets'
-import { NotFound } from '../pages/shared/NotFound'
 import type { RouteDefinition } from './types'
 import type { CurrentUser } from '../auth/AuthProvider'
+
+// Route-level code splitting — each page loads on demand.
+const Login = lazy(() => import('../pages/shared/Login').then((m) => ({ default: m.Login })))
+const Home = lazy(() => import('../pages/home/Home').then((m) => ({ default: m.Home })))
+const CatalogBrowse = lazy(() => import('../pages/home/CatalogBrowse').then((m) => ({ default: m.CatalogBrowse })))
+const MyRequests = lazy(() => import('../pages/home/MyRequests').then((m) => ({ default: m.MyRequests })))
+const MyRequestDetail = lazy(() => import('../pages/home/MyRequestDetail').then((m) => ({ default: m.MyRequestDetail })))
+const ApprovedRequests = lazy(() => import('../pages/shared/ApprovedRequests').then((m) => ({ default: m.ApprovedRequests })))
+const ApprovedRequestDetail = lazy(() => import('../pages/shared/ApprovedRequestDetail').then((m) => ({ default: m.ApprovedRequestDetail })))
+const KbBrowse = lazy(() => import('../pages/home/KbBrowse').then((m) => ({ default: m.KbBrowse })))
+const KbArticleView = lazy(() => import('../pages/home/KbArticleView').then((m) => ({ default: m.KbArticleView })))
+const Dashboard = lazy(() => import('../pages/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })))
+const AgentQueue = lazy(() => import('../pages/dashboard/AgentQueue').then((m) => ({ default: m.AgentQueue })))
+const ProblemList = lazy(() => import('../pages/dashboard/ProblemList').then((m) => ({ default: m.ProblemList })))
+const ProblemDetail = lazy(() => import('../pages/dashboard/ProblemDetail').then((m) => ({ default: m.ProblemDetail })))
+const ServiceRequestList = lazy(() => import('../pages/dashboard/ServiceRequestList').then((m) => ({ default: m.ServiceRequestList })))
+const Approvals = lazy(() => import('../pages/dashboard/Approvals').then((m) => ({ default: m.Approvals })))
+const ServiceRequestDetail = lazy(() => import('../pages/dashboard/ServiceRequestDetail').then((m) => ({ default: m.ServiceRequestDetail })))
+const KbArticleList = lazy(() => import('../pages/dashboard/KbArticleList').then((m) => ({ default: m.KbArticleList })))
+const KbArticleEditor = lazy(() => import('../pages/dashboard/KbArticleEditor').then((m) => ({ default: m.KbArticleEditor })))
+const ChangeList = lazy(() => import('../pages/dashboard/ChangeList').then((m) => ({ default: m.ChangeList })))
+const ChangeDetail = lazy(() => import('../pages/dashboard/ChangeDetail').then((m) => ({ default: m.ChangeDetail })))
+const ChangeCalendar = lazy(() => import('../pages/dashboard/ChangeCalendar').then((m) => ({ default: m.ChangeCalendar })))
+const IncidentDetail = lazy(() => import('../pages/dashboard/IncidentDetail').then((m) => ({ default: m.IncidentDetail })))
+const ReportsDashboard = lazy(() => import('../pages/dashboard/ReportsDashboard').then((m) => ({ default: m.ReportsDashboard })))
+const AdHocQueryBuilder = lazy(() => import('../pages/dashboard/AdHocQueryBuilder').then((m) => ({ default: m.AdHocQueryBuilder })))
+const DataExport = lazy(() => import('../pages/dashboard/DataExport').then((m) => ({ default: m.DataExport })))
+const NotificationPreferences = lazy(() => import('../pages/dashboard/NotificationPreferences').then((m) => ({ default: m.NotificationPreferences })))
+const SlaDetails = lazy(() => import('../pages/dashboard/SlaDetails').then((m) => ({ default: m.SlaDetails })))
+const Settings = lazy(() => import('../pages/dashboard/Settings').then((m) => ({ default: m.Settings })))
+const ProjectList = lazy(() => import('../pages/dashboard/ProjectList').then((m) => ({ default: m.ProjectList })))
+const ProjectDetail = lazy(() => import('../pages/dashboard/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
+const BoardPage = lazy(() => import('../pages/dashboard/BoardPage').then((m) => ({ default: m.BoardPage })))
+const IssueDetail = lazy(() => import('../pages/dashboard/IssueDetail').then((m) => ({ default: m.IssueDetail })))
+const Incidents = lazy(() => import('../pages/shared/Incidents').then((m) => ({ default: m.Incidents })))
+const AdminHome = lazy(() => import('../pages/admin/AdminHome').then((m) => ({ default: m.AdminHome })))
+const UserAdmin = lazy(() => import('../pages/admin/UserAdmin').then((m) => ({ default: m.UserAdmin })))
+const CatalogAdmin = lazy(() => import('../pages/admin/CatalogAdmin').then((m) => ({ default: m.CatalogAdmin })))
+const WorkflowAdmin = lazy(() => import('../pages/admin/WorkflowAdmin').then((m) => ({ default: m.WorkflowAdmin })))
+const AutomationAdmin = lazy(() => import('../pages/admin/AutomationAdmin').then((m) => ({ default: m.AutomationAdmin })))
+const BusinessCalendars = lazy(() => import('../pages/admin/BusinessCalendars').then((m) => ({ default: m.BusinessCalendars })))
+const LocationAdmin = lazy(() => import('../pages/admin/LocationAdmin').then((m) => ({ default: m.LocationAdmin })))
+const CategoryAdmin = lazy(() => import('../pages/admin/CategoryAdmin').then((m) => ({ default: m.CategoryAdmin })))
+const SupportTiers = lazy(() => import('../pages/admin/SupportTiers').then((m) => ({ default: m.SupportTiers })))
+const HowItWorks = lazy(() => import('../pages/admin/HowItWorks').then((m) => ({ default: m.HowItWorks })))
+const ImportTickets = lazy(() => import('../pages/admin/ImportTickets').then((m) => ({ default: m.ImportTickets })))
+const NotFound = lazy(() => import('../pages/shared/NotFound').then((m) => ({ default: m.NotFound })))
 
 const homeRoutes: RouteDefinition[] = [
   { path: 'home', label: 'Home', element: <Home /> },
@@ -172,5 +174,5 @@ export function AppRoutes() {
   }, [isAuthenticated, currentUser])
 
   if (loading) return <Loading message="Signing you in…" />
-  return useRoutes(routeObjects)
+  return <Suspense fallback={<Loading />}>{useRoutes(routeObjects)}</Suspense>
 }

@@ -64,7 +64,7 @@ class ReportingControllerTest {
     void agentCanAccessTicketsSummary() throws Exception {
         AppUser user = testUser();
         lenient().when(userService.syncFromJwt(any())).thenReturn(user);
-        when(reportingService.ticketsSummary(user.getOrgId(), null)).thenReturn(
+        when(reportingService.ticketsSummary(eq(user.getOrgId()), isNull(), isNull(), isNull())).thenReturn(
                 Map.of("total", 1L, "open", 0L, "inProgress", 0L, "resolvedToday", 0L));
 
         mockMvc.perform(get("/api/v1/reports/tickets-summary"))
@@ -110,14 +110,14 @@ class ReportingControllerTest {
     void agentIsScopedToOwnDataEvenWithoutMineParam() throws Exception {
         AppUser user = testUser();
         lenient().when(userService.syncFromJwt(any())).thenReturn(user);
-        when(reportingService.ticketsSummary(eq(user.getOrgId()), eq(user.getId())))
+        when(reportingService.ticketsSummary(eq(user.getOrgId()), eq(user.getId()), isNull(), isNull()))
                 .thenReturn(Map.of("total", 1L));
 
         mockMvc.perform(get("/api/v1/reports/tickets-summary"))
                 .andExpect(status().isOk());
 
-        verify(reportingService).ticketsSummary(user.getOrgId(), user.getId());
-        verify(reportingService, never()).ticketsSummary(any(), isNull());
+        verify(reportingService).ticketsSummary(eq(user.getOrgId()), eq(user.getId()), isNull(), isNull());
+        verify(reportingService, never()).ticketsSummary(any(), isNull(), any(), any());
     }
 
     @Test
@@ -139,13 +139,13 @@ class ReportingControllerTest {
     void adminStillGetsOrgWideDataWithoutMineParam() throws Exception {
         AppUser user = testUser();
         lenient().when(userService.syncFromJwt(any())).thenReturn(user);
-        when(reportingService.ticketsSummary(eq(user.getOrgId()), isNull()))
+        when(reportingService.ticketsSummary(eq(user.getOrgId()), isNull(), isNull(), isNull()))
                 .thenReturn(Map.of("total", 5L));
 
         mockMvc.perform(get("/api/v1/reports/tickets-summary"))
                 .andExpect(status().isOk());
 
-        verify(reportingService).ticketsSummary(user.getOrgId(), null);
+        verify(reportingService).ticketsSummary(eq(user.getOrgId()), isNull(), isNull(), isNull());
     }
 
     @Test

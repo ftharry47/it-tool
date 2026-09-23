@@ -667,10 +667,10 @@ function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHoc
         {priorityData.length > 0 && (
           <div>
             <p className="mb-1 text-xs text-muted-foreground">Open incidents by priority</p>
-            <div className="h-48">
+            <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={priorityData} dataKey="count" nameKey="name" outerRadius={60} label>
+                  <Pie data={priorityData} dataKey="count" nameKey="name" outerRadius={70} label>
                     {priorityData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
@@ -1075,7 +1075,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1087,7 +1087,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1099,7 +1099,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1111,7 +1111,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1123,7 +1123,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1161,7 +1161,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isSuperAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1177,7 +1177,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1189,7 +1189,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1201,7 +1201,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isStaff,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1213,7 +1213,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isStaff,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1226,7 +1226,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1239,7 +1239,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isSuperAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1252,7 +1252,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!account && isAdmin,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1264,7 +1264,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isFulfillmentMember,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1276,7 +1276,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isStaff,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1288,7 +1288,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isStaff,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1301,7 +1301,7 @@ export function Dashboard() {
       return res.json()
     },
     enabled: !!currentUser && isStaff,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 
@@ -1324,22 +1324,6 @@ export function Dashboard() {
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
             <p className="text-sm text-muted-foreground">Welcome back, {currentUser.displayName ?? currentUser.email}.</p>
           </div>
-          {isAdmin && (
-            <div className="flex gap-2">
-              <Link
-                to="/admin/import-tickets"
-                className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground hover:shadow-sm"
-              >
-                Import Tickets
-              </Link>
-              <Link
-                to="/dashboard/reports/export"
-                className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground hover:shadow-sm"
-              >
-                Data Export
-              </Link>
-            </div>
-          )}
         </div>
 
         {isLoading && <Loading />}
@@ -1843,7 +1827,7 @@ function TierQueue({ tier, instance, account }: {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     staleTime: 0,
   })
 

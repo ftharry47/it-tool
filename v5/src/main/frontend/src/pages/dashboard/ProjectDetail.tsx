@@ -69,16 +69,14 @@ export function ProjectDetail() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-4">
-        <div>
+        <div className="flex items-start justify-between gap-4">
           <button
             onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-        </div>
-        <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{project.key} — {project.name}</h1>
             <p className="text-sm text-muted-foreground">Lead: {project.leadName ?? 'Unassigned'} · {project.status}</p>

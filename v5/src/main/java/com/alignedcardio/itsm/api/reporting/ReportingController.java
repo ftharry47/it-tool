@@ -78,9 +78,11 @@ public class ReportingController {
 
     @GetMapping("/tickets-summary")
     public Map<String, Object> ticketsSummary(@AuthenticationPrincipal Jwt jwt, Authentication auth,
-                                              @RequestParam(required = false, defaultValue = "false") boolean mine) {
+                                              @RequestParam(required = false, defaultValue = "false") boolean mine,
+                                              @RequestParam(required = false) OffsetDateTime from,
+                                              @RequestParam(required = false) OffsetDateTime to) {
         AppUser user = userService.syncFromJwt(jwt);
-        return reportingService.ticketsSummary(user.getOrgId(), scopedUserId(auth, user, mine));
+        return reportingService.ticketsSummary(user.getOrgId(), scopedUserId(auth, user, mine), from, to);
     }
 
     @GetMapping("/sla-compliance")
@@ -253,12 +255,31 @@ public class ReportingController {
                                               @RequestParam(defaultValue = "json") String format)
             throws java.io.IOException {
         AppUser user = userService.syncFromJwt(jwt);
-        List<Map<String, Object>> rows = reportingService.fullDetailExport(
+        Map<String, List<Map<String, Object>>> sheets = reportingService.fullDetailExport(
                 user.getOrgId(), from, to);
         if ("json".equals(format)) {
-            return ResponseEntity.ok(rows);
+            return ResponseEntity.ok(sheets);
         }
-        return download("full-detail-export", format, rows);
+        if ("xlsx".equals(format)) {
+            return ResponseEntity.ok()
+                    .header("Content-Type",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .header("Content-Disposition", "attachment; filename=\"full-detail-export.xlsx\"")
+                    .body(toXlsx(sheets));
+        }
+        // CSV has no sheets — deliver one ZIP containing one CSV per entity.
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(bos)) {
+            for (Map.Entry<String, List<Map<String, Object>>> e : sheets.entrySet()) {
+                zip.putNextEntry(new java.util.zip.ZipEntry(e.getKey() + ".csv"));
+                zip.write(toCsv(e.getValue()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+        }
+        return ResponseEntity.ok()
+                .header("Content-Type", "application/zip")
+                .header("Content-Disposition", "attachment; filename=\"full-detail-export.zip\"")
+                .body(bos.toByteArray());
     }
 
     /** Per-location ops summary: opened / worked-on / pending / resolved. */
@@ -476,23 +497,31 @@ public class ReportingController {
 
     private static byte[] toXlsx(String sheetName, List<Map<String, Object>> rows)
             throws java.io.IOException {
+        return toXlsx(Map.of(sheetName, rows));
+    }
+
+    /** One workbook, one sheet per map entry (e.g. Incidents / Service Requests). */
+    private static byte[] toXlsx(Map<String, List<Map<String, Object>>> sheets)
+            throws java.io.IOException {
         try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
              java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
-            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
-            java.util.List<String> headers = rows.stream()
-                    .flatMap(r -> r.keySet().stream())
-                    .distinct()
-                    .toList();
-            org.apache.poi.ss.usermodel.Row head = sheet.createRow(0);
-            for (int c = 0; c < headers.size(); c++) {
-                head.createCell(c).setCellValue(headers.get(c));
-            }
-            int r = 1;
-            for (Map<String, Object> row : rows) {
-                org.apache.poi.ss.usermodel.Row excelRow = sheet.createRow(r++);
+            for (Map.Entry<String, List<Map<String, Object>>> e : sheets.entrySet()) {
+                org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(e.getKey());
+                java.util.List<String> headers = e.getValue().stream()
+                        .flatMap(r -> r.keySet().stream())
+                        .distinct()
+                        .toList();
+                org.apache.poi.ss.usermodel.Row head = sheet.createRow(0);
                 for (int c = 0; c < headers.size(); c++) {
-                    Object v = row.get(headers.get(c));
-                    excelRow.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                    head.createCell(c).setCellValue(headers.get(c));
+                }
+                int r = 1;
+                for (Map<String, Object> row : e.getValue()) {
+                    org.apache.poi.ss.usermodel.Row excelRow = sheet.createRow(r++);
+                    for (int c = 0; c < headers.size(); c++) {
+                        Object v = row.get(headers.get(c));
+                        excelRow.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                    }
                 }
             }
             wb.write(bos);

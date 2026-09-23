@@ -1,0 +1,3 @@
+function p(o,e){const r=[];if(Array.isArray(e)&&e.length>0&&typeof e[0]=="object"&&e[0]!==null){const n=Array.from(new Set(e.flatMap(t=>Object.keys(t))));r.push(n);for(const t of e)r.push(n.map(i=>c(t[i])))}else if(e!==null&&typeof e=="object"&&!Array.isArray(e)){r.push(["metric","value"]);for(const[n,t]of Object.entries(e))r.push([n,c(t)])}else r.push([c(e)]);const f=r.map(n=>n.join(",")).join(`\r
+`),u=new Blob(["\uFEFF"+f],{type:"text/csv;charset=utf-8"}),l=URL.createObjectURL(u),s=document.createElement("a");s.href=l,s.download=o,s.click(),URL.revokeObjectURL(l)}function c(o){if(o==null)return"";const e=typeof o=="object"?JSON.stringify(o):String(o);return/[",\r\n]/.test(e)?`"${e.replace(/"/g,'""')}"`:e}export{p as d};
+//# sourceMappingURL=csv-P_Acfli9.js.map

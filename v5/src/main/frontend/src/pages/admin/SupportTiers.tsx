@@ -252,17 +252,21 @@ export function SupportTiers() {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <div>
-          <button
-            onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-          <h1 className="text-2xl font-semibold tracking-tight">Support Tiers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The L1/L2/L3 escalation roster. SLA escalation reassigns incidents to these teams.
-          </p>
+          <div className="flex items-center gap-3">
+            <button
+                        onClick={smartBack}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                      </button>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Support Tiers</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                          The L1/L2/L3 escalation roster. SLA escalation reassigns incidents to these teams.
+                        </p>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">

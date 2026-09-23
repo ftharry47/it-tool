@@ -268,14 +268,18 @@ export function WorkflowAdmin() {
         onCancel={() => setPendingTransitionRemoval(null)}
       />
       <div className="mx-auto max-w-5xl space-y-6">
-        <button
-          onClick={smartBack}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="text-2xl font-semibold tracking-tight">Workflow Builder</h1>
+        <div className="flex items-center gap-3">
+          <button
+                    onClick={smartBack}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back
+                  </button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Workflow Builder</h1>
+          </div>
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold">Create Workflow</h2>

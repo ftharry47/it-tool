@@ -151,20 +151,24 @@ export function CategoryAdmin() {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <button
-            onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold">
-            <Tags className="h-6 w-6" />
-            Incident Categories
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage the categories available on incident forms, filters, and reports.
-          </p>
+          <div className="flex items-center gap-3">
+            <button
+                        onClick={smartBack}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                      </button>
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold">
+                          <Tags className="h-6 w-6" />
+                          Incident Categories
+                        </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                          Manage the categories available on incident forms, filters, and reports.
+                        </p>
+            </div>
+          </div>
         </div>
         <button
           onClick={openCreate}

@@ -11,7 +11,7 @@ const ENTITIES: { value: string; label: string; statuses: string[] }[] = [
   {
     value: 'incident',
     label: 'Incidents',
-    statuses: ['NEW', 'ASSIGNED', 'IN_PROGRESS', 'ON_HOLD', 'WAITING_ON_CUSTOMER', 'RESOLVED', 'CLOSED', 'REOPENED'],
+    statuses: ['NEW', 'IN_PROGRESS', 'ON_HOLD', 'WAITING_ON_CUSTOMER', 'RESOLVED', 'CLOSED', 'REOPENED'],
   },
   {
     value: 'service_request',
@@ -21,7 +21,7 @@ const ENTITIES: { value: string; label: string; statuses: string[] }[] = [
   {
     value: 'problem',
     label: 'Problems',
-    statuses: ['NEW', 'ASSESSING', 'INVESTIGATING', 'KNOWN_ERROR', 'RESOLVED', 'CLOSED'],
+    statuses: ['NEW', 'INVESTIGATING', 'KNOWN_ERROR', 'RESOLVED', 'CLOSED'],
   },
   {
     value: 'change',
@@ -101,17 +101,21 @@ export function DataExport() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
-          <button
-            onClick={smartBack}
-            className="mb-2 inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-          <h1 className="text-2xl font-semibold tracking-tight">Data Export</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pull full row-level data — every ticket or SLA instance with resolved names — filtered by date range and status. Dates render in US Eastern time.
-          </p>
+          <div className="flex items-center gap-3">
+            <button
+                        onClick={smartBack}
+                        className="mb-2 inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                      </button>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Data Export</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                          Pull full row-level data — every ticket or SLA instance with resolved names — filtered by date range and status. Dates render in US Eastern time.
+                        </p>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">

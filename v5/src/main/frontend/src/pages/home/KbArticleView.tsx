@@ -163,16 +163,15 @@ export function KbArticleView() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-3">
           <button
             onClick={smartBack}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-        </div>
-        <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1 text-sm text-muted-foreground">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted-foreground">
           <Link to="/home/kb" className="hover:text-foreground hover:underline">Knowledge Base</Link>
           {article.category && (
             <>
@@ -182,7 +181,8 @@ export function KbArticleView() {
           )}
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="truncate text-foreground">{article.title}</span>
-        </nav>
+          </nav>
+        </div>
 
         <div className="flex gap-8">
           <div className="min-w-0 flex-1 space-y-6">

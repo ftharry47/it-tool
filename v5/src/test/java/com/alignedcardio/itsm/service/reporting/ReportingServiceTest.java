@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -562,7 +563,7 @@ class ReportingServiceTest {
         lenient().when(siQ.getResultList()).thenReturn(List.of(siBreached, siOk, siSr));
         lenient().when(siQ.setParameter(anyString(), any())).thenReturn(siQ);
         lenient().when(entityManager.createQuery(
-                contains("FROM SlaInstance si WHERE si.orgId"), eq(SlaInstance.class)))
+                contains("FROM SlaInstance si "), eq(SlaInstance.class)))
                 .thenReturn(siQ);
 
         stubJpql(Map.of(
@@ -574,6 +575,10 @@ class ReportingServiceTest {
 
         ReportingService service = new ReportingService(entityManager);
         Map<String, Object> result = service.slaComplianceBreakdown(orgId);
+
+        // N+1 regression: the instance query must JOIN FETCH the ticket
+        // associations instead of lazy-loading each row.
+        verify(entityManager).createQuery(contains("JOIN FETCH si.incident"), eq(SlaInstance.class));
 
         // Overall: 3 SLAs, 1 breached → 66.67%.
         @SuppressWarnings("unchecked")
@@ -647,36 +652,64 @@ class ReportingServiceTest {
         UUID actor = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.now();
 
-        stubJpql(Map.of(
-                "SELECT si.incident.id", List.of(
-                        tuple(incId, null, SlaInstance.BreachStatus.BREACHED, now)),
-                "FROM Incident i", List.of(
-                        tuple(incId, 42L, "VPN down", Incident.Status.IN_PROGRESS,
-                                "High", "Network", "HQ", "Alice", "Bob", now, now)),
-                "FROM ServiceRequest s", List.of(
-                        tuple(srId, "SR-7", "Laptop Request", ServiceRequest.Status.FULFILLED,
-                                "Medium", "HQ", "Carol", "Dan", now, now)),
-                "FROM AuditLog a", List.of(
-                        tuple("INCIDENT", incId, actor),
-                        tuple("SERVICE_REQUEST", srId, actor)),
-                "FROM AppUser u", List.of(tuple(actor, "Eve"))));
+        // Escalated incident: SLA met 2h after due → breached with a
+        // breachDurationMinutes value; two escalation events in the trail.
+        Map<String, List<Tuple>> responses = new LinkedHashMap<>();
+        // 0 incId | 1 srId | 2 breachStatus | 3 responseMetAt | 4 responseDueAt
+        // | 5 resolutionDueAt | 6 resolutionMetAt | 7 escalationLevel | 8 policy
+        responses.put("SELECT si.incident.id", List.of(
+                tuple(incId, null, SlaInstance.BreachStatus.BREACHED, now,
+                        now.minusHours(6), now.minusHours(4), now.minusHours(2),
+                        2, "Standard Resolution")));
+        responses.put("FROM Incident i", List.of(
+                tuple(incId, 42L, "VPN down", Incident.Status.IN_PROGRESS,
+                        "High", "Network", "HQ", "Alice", "Bob", now, now)));
+        responses.put("FROM ServiceRequest s", List.of(
+                tuple(srId, "SR-7", "Laptop Request", ServiceRequest.Status.FULFILLED,
+                        "Medium", "HQ", "Carol", "Dan", now, now)));
+        // lastWorkedBy query vs escalation-history query — distinct fragments.
+        responses.put("a.actorUserId", List.of(
+                tuple("INCIDENT", incId, actor),
+                tuple("SERVICE_REQUEST", srId, actor)));
+        responses.put("a.action, a.detail", List.of(
+                tuple("INCIDENT", incId, "ESCALATE_TIER", "L1 → L2", now.minusHours(5)),
+                tuple("INCIDENT", incId, "AUTO_ESCALATE_TIER", "L2 → L3", now.minusHours(3))));
+        responses.put("FROM AppUser u", List.of(tuple(actor, "Eve")));
+        stubJpql(responses);
 
-        // Location name query returns String.class, needs its own stub.
         ReportingService service = new ReportingService(entityManager);
-        List<Map<String, Object>> rows = service.fullDetailExport(
+        Map<String, List<Map<String, Object>>> sheets = service.fullDetailExport(
                 orgId, now.minusDays(30), now.plusDays(1));
 
-        assertEquals(2, rows.size());
-        Map<String, Object> inc = rows.get(0);
-        assertEquals("INCIDENT", inc.get("type"));
+        // Two separate row sets — no type discriminator.
+        List<Map<String, Object>> incidentRows = sheets.get("incidents");
+        List<Map<String, Object>> requestRows = sheets.get("serviceRequests");
+        assertEquals(1, incidentRows.size());
+        assertEquals(1, requestRows.size());
+        assertNull(incidentRows.get(0).get("type"));
+
+        Map<String, Object> inc = incidentRows.get(0);
         assertEquals("INC-42", inc.get("number"));
         assertEquals("BREACHED", inc.get("slaStatus"));
         assertEquals("Eve", inc.get("lastWorkedBy"));
-        Map<String, Object> sr = rows.get(1);
-        assertEquals("SERVICE_REQUEST", sr.get("type"));
+        // SLA detail columns
+        assertEquals("Standard Resolution", inc.get("slaPolicy"));
+        assertEquals(120L, inc.get("breachDurationMinutes")); // met 2h past due
+        assertEquals(2, inc.get("escalationLevel"));
+        assertEquals(2, inc.get("escalationCount"));
+        String hist = (String) inc.get("escalationHistory");
+        assertTrue(hist.contains("ESCALATE_TIER — L1 → L2"), hist);
+        assertTrue(hist.contains("AUTO_ESCALATE_TIER — L2 → L3"), hist);
+        assertTrue(hist.indexOf("ESCALATE_TIER") < hist.indexOf("AUTO_ESCALATE_TIER"),
+                "escalation history should be chronological");
+
+        Map<String, Object> sr = requestRows.get(0);
         assertEquals("SR-7", sr.get("number"));
         assertEquals("Laptop Request", sr.get("catalogItem"));
         assertEquals("Carol", sr.get("approver"));
+        // No SLA instance for the SR → blank SLA columns, zero escalation.
+        assertEquals("", sr.get("slaStatus"));
+        assertEquals(0, sr.get("escalationCount"));
     }
 
     @Test
@@ -824,7 +857,7 @@ class ReportingServiceTest {
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void everyBuilderTemplateRunsWithoutError() {
-        String OPEN_INCIDENT = "NEW,IN_PROGRESS,ON_HOLD,REOPENED";
+        String OPEN_INCIDENT = "NEW,IN_PROGRESS,ON_HOLD,WAITING_ON_CUSTOMER,REOPENED";
         String OPEN_REQUEST = "SUBMITTED,PENDING_APPROVAL,APPROVED,IN_FULFILLMENT,ON_HOLD,REJECTED_NEEDS_REVIEW";
 
         stubAdHocEngine();
@@ -874,6 +907,91 @@ class ReportingServiceTest {
                     "Template failed: " + t.name());
             assertNotNull(res.rows(), t.name());
         }
+    }
+
+    /**
+     * Reads the REAL AdHocQueryBuilder.tsx + DataExport.tsx constants and
+     * asserts every status-filter token parses against the actual enums.
+     * Guards the exact class of bug where a template references a status
+     * that never existed (e.g. Incident.Status.ASSIGNED) — Java-side mirrors
+     * of the TS constants can silently diverge, so this reads the source.
+     */
+    @Test
+    void frontendTemplateStatusValuesMatchRealEnums() throws Exception {
+        java.nio.file.Path frontendDir = java.nio.file.Path.of(
+                "src/main/frontend/src/pages/dashboard");
+        String qb = java.nio.file.Files.readString(frontendDir.resolve("AdHocQueryBuilder.tsx"));
+        String de = java.nio.file.Files.readString(frontendDir.resolve("DataExport.tsx"));
+
+        Map<String, Class<? extends Enum<?>>> enumByEntity = Map.of(
+                "incident", Incident.Status.class,
+                "service_request", ServiceRequest.Status.class,
+                "problem", Problem.Status.class,
+                "change", ChangeRequest.Status.class);
+
+        // 1. Top-level TSX constants (e.g. OPEN_INCIDENT = 'A,B,C').
+        Map<String, String> consts = new HashMap<>();
+        var constMatcher = java.util.regex.Pattern
+                .compile("const (\\w+) = '([A-Z_,]+)'").matcher(qb);
+        while (constMatcher.find()) {
+            consts.put(constMatcher.group(1), constMatcher.group(2));
+        }
+        assertTrue(consts.containsKey("OPEN_INCIDENT"), "OPEN_INCIDENT const not found in TSX");
+
+        // 2. Every 'status' filter inside each builder template. Templates are
+        // object literals containing entity + filters with value = const or literal.
+        var tplMatcher = java.util.regex.Pattern
+                .compile("entity: '(incident|service_request|problem|change)'.*?(?=\\{ name:|\\])",
+                        java.util.regex.Pattern.DOTALL)
+                .matcher(qb);
+        int statusFilters = 0;
+        while (tplMatcher.find()) {
+            String tpl = tplMatcher.group(0);
+            String entity = tpl.substring(tpl.indexOf("'") + 1, tpl.indexOf("'", tpl.indexOf("'") + 1));
+            var fMatcher = java.util.regex.Pattern
+                    .compile("field: 'status'[^}]*?value: ([A-Za-z_'][^,}]*)").matcher(tpl);
+            while (fMatcher.find()) {
+                statusFilters++;
+                String raw = fMatcher.group(1).trim();
+                String resolved;
+                if (raw.startsWith("'")) {
+                    resolved = raw.replace("'", "");
+                } else {
+                    resolved = consts.get(raw);
+                    if (resolved == null) failValue(raw);
+                }
+                for (String token : resolved.split(",")) {
+                    assertDoesNotThrow(() -> Enum.valueOf(
+                            (Class) enumByEntity.get(entity), token.trim()),
+                            () -> entity + " status filter references invalid enum value: " + token
+                                    + " (template: " + tpl.substring(0, Math.min(80, tpl.length())) + "…)");
+                }
+            }
+        }
+        assertTrue(statusFilters >= 8, "expected >=8 status filters parsed from templates, got " + statusFilters);
+
+        // 3. DataExport ENTITIES status lists (these drive the export filter
+        // that hits the same enum parse path server-side).
+        var entMatcher = java.util.regex.Pattern
+                .compile("value: '(incident|service_request|problem|change)'.*?statuses: \\[([^]]+)]",
+                        java.util.regex.Pattern.DOTALL)
+                .matcher(de);
+        int exportLists = 0;
+        while (entMatcher.find()) {
+            exportLists++;
+            Class<? extends Enum<?>> enumClass = enumByEntity.get(entMatcher.group(1));
+            for (String tok : entMatcher.group(2).split(",")) {
+                String v = tok.trim().replace("'", "");
+                if (v.isEmpty()) continue;
+                assertDoesNotThrow(() -> Enum.valueOf((Class) enumClass, v),
+                        () -> "DataExport " + entMatcher.group(1) + " lists invalid status: " + v);
+            }
+        }
+        assertEquals(4, exportLists, "expected 4 entity status lists in DataExport");
+    }
+
+    private static String failValue(String raw) {
+        throw new AssertionError("template references unknown const: " + raw);
     }
 
     /** Fully-stubbed criteria engine: any entity root, per-field java types,
