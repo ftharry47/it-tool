@@ -513,6 +513,101 @@ class ReportingServiceTest {
                 com.alignedcardio.itsm.entity.ServiceRequest.Status.CANCELLED);
     }
 
+    // --- SLA Compliance Breakdown verification (overall / team / agent) ---
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void slaComplianceBreakdownComputesOverallTeamAndAgent() {
+        UUID orgId = UUID.randomUUID();
+        UUID aliceId = UUID.randomUUID();
+        UUID bobId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        AppUser alice = mock(AppUser.class);
+        lenient().when(alice.getId()).thenReturn(aliceId);
+        lenient().when(alice.getDisplayName()).thenReturn("Alice");
+        Team l1 = mock(Team.class);
+        lenient().when(l1.getName()).thenReturn("L1 Support");
+        Incident incBreached = mock(Incident.class);
+        lenient().when(incBreached.getAssignee()).thenReturn(alice);
+        lenient().when(incBreached.getAssignmentTeam()).thenReturn(l1);
+        lenient().when(incBreached.getDeletedAt()).thenReturn(null);
+        Incident incOk = mock(Incident.class);
+        lenient().when(incOk.getAssignee()).thenReturn(alice);
+        lenient().when(incOk.getAssignmentTeam()).thenReturn(l1);
+        lenient().when(incOk.getDeletedAt()).thenReturn(null);
+
+        UUID srId = UUID.randomUUID();
+        ServiceRequest sr = mock(ServiceRequest.class);
+        lenient().when(sr.getId()).thenReturn(srId);
+        lenient().when(sr.getDeletedAt()).thenReturn(null);
+        lenient().when(sr.getRequester()).thenReturn(null);
+
+        // Instance 1: breached (met after due). 2: compliant (met before due).
+        // 3: SR instance — ownership via fulfillment task assignee (Bob).
+        SlaInstance siBreached = mock(SlaInstance.class);
+        lenient().when(siBreached.getIncident()).thenReturn(incBreached);
+        lenient().when(siBreached.getResolutionDueAt()).thenReturn(now.minusHours(2));
+        lenient().when(siBreached.getResolutionMetAt()).thenReturn(now.minusHours(1));
+        SlaInstance siOk = mock(SlaInstance.class);
+        lenient().when(siOk.getIncident()).thenReturn(incOk);
+        lenient().when(siOk.getResolutionDueAt()).thenReturn(now.plusHours(5));
+        lenient().when(siOk.getResolutionMetAt()).thenReturn(now);
+        SlaInstance siSr = mock(SlaInstance.class);
+        lenient().when(siSr.getServiceRequest()).thenReturn(sr);
+        lenient().when(siSr.getResolutionDueAt()).thenReturn(now.plusHours(5));
+        lenient().when(siSr.getResolutionMetAt()).thenReturn(now);
+
+        TypedQuery<SlaInstance> siQ = mock(TypedQuery.class);
+        lenient().when(siQ.getResultList()).thenReturn(List.of(siBreached, siOk, siSr));
+        lenient().when(siQ.setParameter(anyString(), any())).thenReturn(siQ);
+        lenient().when(entityManager.createQuery(
+                contains("FROM SlaInstance si WHERE si.orgId"), eq(SlaInstance.class)))
+                .thenReturn(siQ);
+
+        stubJpql(Map.of(
+                "FROM FulfillmentTask ft JOIN ft.assignee a", List.of(
+                        tuple(srId, bobId, "Bob")),
+                "FROM TeamMember tm JOIN tm.team t", List.of(
+                        tuple(aliceId, "L1 Support"),
+                        tuple(bobId, "L2 Support"))));
+
+        ReportingService service = new ReportingService(entityManager);
+        Map<String, Object> result = service.slaComplianceBreakdown(orgId);
+
+        // Overall: 3 SLAs, 1 breached → 66.67%.
+        @SuppressWarnings("unchecked")
+        Map<String, Object> overall = (Map<String, Object>) result.get("overall");
+        assertEquals(3L, overall.get("total"));
+        assertEquals(1L, overall.get("breached"));
+        assertEquals(66.67, overall.get("compliancePercent"));
+
+        // By agent: Alice 2 total / 1 breached (50%), Bob 1 / 0 (100%).
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> byAgent = (List<Map<String, Object>>) result.get("byAgent");
+        Map<String, Object> aliceRow = byAgent.stream()
+                .filter(r -> "Alice".equals(r.get("agentName"))).findFirst().orElseThrow();
+        assertEquals(2L, aliceRow.get("total"));
+        assertEquals(1L, aliceRow.get("breached"));
+        assertEquals(50.0, aliceRow.get("compliancePercent"));
+        Map<String, Object> bobRow = byAgent.stream()
+                .filter(r -> "Bob".equals(r.get("agentName"))).findFirst().orElseThrow();
+        assertEquals(1L, bobRow.get("total"));
+        assertEquals(100.0, bobRow.get("compliancePercent"));
+
+        // By team: L1 2/1, L2 1/0.
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> byTeam = (List<Map<String, Object>>) result.get("byTeam");
+        Map<String, Object> l1Row = byTeam.stream()
+                .filter(r -> "L1 Support".equals(r.get("teamName"))).findFirst().orElseThrow();
+        assertEquals(2L, l1Row.get("total"));
+        assertEquals(50.0, l1Row.get("compliancePercent"));
+        Map<String, Object> l2Row = byTeam.stream()
+                .filter(r -> "L2 Support".equals(r.get("teamName"))).findFirst().orElseThrow();
+        assertEquals(1L, l2Row.get("total"));
+        assertEquals(100.0, l2Row.get("compliancePercent"));
+    }
+
     // --- Parts D/E/F: union export, location dashboard, workload detail ---
 
     /** Dispatches string-JPQL Tuple queries by content fragment. */
@@ -599,17 +694,20 @@ class ReportingServiceTest {
                 contains("SELECT l.name FROM Location"), eq(String.class)))
                 .thenReturn(locNames);
 
-        stubJpql(Map.of(
-                "i.createdAt >= :from", List.of(tuple("HQ", 5L)),
-                "i.id IN :ids", List.of(tuple("HQ", 1L)),
-                "s.id IN :ids", List.of(tuple("HQ", 2L)),
-                "i.status IN :statuses", List.of(tuple("HQ", 3L)),
-                "s.status IN :statuses", List.of(tuple("HQ", 1L)),
-                "i.resolvedAt >= :from", List.of(tuple("HQ", 4L)),
-                "s.updatedAt >= :from", List.of(tuple("HQ", 2L)),
-                "GROUP BY a.entityType", List.of(
-                        tuple("INCIDENT", incId),
-                        tuple("SERVICE_REQUEST", UUID.randomUUID()))));
+        // LinkedHashMap — fragment order matters (more specific first):
+        // the SR resolved query also contains "s.status IN :statuses".
+        Map<String, List<Tuple>> responses = new LinkedHashMap<>();
+        responses.put("i.id IN :ids", List.of(tuple("HQ", 1L)));
+        responses.put("s.id IN :ids", List.of(tuple("HQ", 2L)));
+        responses.put("i.resolvedAt >= :from", List.of(tuple("HQ", 4L)));
+        responses.put("s.updatedAt >= :from", List.of(tuple("HQ", 2L)));
+        responses.put("i.status IN :statuses", List.of(tuple("HQ", 3L)));
+        responses.put("s.status IN :statuses", List.of(tuple("HQ", 1L)));
+        responses.put("i.createdAt >= :from", List.of(tuple("HQ", 5L)));
+        responses.put("GROUP BY a.entityType", List.of(
+                tuple("INCIDENT", incId),
+                tuple("SERVICE_REQUEST", UUID.randomUUID())));
+        stubJpql(responses);
 
         ReportingService service = new ReportingService(entityManager);
         List<Map<String, Object>> rows = service.locationDashboard(

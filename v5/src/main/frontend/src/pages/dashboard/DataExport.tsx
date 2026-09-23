@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMsal } from '@azure/msal-react'
-import { Download } from 'lucide-react'
+import { ArrowLeft, Download } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { DateInput } from '../../components/ui/DateInput'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 
@@ -48,6 +49,7 @@ export function DataExport() {
   const account = accounts[0]
   const { currentUser } = useAuth()
   const isAdmin = (currentUser?.roles ?? []).some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN')
+  const smartBack = useSmartBack('/dashboard/reports')
 
   const [entity, setEntity] = useState('incident')
   const [status, setStatus] = useState('')
@@ -99,6 +101,13 @@ export function DataExport() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
+          <button
+            onClick={smartBack}
+            className="mb-2 inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Data Export</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Pull full row-level data — every ticket or SLA instance with resolved names — filtered by date range and status. Dates render in US Eastern time.
