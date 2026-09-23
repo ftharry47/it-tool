@@ -84,6 +84,8 @@ interface BuilderTemplate {
   dateField?: string
   /** Only `to` — for "older than" templates. */
   olderThanDays?: number
+  /** Future window — `to` = now + N days (e.g. changes scheduled ahead). */
+  aheadDays?: number
 }
 
 const BUILDER_TEMPLATES: BuilderTemplate[] = [
@@ -95,6 +97,11 @@ const BUILDER_TEMPLATES: BuilderTemplate[] = [
   { name: 'Reopened Incidents Last 30 Days', entity: 'incident', detailed: true, days: 30, filters: [{ field: 'status', op: 'eq', value: 'REOPENED' }] },
   { name: 'Incidents by Location', entity: 'incident', detailed: false, groupBy: 'location' },
   { name: 'Open Requests by Catalog Item', entity: 'service_request', detailed: false, groupBy: 'catalogItem', filters: [{ field: 'status', op: 'in', value: OPEN_REQUEST }] },
+  { name: 'Open Incidents Older Than 14 Days', entity: 'incident', detailed: true, olderThanDays: 14, filters: [{ field: 'status', op: 'in', value: OPEN_INCIDENT }] },
+  { name: 'Incidents by Category', entity: 'incident', detailed: false, groupBy: 'category' },
+  { name: 'All Requests by Catalog Item', entity: 'service_request', detailed: false, groupBy: 'catalogItem' },
+  { name: 'Changes Scheduled This Week', entity: 'change', detailed: true, aheadDays: 7, dateField: 'plannedStart', filters: [{ field: 'status', op: 'in', value: 'APPROVED,SCHEDULED,IN_PROGRESS' }] },
+  { name: 'Changes by Risk', entity: 'change', detailed: false, groupBy: 'risk' },
 ]
 
 interface CannedTemplate {
@@ -260,12 +267,15 @@ export function AdHocQueryBuilder() {
     onError: (e) => setSaveError(e.message),
   })
 
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const deleteMutation = useMutation<void, Error, string>({
     mutationFn: async (id) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/reports/saved/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw new Error(`Delete failed (HTTP ${res.status})`)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['saved-reports'] }),
+    onError: (e) => setDeleteError(e.message),
   })
 
   const runSaved = useMutation<QueryResponse, Error, SavedReport>({
@@ -304,8 +314,10 @@ export function AdHocQueryBuilder() {
     setMode(t.detailed ? 'detailed' : 'grouped')
     setGroupBy(t.groupBy ?? '')
     const now = new Date()
-    const newFrom = t.days ? new Date(now.getTime() - t.days * 86400000).toISOString().slice(0, 16) : ''
-    const newTo = t.olderThanDays ? new Date(now.getTime() - t.olderThanDays * 86400000).toISOString().slice(0, 16) : ''
+    const newFrom = t.days ? new Date(now.getTime() - t.days * 86400000).toISOString().slice(0, 16)
+        : t.aheadDays ? now.toISOString().slice(0, 16) : ''
+    const newTo = t.olderThanDays ? new Date(now.getTime() - t.olderThanDays * 86400000).toISOString().slice(0, 16)
+        : t.aheadDays ? new Date(now.getTime() + t.aheadDays * 86400000).toISOString().slice(0, 16) : ''
     const newDateField = t.dateField ?? 'createdAt'
     setFrom(newFrom)
     setTo(newTo)
@@ -439,6 +451,8 @@ export function AdHocQueryBuilder() {
               </button>
             ))}
           </div>
+          <h3 className="mb-2 mt-4 text-sm font-semibold text-muted-foreground">Cross-entity</h3>
+          <FullDetailExportCard instance={instance} account={account} />
           {canned && (
             <div className="mt-4">
               {cannedQuery.isLoading ? (
@@ -477,6 +491,11 @@ export function AdHocQueryBuilder() {
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h2 className="mb-3 text-lg font-semibold">Saved Queries</h2>
+          {deleteError && (
+            <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {deleteError}
+            </p>
+          )}
           {(savedQuery.data ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">No saved queries yet — build a query below and save it.</p>
           ) : (
@@ -779,6 +798,130 @@ export function AdHocQueryBuilder() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+interface FullDetailRow {
+  type: string
+  number: string
+  title: string
+  status: string
+  priority: string
+  category: string
+  catalogItem: string
+  location: string
+  assignee: string
+  approver: string
+  requester: string
+  createdAt: string
+  resolvedOrDecidedAt: string
+  slaStatus: string
+  firstResponseAt: string
+  lastWorkedBy: string
+}
+
+/**
+ * Cross-entity export — Incidents + Service Requests in one union table with
+ * a `type` discriminator, SLA status, and last-worked-by attribution.
+ * Backed by /api/v1/reports/full-detail-export (the ad-hoc engine is
+ * single-entity, so this template has its own endpoint).
+ */
+function FullDetailExportCard({ instance, account }: {
+  instance: ReturnType<typeof useMsal>['instance']
+  account: ReturnType<typeof useMsal>['accounts'][number]
+}) {
+  const now = new Date()
+  const monthAgo = new Date(now.getTime() - 30 * 86400000)
+  const [from, setFrom] = useState(monthAgo.toISOString().slice(0, 10))
+  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+  const [showPreview, setShowPreview] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const params = new URLSearchParams()
+  if (from) params.set('from', new Date(`${from}T00:00:00Z`).toISOString())
+  if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
+
+  const previewQuery = useQuery<FullDetailRow[]>({
+    queryKey: ['full-detail-export', from, to],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/full-detail-export?${params}&format=json`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account && showPreview,
+  })
+
+  const download = async (format: 'csv' | 'xlsx') => {
+    setError(null)
+    try {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/full-detail-export?${params}&format=${format}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `full-detail-export.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed')
+    }
+  }
+
+  const inputCls = 'rounded-md border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring'
+
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">Full Detail Export</span>
+        <span className="text-xs text-muted-foreground">Incidents + service requests with SLA status and worked-by attribution</span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label className="text-xs text-muted-foreground">
+            From <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setShowPreview(false) }} className={inputCls} />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            To <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setShowPreview(false) }} className={inputCls} />
+          </label>
+          <button
+            onClick={() => setShowPreview(true)}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+          >
+            Preview
+          </button>
+          <button onClick={() => download('csv')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">CSV</button>
+          <button onClick={() => download('xlsx')} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">XLSX</button>
+        </div>
+      </div>
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {showPreview && (
+        <div className="mt-3">
+          {previewQuery.isLoading ? (
+            <Loading compact />
+          ) : previewQuery.error ? (
+            <p className="text-sm text-destructive">Could not load preview.</p>
+          ) : (
+            <DataTable<FullDetailRow>
+              caption={`Full detail export — ${previewQuery.data?.length ?? 0} rows`}
+              columns={[
+                { key: 'number', header: '#' },
+                { key: 'type', header: 'Type' },
+                { key: 'title', header: 'Title' },
+                { key: 'status', header: 'Status' },
+                { key: 'priority', header: 'Priority' },
+                { key: 'location', header: 'Location' },
+                { key: 'assignee', header: 'Assignee' },
+                { key: 'slaStatus', header: 'SLA' },
+                { key: 'lastWorkedBy', header: 'Last Worked By' },
+                { key: 'createdAt', header: 'Created' },
+              ]}
+              data={(previewQuery.data ?? []).slice(0, 50)}
+              getRowKey={(r) => `${r.type}:${r.number}`}
+              emptyText="No tickets in this range."
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }

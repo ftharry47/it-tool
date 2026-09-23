@@ -36,7 +36,7 @@ public class ReportingService {
             "incident", Set.of("orgId", "status", "priority", "category", "assignee", "requester", "createdAt", "resolvedAt", "closedAt", "impact", "urgency", "location"),
             "issue", Set.of("orgId", "status", "priority", "createdAt", "assignee", "reporter", "type"),
             "problem", Set.of("orgId", "status", "assignee", "createdAt"),
-            "change", Set.of("orgId", "status", "assignee", "requestedBy", "changeType", "risk", "createdAt"),
+            "change", Set.of("orgId", "status", "assignee", "requestedBy", "changeType", "risk", "createdAt", "plannedStart"),
             "service_request", Set.of("orgId", "status", "createdAt", "requester", "catalogItem", "location"));
 
     private static final Map<String, String> DATE_FIELD_BY_ENTITY = Map.of(
@@ -1014,7 +1014,7 @@ public class ReportingService {
      * outside its creation window silently disappeared.
      */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<Map<String, Object>> agentPerformanceTickets(UUID orgId, UUID agentId,
+    public List<Map<String, Object>> agentPerformanceTickets(UUID orgId, List<UUID> agentIds,
                                                              OffsetDateTime from, OffsetDateTime to,
                                                              String entityType, String status) {
         // audit entityType → lower-case report entity key.
@@ -1030,11 +1030,11 @@ public class ReportingService {
         // Distinct tickets the agent acted on in range + when they last acted.
         List<Tuple> auditRows = entityManager.createQuery(
                 "SELECT a.entityType, a.entityId, MAX(a.createdAt) FROM AuditLog a " +
-                        "WHERE a.orgId = :org AND a.actorUserId = :agent " +
+                        "WHERE a.orgId = :org AND a.actorUserId IN :agents " +
                         "AND a.createdAt >= :from AND a.createdAt < :to " +
                         "AND a.entityType IN :types " +
                         "GROUP BY a.entityType, a.entityId", Tuple.class)
-                .setParameter("org", orgId).setParameter("agent", agentId)
+                .setParameter("org", orgId).setParameter("agents", agentIds)
                 .setParameter("from", from).setParameter("to", to)
                 .setParameter("types", wanted)
                 .getResultList();
@@ -1966,7 +1966,7 @@ public class ReportingService {
             "incident", Set.of("createdAt", "resolvedAt", "closedAt"),
             "issue", Set.of("createdAt"),
             "problem", Set.of("createdAt", "resolvedAt", "closedAt"),
-            "change", Set.of("createdAt"),
+            "change", Set.of("createdAt", "plannedStart"),
             "service_request", Set.of("createdAt", "decidedAt"));
 
     private Optional<Predicate> applyDateRange(CriteriaBuilder cb, Root<?> root, String entity, AdHocQueryRequest.DateRange dateRange) {
@@ -2003,11 +2003,12 @@ public class ReportingService {
             return buildEntityPredicate(cb, path, filter, fieldClass);
         }
 
-        Object parsedValue = parseValue(filter.value(), fieldClass);
-
+        // parseValue is lazy per-op — eager evaluation would throw
+        // "No enum constant" on a comma-joined "in" list before the in-branch
+        // gets a chance to split it.
         return switch (filter.op()) {
-            case "eq" -> cb.equal(path, parsedValue);
-            case "ne" -> cb.notEqual(path, parsedValue);
+            case "eq" -> cb.equal(path, parseValue(filter.value(), fieldClass));
+            case "ne" -> cb.notEqual(path, parseValue(filter.value(), fieldClass));
             case "in" -> {
                 List<Object> values = Arrays.stream(filter.value().split(","))
                         .map(String::trim)
@@ -2317,5 +2318,457 @@ public class ReportingService {
                     "totalPausedMinutes", si.getTotalPausedMinutes()));
         }
         return rows;
+    }
+
+    // ---- Full Detail Export (cross-entity union) ----
+
+    /**
+     * Incidents + Service Requests in one union table with a `type`
+     * discriminator, SLA status, first-response time, and last-worked-by
+     * attribution. Ranged on createdAt. For the Query Builder's
+     * "Full Detail Export" template — the ad-hoc engine is single-entity, so
+     * this union lives here.
+     */
+    public List<Map<String, Object>> fullDetailExport(UUID orgId, OffsetDateTime from, OffsetDateTime to) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        // SLA status + first response, keyed by "TYPE:entityId".
+        Map<String, Tuple> slaByEntity = new HashMap<>();
+        for (Tuple t : entityManager.createQuery(
+                "SELECT si.incident.id, si.serviceRequest.id, si.breachStatus, si.responseMetAt "
+                        + "FROM SlaInstance si WHERE si.orgId = :org", Tuple.class)
+                .setParameter("org", orgId).getResultList()) {
+            if (t.get(0) != null) slaByEntity.put("INCIDENT:" + t.get(0), t);
+            if (t.get(1) != null) slaByEntity.put("SERVICE_REQUEST:" + t.get(1), t);
+        }
+
+        List<Tuple> incidents = entityManager.createQuery(
+                "SELECT i.id, i.number, i.title, i.status, p.name, c.name, l.name, "
+                        + "a.displayName, r.displayName, i.createdAt, i.resolvedAt FROM Incident i "
+                        + "LEFT JOIN i.priority p LEFT JOIN i.category c LEFT JOIN i.location l "
+                        + "LEFT JOIN i.assignee a LEFT JOIN i.requester r "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL "
+                        + "AND i.createdAt >= :from AND i.createdAt <= :to ORDER BY i.createdAt DESC",
+                Tuple.class)
+                .setParameter("org", orgId).setParameter("from", from).setParameter("to", to)
+                .getResultList();
+        List<Tuple> requests = entityManager.createQuery(
+                "SELECT s.id, s.number, ci.name, s.status, pr.name, l.name, ap.displayName, "
+                        + "r.displayName, s.createdAt, s.decidedAt FROM ServiceRequest s "
+                        + "LEFT JOIN s.catalogItem ci LEFT JOIN s.priority pr LEFT JOIN s.location l "
+                        + "LEFT JOIN s.approver ap LEFT JOIN s.requester r "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL "
+                        + "AND s.createdAt >= :from AND s.createdAt <= :to ORDER BY s.createdAt DESC",
+                Tuple.class)
+                .setParameter("org", orgId).setParameter("from", from).setParameter("to", to)
+                .getResultList();
+
+        // Last worked-by: actor of the latest audit entry per selected ticket.
+        Set<UUID> ticketIds = new HashSet<>();
+        incidents.forEach(t -> ticketIds.add(t.get(0, UUID.class)));
+        requests.forEach(t -> ticketIds.add(t.get(0, UUID.class)));
+        Map<String, String> lastWorkedBy = ticketIds.isEmpty() ? Map.of() : lastWorkedByMap(orgId, ticketIds);
+
+        for (Tuple t : incidents) {
+            UUID id = t.get(0, UUID.class);
+            Tuple sla = slaByEntity.get("INCIDENT:" + id);
+            rows.add(row(
+                    "type", "INCIDENT",
+                    "number", "INC-" + t.get(1),
+                    "title", t.get(2) != null ? t.get(2) : "",
+                    "status", t.get(3) != null ? t.get(3).toString() : "",
+                    "priority", t.get(4) != null ? t.get(4) : "",
+                    "category", t.get(5) != null ? t.get(5) : "",
+                    "catalogItem", "",
+                    "location", t.get(6) != null ? t.get(6) : "",
+                    "assignee", t.get(7) != null ? t.get(7) : "",
+                    "approver", "",
+                    "requester", t.get(8) != null ? t.get(8) : "",
+                    "createdAt", fmt(t.get(9, OffsetDateTime.class)),
+                    "resolvedOrDecidedAt", fmt(t.get(10, OffsetDateTime.class)),
+                    "slaStatus", sla != null && sla.get(2) != null ? sla.get(2).toString() : "",
+                    "firstResponseAt", sla != null ? fmt(sla.get(3, OffsetDateTime.class)) : "",
+                    "lastWorkedBy", lastWorkedBy.getOrDefault("INCIDENT:" + id, "")));
+        }
+        for (Tuple t : requests) {
+            UUID id = t.get(0, UUID.class);
+            Tuple sla = slaByEntity.get("SERVICE_REQUEST:" + id);
+            rows.add(row(
+                    "type", "SERVICE_REQUEST",
+                    "number", t.get(1),
+                    "title", t.get(2) != null ? t.get(2) : "",
+                    "status", t.get(3) != null ? t.get(3).toString() : "",
+                    "priority", t.get(4) != null ? t.get(4) : "",
+                    "category", "",
+                    "catalogItem", t.get(2) != null ? t.get(2) : "",
+                    "location", t.get(5) != null ? t.get(5) : "",
+                    "assignee", "",
+                    "approver", t.get(6) != null ? t.get(6) : "",
+                    "requester", t.get(7) != null ? t.get(7) : "",
+                    "createdAt", fmt(t.get(8, OffsetDateTime.class)),
+                    "resolvedOrDecidedAt", fmt(t.get(9, OffsetDateTime.class)),
+                    "slaStatus", sla != null && sla.get(2) != null ? sla.get(2).toString() : "",
+                    "firstResponseAt", sla != null ? fmt(sla.get(3, OffsetDateTime.class)) : "",
+                    "lastWorkedBy", lastWorkedBy.getOrDefault("SERVICE_REQUEST:" + id, "")));
+        }
+        return rows;
+    }
+
+    /** Latest-audit-actor display name per entityId ("TYPE:id" → name). */
+    private Map<String, String> lastWorkedByMap(UUID orgId, Set<UUID> entityIds) {
+        Map<String, UUID> actorByEntity = new LinkedHashMap<>();
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.entityType, a.entityId, a.actorUserId FROM AuditLog a "
+                        + "WHERE a.orgId = :org AND a.entityId IN :ids "
+                        + "ORDER BY a.createdAt DESC", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", entityIds).getResultList()) {
+            actorByEntity.putIfAbsent(
+                    t.get(0, String.class) + ":" + t.get(1, UUID.class), t.get(2, UUID.class));
+        }
+        Set<UUID> actorIds = actorByEntity.values().stream().filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> names = new HashMap<>();
+        if (!actorIds.isEmpty()) {
+            for (Tuple t : entityManager.createQuery(
+                    "SELECT u.id, u.displayName FROM AppUser u WHERE u.id IN :ids", Tuple.class)
+                    .setParameter("ids", actorIds).getResultList()) {
+                names.put(t.get(0, UUID.class), t.get(1, String.class));
+            }
+        }
+        Map<String, String> out = new HashMap<>();
+        actorByEntity.forEach((k, actorId) -> out.put(k, names.getOrDefault(actorId, "")));
+        return out;
+    }
+
+    // ---- Location Dashboard ----
+
+    private static final List<Incident.Status> OPEN_INCIDENT_STATUSES_DASH = List.of(
+            Incident.Status.NEW, Incident.Status.IN_PROGRESS, Incident.Status.ON_HOLD,
+            Incident.Status.WAITING_ON_CUSTOMER, Incident.Status.REOPENED);
+    private static final List<ServiceRequest.Status> OPEN_SR_STATUSES_DASH = List.of(
+            ServiceRequest.Status.SUBMITTED, ServiceRequest.Status.PENDING_APPROVAL,
+            ServiceRequest.Status.APPROVED, ServiceRequest.Status.IN_FULFILLMENT,
+            ServiceRequest.Status.ON_HOLD, ServiceRequest.Status.REJECTED_NEEDS_REVIEW);
+
+    /**
+     * Per-location operations summary: opened in range, worked-on in range
+     * (audit-driven — same definition as "Tickets I Worked On"), currently
+     * pending, resolved in range. Incidents + service requests combined.
+     */
+    public List<Map<String, Object>> locationDashboard(UUID orgId, OffsetDateTime from, OffsetDateTime to) {
+        Map<String, long[]> stats = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        entityManager.createQuery(
+                        "SELECT l.name FROM Location l WHERE l.orgId = :org AND l.deletedAt IS NULL",
+                        String.class)
+                .setParameter("org", orgId).getResultList()
+                .forEach(n -> stats.put(n, new long[4]));
+        stats.putIfAbsent("(No location)", new long[4]);
+
+        // [0] opened — createdAt in range
+        addLocationCounts(stats, 0, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(i) FROM Incident i LEFT JOIN i.location l "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL "
+                        + "AND i.createdAt >= :from AND i.createdAt <= :to GROUP BY l.name", from, to);
+        addLocationCounts(stats, 0, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(s) FROM ServiceRequest s LEFT JOIN s.location l "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL "
+                        + "AND s.createdAt >= :from AND s.createdAt <= :to GROUP BY l.name", from, to);
+
+        // [1] worked-on — distinct tickets with audit activity in range
+        List<Tuple> workedRows = entityManager.createQuery(
+                "SELECT a.entityType, a.entityId FROM AuditLog a "
+                        + "WHERE a.orgId = :org AND a.createdAt >= :from AND a.createdAt <= :to "
+                        + "AND a.entityType IN ('INCIDENT','SERVICE_REQUEST') "
+                        + "GROUP BY a.entityType, a.entityId", Tuple.class)
+                .setParameter("org", orgId).setParameter("from", from).setParameter("to", to)
+                .getResultList();
+        List<UUID> workedIncidents = workedRows.stream()
+                .filter(t -> "INCIDENT".equals(t.get(0))).map(t -> t.get(1, UUID.class)).toList();
+        List<UUID> workedRequests = workedRows.stream()
+                .filter(t -> "SERVICE_REQUEST".equals(t.get(0))).map(t -> t.get(1, UUID.class)).toList();
+        if (!workedIncidents.isEmpty()) {
+            addLocationCountsIds(stats, 1, orgId,
+                    "SELECT COALESCE(l.name, '(No location)'), COUNT(DISTINCT i.id) "
+                            + "FROM Incident i LEFT JOIN i.location l "
+                            + "WHERE i.orgId = :org AND i.id IN :ids GROUP BY l.name", workedIncidents);
+        }
+        if (!workedRequests.isEmpty()) {
+            addLocationCountsIds(stats, 1, orgId,
+                    "SELECT COALESCE(l.name, '(No location)'), COUNT(DISTINCT s.id) "
+                            + "FROM ServiceRequest s LEFT JOIN s.location l "
+                            + "WHERE s.orgId = :org AND s.id IN :ids GROUP BY l.name", workedRequests);
+        }
+
+        // [2] pending — currently open, not range-bound
+        addLocationCountsOpen(stats, 2, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(i) FROM Incident i LEFT JOIN i.location l "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL AND i.status IN :statuses GROUP BY l.name",
+                OPEN_INCIDENT_STATUSES_DASH);
+        addLocationCountsOpen(stats, 2, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(s) FROM ServiceRequest s LEFT JOIN s.location l "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL AND s.status IN :statuses GROUP BY l.name",
+                OPEN_SR_STATUSES_DASH);
+
+        // [3] resolved — incident resolvedAt / SR fulfilled (updatedAt) in range
+        addLocationCounts(stats, 3, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(i) FROM Incident i LEFT JOIN i.location l "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL "
+                        + "AND i.resolvedAt >= :from AND i.resolvedAt <= :to GROUP BY l.name", from, to);
+        addLocationCountsOpen(stats, 3, orgId,
+                "SELECT COALESCE(l.name, '(No location)'), COUNT(s) FROM ServiceRequest s LEFT JOIN s.location l "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL AND s.status IN :statuses "
+                        + "AND s.updatedAt >= :from AND s.updatedAt <= :to GROUP BY l.name",
+                List.of(ServiceRequest.Status.FULFILLED), from, to);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        stats.forEach((name, c) -> rows.add(row(
+                "location", name,
+                "opened", c[0],
+                "workedOn", c[1],
+                "pending", c[2],
+                "resolved", c[3])));
+        return rows;
+    }
+
+    private void addLocationCounts(Map<String, long[]> stats, int idx, UUID orgId,
+                                   String jpql, OffsetDateTime from, OffsetDateTime to) {
+        for (Tuple t : entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("org", orgId).setParameter("from", from).setParameter("to", to)
+                .getResultList()) {
+            stats.computeIfAbsent(t.get(0, String.class), k -> new long[4])[idx] += t.get(1, Long.class);
+        }
+    }
+
+    private void addLocationCountsIds(Map<String, long[]> stats, int idx, UUID orgId,
+                                      String jpql, List<UUID> ids) {
+        for (Tuple t : entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", ids).getResultList()) {
+            stats.computeIfAbsent(t.get(0, String.class), k -> new long[4])[idx] += t.get(1, Long.class);
+        }
+    }
+
+    private void addLocationCountsOpen(Map<String, long[]> stats, int idx, UUID orgId,
+                                       String jpql, List<? extends Enum<?>> statuses) {
+        addLocationCountsOpen(stats, idx, orgId, jpql, statuses, null, null);
+    }
+
+    private void addLocationCountsOpen(Map<String, long[]> stats, int idx, UUID orgId,
+                                       String jpql, List<? extends Enum<?>> statuses,
+                                       OffsetDateTime from, OffsetDateTime to) {
+        TypedQuery<Tuple> q = entityManager.createQuery(jpql, Tuple.class)
+                .setParameter("org", orgId).setParameter("statuses", statuses);
+        if (from != null) q.setParameter("from", from);
+        if (to != null) q.setParameter("to", to);
+        for (Tuple t : q.getResultList()) {
+            stats.computeIfAbsent(t.get(0, String.class), k -> new long[4])[idx] += t.get(1, Long.class);
+        }
+    }
+
+    // ---- Agent Workload Detail (SUPER_ADMIN, grouped by tier) ----
+
+    /**
+     * Per-tier workload: every member of L1/L2/L3/IT Fulfillment, including
+     * members with zero work (the gap the monthly Agent Performance table has).
+     * Metrics: open assigned, audit actions in range, resolved in range,
+     * currently-overdue assigned, SLA compliance %.
+     */
+    public List<Map<String, Object>> agentWorkloadDetail(UUID orgId, OffsetDateTime from, OffsetDateTime to) {
+        List<UUID> tierIds = List.of(SupportTiers.L1_ID, SupportTiers.L2_ID,
+                SupportTiers.L3_ID, SupportTiers.IT_FULFILLMENT_ID);
+        Map<UUID, String> tierNames = new HashMap<>();
+        for (Team t : entityManager.createQuery(
+                "SELECT t FROM Team t WHERE t.id IN :ids", Team.class)
+                .setParameter("ids", tierIds).getResultList()) {
+            tierNames.put(t.getId(), t.getName());
+        }
+        Map<UUID, String> tierFallback = Map.of(
+                SupportTiers.L1_ID, "L1 Support", SupportTiers.L2_ID, "L2 Support",
+                SupportTiers.L3_ID, "L3 Support", SupportTiers.IT_FULFILLMENT_ID, "IT Fulfillment");
+
+        // team.id -> [member rows]
+        Map<UUID, List<Map<String, Object>>> members = new LinkedHashMap<>();
+        tierIds.forEach(id -> members.put(id, new ArrayList<>()));
+        for (Tuple t : entityManager.createQuery(
+                "SELECT tm.team.id, u.id, u.displayName FROM TeamMember tm JOIN tm.user u "
+                        + "WHERE tm.team.id IN :ids AND u.deletedAt IS NULL "
+                        + "ORDER BY tm.team.id, u.displayName", Tuple.class)
+                .setParameter("ids", tierIds).getResultList()) {
+            UUID teamId = t.get(0, UUID.class);
+            members.computeIfAbsent(teamId, k -> new ArrayList<>()).add(row(
+                    "agentId", t.get(1, UUID.class).toString(),
+                    "name", t.get(2, String.class),
+                    "openAssigned", 0L, "worked", 0L, "resolved", 0L,
+                    "overdue", 0L, "slaPercent", null));
+        }
+
+        Set<UUID> agentIds = members.values().stream().flatMap(List::stream)
+                .map(m -> UUID.fromString((String) m.get("agentId"))).collect(Collectors.toSet());
+        if (agentIds.isEmpty()) {
+            return tierIds.stream().map(id -> Map.<String, Object>of(
+                    "team", tierNames.getOrDefault(id, tierFallback.get(id)),
+                    "teamId", id.toString(),
+                    "members", List.<Map<String, Object>>of())).collect(Collectors.toList());
+        }
+
+        Map<UUID, long[]> m = new HashMap<>(); // [open, worked, resolved, overdue]
+        agentIds.forEach(id -> m.put(id, new long[4]));
+        Map<UUID, long[]> sla = new HashMap<>(); // [total, breached]
+
+        // open assigned: open incidents + open fulfillment tasks
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.id, COUNT(i) FROM Incident i JOIN i.assignee a "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL AND i.status IN :statuses "
+                        + "AND a.id IN :ids GROUP BY a.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("statuses", OPEN_INCIDENT_STATUSES_DASH)
+                .setParameter("ids", agentIds).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[0] += t.get(1, Long.class);
+        }
+        for (Tuple t : entityManager.createQuery(
+                "SELECT ft.assignee.id, COUNT(ft) FROM FulfillmentTask ft JOIN ft.serviceRequest s "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL AND ft.assignee.id IN :ids "
+                        + "AND ft.status IN :statuses GROUP BY ft.assignee.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("statuses", WORKLOAD_TASK_STATUSES)
+                .setParameter("ids", agentIds).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[0] += t.get(1, Long.class);
+        }
+
+        // worked: audit actions in range
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.actorUserId, COUNT(a) FROM AuditLog a "
+                        + "WHERE a.orgId = :org AND a.actorUserId IN :ids "
+                        + "AND a.createdAt >= :from AND a.createdAt <= :to "
+                        + "GROUP BY a.actorUserId", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", agentIds)
+                .setParameter("from", from).setParameter("to", to).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[1] += t.get(1, Long.class);
+        }
+
+        // resolved: incidents resolvedAt + tasks deliveredAt in range
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.id, COUNT(i) FROM Incident i JOIN i.assignee a "
+                        + "WHERE i.orgId = :org AND i.deletedAt IS NULL AND a.id IN :ids "
+                        + "AND i.resolvedAt >= :from AND i.resolvedAt <= :to GROUP BY a.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", agentIds)
+                .setParameter("from", from).setParameter("to", to).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[2] += t.get(1, Long.class);
+        }
+        for (Tuple t : entityManager.createQuery(
+                "SELECT ft.assignee.id, COUNT(ft) FROM FulfillmentTask ft JOIN ft.serviceRequest s "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL AND ft.assignee.id IN :ids "
+                        + "AND ft.deliveredAt >= :from AND ft.deliveredAt <= :to "
+                        + "GROUP BY ft.assignee.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", agentIds)
+                .setParameter("from", from).setParameter("to", to).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[2] += t.get(1, Long.class);
+        }
+
+        // overdue assigned: breached SLA on open incidents + overdue tasks
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.id, COUNT(i) FROM SlaInstance si JOIN si.incident i JOIN i.assignee a "
+                        + "WHERE si.orgId = :org AND si.breachStatus = :breached "
+                        + "AND i.deletedAt IS NULL AND i.status IN :statuses AND a.id IN :ids "
+                        + "GROUP BY a.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("statuses", OPEN_INCIDENT_STATUSES_DASH)
+                .setParameter("breached", SlaInstance.BreachStatus.BREACHED)
+                .setParameter("ids", agentIds).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[3] += t.get(1, Long.class);
+        }
+        for (Tuple t : entityManager.createQuery(
+                "SELECT ft.assignee.id, COUNT(ft) FROM FulfillmentTask ft JOIN ft.serviceRequest s "
+                        + "WHERE s.orgId = :org AND s.deletedAt IS NULL AND ft.assignee.id IN :ids "
+                        + "AND ft.expectedDeliveryDate < :today AND ft.deliveredAt IS NULL "
+                        + "AND ft.status <> :completed GROUP BY ft.assignee.id", Tuple.class)
+                .setParameter("org", orgId).setParameter("ids", agentIds)
+                .setParameter("completed", FulfillmentTask.Status.COMPLETED)
+                .setParameter("today", LocalDate.now()).getResultList()) {
+            m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[3] += t.get(1, Long.class);
+        }
+
+        // SLA compliance: instances on incidents assigned to the agent
+        for (Tuple t : entityManager.createQuery(
+                "SELECT a.id, COUNT(si), "
+                        + "SUM(CASE WHEN si.breachStatus = :breached THEN 1 ELSE 0 END) "
+                        + "FROM SlaInstance si JOIN si.incident i JOIN i.assignee a "
+                        + "WHERE si.orgId = :org AND i.deletedAt IS NULL AND a.id IN :ids "
+                        + "GROUP BY a.id", Tuple.class)
+                .setParameter("breached", SlaInstance.BreachStatus.BREACHED)
+                .setParameter("org", orgId).setParameter("ids", agentIds).getResultList()) {
+            sla.put(t.get(0, UUID.class), new long[]{t.get(1, Long.class), t.get(2, Long.class)});
+        }
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (UUID tierId : tierIds) {
+            List<Map<String, Object>> memberRows = members.getOrDefault(tierId, List.of()).stream()
+                    .map(member -> {
+                        UUID agentId = UUID.fromString((String) member.get("agentId"));
+                        long[] c = m.getOrDefault(agentId, new long[4]);
+                        long[] s = sla.get(agentId);
+                        Object slaPercent = s == null || s[0] == 0 ? null
+                                : Math.round((s[0] - s[1]) * 1000.0 / s[0]) / 10.0;
+                        Map<String, Object> mr = new LinkedHashMap<>(member);
+                        mr.put("openAssigned", c[0]);
+                        mr.put("worked", c[1]);
+                        mr.put("resolved", c[2]);
+                        mr.put("overdue", c[3]);
+                        mr.put("slaPercent", slaPercent);
+                        return mr;
+                    }).collect(Collectors.toList());
+            out.add(Map.of(
+                    "team", tierNames.getOrDefault(tierId, tierFallback.get(tierId)),
+                    "teamId", tierId.toString(),
+                    "members", memberRows));
+        }
+        return out;
+    }
+
+    // ---- SLA trend by priority (monthly) ----
+
+    /** Monthly SLA compliance split by ticket priority (incidents + requests). */
+    public List<Map<String, Object>> slaComplianceMonthlyByPriority(UUID orgId, int months) {
+        if (months < 1 || months > 60) {
+            throw new IllegalArgumentException("months must be between 1 and 60");
+        }
+        OffsetDateTime start = OffsetDateTime.now(ZoneOffset.UTC)
+                .minusMonths(months).withDayOfMonth(1).truncatedTo(ChronoUnit.DAYS);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<Tuple> rows = entityManager.createQuery(
+                "SELECT si.createdAt, si.resolutionDueAt, si.resolutionMetAt, ip.name, sp.name "
+                        + "FROM SlaInstance si "
+                        + "LEFT JOIN si.incident i LEFT JOIN i.priority ip "
+                        + "LEFT JOIN si.serviceRequest s LEFT JOIN s.priority sp "
+                        + "WHERE si.orgId = :org AND si.createdAt >= :start", Tuple.class)
+                .setParameter("org", orgId).setParameter("start", start).getResultList();
+
+        record MonthKey(YearMonth month, String priority) implements Comparable<MonthKey> {
+            @Override public int compareTo(MonthKey o) {
+                int c = month.compareTo(o.month);
+                return c != 0 ? c : priority.compareTo(o.priority);
+            }
+        }
+        record Sla(long total, long breached) {}
+
+        Map<MonthKey, Sla> byMonthPriority = new TreeMap<>();
+        for (Tuple t : rows) {
+            OffsetDateTime createdAt = t.get(0, OffsetDateTime.class);
+            if (createdAt == null) continue;
+            String priority = t.get(3, String.class) != null ? t.get(3, String.class)
+                    : t.get(4, String.class) != null ? t.get(4, String.class) : "None";
+            MonthKey key = new MonthKey(YearMonth.from(createdAt), priority);
+            Sla cur = byMonthPriority.getOrDefault(key, new Sla(0, 0));
+            boolean breached = isBreachedAtDue(t.get(1, OffsetDateTime.class),
+                    t.get(2, OffsetDateTime.class), now);
+            byMonthPriority.put(key, new Sla(cur.total() + 1, cur.breached() + (breached ? 1 : 0)));
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        byMonthPriority.forEach((k, s) -> result.add(Map.of(
+                "month", k.month().toString(),
+                "priority", k.priority(),
+                "total", s.total(),
+                "breached", s.breached(),
+                "compliancePercent", s.total() == 0 ? 100.0
+                        : Math.round((s.total() - s.breached()) * 10000.0 / s.total()) / 100.0)));
+        return result;
     }
 }

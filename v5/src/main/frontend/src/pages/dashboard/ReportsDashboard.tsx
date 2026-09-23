@@ -359,17 +359,33 @@ function TicketsSummaryView({ data, mine, userId }: { data: TicketsSummary; mine
   )
 }
 
+type TrendRange = '7d' | '30d' | '90d' | '6m' | '12m'
+
+interface PriorityTrendPoint {
+  month: string
+  priority: string
+  total: number
+  breached: number
+  compliancePercent: number
+}
+
 function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean }) {
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const navigate = useNavigate()
-  const [days, setDays] = useState(30)
+  const [range, setRange] = useState<TrendRange>('30d')
+  const [priorityMonths, setPriorityMonths] = useState(6)
 
-  const trendQuery = useQuery<TrendPoint[]>({
-    queryKey: ['reports', 'sla-trend', days, mine],
+  const monthly = range === '6m' || range === '12m'
+  const months = range === '6m' ? 6 : range === '12m' ? 12 : 0
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 30
+
+  const trendQuery = useQuery<{ date?: string; month?: string; compliancePercent: number }[]>({
+    queryKey: ['reports', 'sla-trend', range, mine],
     queryFn: async () => {
-      const qs = new URLSearchParams({ days: String(days), mine: String(mine) })
-      const res = await fetchWithToken(instance, account!, `/api/v1/reports/sla-trend?${qs.toString()}`)
+      const res = await fetchWithToken(instance, account!, monthly
+        ? `/api/v1/reports/sla-trend/monthly?months=${months}&mine=${mine}`
+        : `/api/v1/reports/sla-trend?days=${days}&mine=${mine}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
@@ -377,6 +393,27 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
     refetchInterval: 60_000,
     staleTime: 0,
   })
+
+  const priorityQuery = useQuery<PriorityTrendPoint[]>({
+    queryKey: ['reports', 'sla-trend-priority', priorityMonths],
+    queryFn: async () => {
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/sla-trend/by-priority?months=${priorityMonths}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  // Pivot priority rows into per-month chart data: { month, <priority>: pct, ... }
+  const priorityNames = Array.from(new Set((priorityQuery.data ?? []).map((r) => r.priority))).sort()
+  const priorityChart = Array.from(
+    (priorityQuery.data ?? []).reduce((acc, r) => {
+      const row = acc.get(r.month) ?? { month: r.month }
+      row[r.priority] = r.compliancePercent
+      acc.set(r.month, row)
+      return acc
+    }, new Map<string, Record<string, unknown>>()).values(),
+  )
 
   const nonBreached = Math.max(0, data.total - data.breached)
   const chartData = [
@@ -396,12 +433,15 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-muted-foreground">SLA compliance trend</h3>
           <select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
+            value={range}
+            onChange={(e) => setRange(e.target.value as TrendRange)}
             className="rounded-md border border-border bg-background px-2 py-1 text-sm"
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="6m">Last 6 months</option>
+            <option value="12m">Last 12 months</option>
           </select>
         </div>
         {trendQuery.isLoading ? (
@@ -413,10 +453,47 @@ function SlaComplianceView({ data, mine }: { data: SlaCompliance; mine: boolean 
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendQuery.data}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <XAxis dataKey={monthly ? 'month' : 'date'} tick={{ fontSize: 12 }} />
                 <YAxis domain={[0, 100]} />
                 <Tooltip />
                 <Line type="monotone" dataKey="compliancePercent" stroke={COLORS[2]} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-muted-foreground">Compliance by priority</h3>
+          <select
+            value={priorityMonths}
+            onChange={(e) => setPriorityMonths(Number(e.target.value))}
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+          >
+            <option value={3}>Last 3 months</option>
+            <option value={6}>Last 6 months</option>
+            <option value={12}>Last 12 months</option>
+          </select>
+        </div>
+        {priorityQuery.isLoading ? (
+          <Loading />
+        ) : priorityQuery.error ? (
+          <ErrorFallback error={priorityQuery.error} message="Could not load priority breakdown." onRetry={() => priorityQuery.refetch()} />
+        ) : priorityChart.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No SLA data in this range.</p>
+        ) : (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={priorityChart}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Legend />
+                {priorityNames.map((p, i) => (
+                  <Line key={p} type="monotone" dataKey={p} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -552,23 +629,29 @@ function MetricCard({ label, value, onClick }: { label: string; value: number | 
   )
 }
 
-const TABS = [
+interface ReportTab {
+  key: string
+  label: string
+  endpoint: string
+  custom?: boolean
+  superAdminOnly?: boolean
+}
+
+const TABS: ReportTab[] = [
   { key: 'tickets', label: 'Tickets Summary', endpoint: '/api/v1/reports/tickets-summary' },
   { key: 'sla', label: 'SLA Compliance', endpoint: '/api/v1/reports/sla-compliance' },
   { key: 'agent', label: 'Agent Workload', endpoint: '/api/v1/reports/agent-workload' },
   { key: 'worked', label: 'Worked Tickets', endpoint: '/api/v1/reports/agent-performance/tickets' },
   { key: 'sprint', label: 'Sprint Velocity', endpoint: '/api/v1/reports/sprint-velocity' },
   // Former "Standard Reports" page — consolidated here.
-  { key: 'category', label: 'Incidents by Category', endpoint: '/api/v1/reports/incidents-by-category' },
-  { key: 'catalog', label: 'Requests by Catalog', endpoint: '/api/v1/reports/requests-by-catalog' },
   { key: 'slaPriority', label: 'SLA by Priority', endpoint: '/api/v1/reports/sla-by-priority' },
   { key: 'approvals', label: 'Approval Backlog', endpoint: '/api/v1/reports/pending-approvals-backlog' },
+  { key: 'location', label: 'By Location', endpoint: '', custom: true },
+  { key: 'workloadDetail', label: 'Agent Workload Detail', endpoint: '', custom: true, superAdminOnly: true },
 ]
 
 /** Which column drills where, per standard-report tab. */
 const STANDARD_LINK: Record<string, { key: string; linkFor: (v: string) => string }> = {
-  category: { key: 'group', linkFor: (v) => `${INCIDENTS_BASE}?category=${encodeURIComponent(v)}` },
-  catalog: { key: 'group', linkFor: (v) => `/dashboard/service-requests?catalogItem=${encodeURIComponent(v)}` },
   slaPriority: { key: 'priority', linkFor: (v) => `/dashboard/sla?priority=${encodeURIComponent(v)}` },
   approvals: { key: 'approver', linkFor: () => '/dashboard/service-requests?status=PENDING_APPROVAL' },
 }
@@ -606,11 +689,14 @@ export function ReportsDashboard() {
   const account = accounts[0]
   const { currentUser } = useAuth()
   const isAdmin = currentUser?.roles.some((r) => r === 'ADMIN' || r === 'SUPER_ADMIN') ?? false
+  const isSuperAdmin = currentUser?.roles.includes('SUPER_ADMIN') ?? false
   const mine = !isAdmin
   const userId = currentUser?.id
   const [active, setActive] = useState('tickets')
 
-  const allowedTabs = isAdmin ? TABS : TABS.filter((t) => t.key === 'tickets' || t.key === 'sla' || t.key === 'worked')
+  const allowedTabs = isAdmin
+    ? TABS.filter((t) => !t.superAdminOnly || isSuperAdmin)
+    : TABS.filter((t) => t.key === 'tickets' || t.key === 'sla' || t.key === 'worked')
   const activeTab = allowedTabs.find((t) => t.key === active) ?? allowedTabs[0]
 
   const query = useQuery<unknown>({
@@ -621,10 +707,28 @@ export function ReportsDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    enabled: !!account && activeTab.key !== 'worked',
+    enabled: !!account && !activeTab.custom && activeTab.key !== 'worked',
     refetchInterval: 60_000,
     staleTime: 0,
   })
+
+  // Server-side export for the tabs backed by report-specific endpoints.
+  const EXPORT_ENDPOINT: Record<string, string> = {
+    sla: '/api/v1/reports/sla-compliance/export',
+    slaPriority: '/api/v1/reports/sla-by-priority/export',
+  }
+  const exportTab = async (format: 'csv' | 'xlsx') => {
+    const res = await fetchWithToken(
+      instance, account!, `${EXPORT_ENDPOINT[activeTab.key]}?format=${format}&mine=${mine}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activeTab.key}.${format}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
@@ -657,7 +761,21 @@ export function ReportsDashboard() {
               {t.label}
             </button>
           ))}
-          {!!query.data && activeTab.key !== 'worked' && (
+          {!!query.data && activeTab.key !== 'worked' && EXPORT_ENDPOINT[activeTab.key] && (
+            <div className="ml-auto flex gap-1.5">
+              {(['csv', 'xlsx'] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => exportTab(fmt)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+          {!!query.data && activeTab.key !== 'worked' && !EXPORT_ENDPOINT[activeTab.key] && (
             <button
               onClick={() => downloadCsv(`${activeTab.key}-report.csv`, query.data)}
               className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
@@ -676,7 +794,7 @@ export function ReportsDashboard() {
             {active === 'sla' && <SlaComplianceView data={query.data as SlaCompliance} mine={mine} />}
             {active === 'agent' && <AgentWorkloadView data={query.data as AgentWorkload[]} />}
             {active === 'sprint' && <SprintVelocityView data={query.data as SprintVelocity[]} />}
-            {['category', 'catalog', 'slaPriority', 'approvals'].includes(active) && (
+            {['slaPriority', 'approvals'].includes(active) && (
               <StandardTableView
                 data={query.data as Record<string, unknown>[]}
                 linkKey={STANDARD_LINK[active]?.key}
@@ -686,6 +804,8 @@ export function ReportsDashboard() {
           </>
         )}
         {active === 'worked' && <WorkedTicketsView isAdmin={isAdmin} />}
+        {active === 'location' && <LocationDashboardView />}
+        {active === 'workloadDetail' && <AgentWorkloadDetailView />}
       </div>
     </div>
   )
@@ -721,7 +841,8 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
   const [to, setTo] = useState('')
   const [entityType, setEntityType] = useState('')
   const [status, setStatus] = useState('')
-  const [agentId, setAgentId] = useState('')
+  const [agentIds, setAgentIds] = useState<string[]>([])
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false)
 
   const usersQuery = useQuery<{ id: string; displayName: string }[]>({
     queryKey: ['worked-tickets', 'users'],
@@ -734,14 +855,14 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
   })
 
   const query = useQuery<WorkedTicket[]>({
-    queryKey: ['worked-tickets', from, to, entityType, status, agentId],
+    queryKey: ['worked-tickets', from, to, entityType, status, agentIds],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (from) params.set('from', new Date(from).toISOString())
       if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
       if (entityType) params.set('entityType', entityType)
       if (status) params.set('status', status)
-      if (agentId) params.set('agentId', agentId)
+      agentIds.forEach((id) => params.append('agentId', id))
       const res = await fetchWithToken(instance, account!, `/api/v1/reports/agent-performance/tickets?${params}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
@@ -758,12 +879,38 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
         <h3 className="text-sm font-medium text-muted-foreground">Tickets I Worked On</h3>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {isAdmin && (
-            <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectCls}>
-              <option value="">Me</option>
-              {(usersQuery.data ?? []).map((u) => (
-                <option key={u.id} value={u.id}>{u.displayName}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAgentPickerOpen((o) => !o)}
+                className={selectCls}
+              >
+                {agentIds.length === 0 ? 'Me' : `Agents (${agentIds.length})`} ▾
+              </button>
+              {agentPickerOpen && (
+                <div className="absolute right-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-border bg-card p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { setAgentIds([]); setAgentPickerOpen(false) }}
+                    className="mb-1 w-full rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
+                  >
+                    Me (clear selection)
+                  </button>
+                  {(usersQuery.data ?? []).map((u) => (
+                    <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted">
+                      <input
+                        type="checkbox"
+                        checked={agentIds.includes(u.id)}
+                        onChange={(e) => setAgentIds((prev) =>
+                          e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id))}
+                        className="accent-primary"
+                      />
+                      <span className="truncate">{u.displayName}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className={selectCls}>
             <option value="">All types</option>
@@ -816,6 +963,202 @@ function WorkedTicketsView({ isAdmin }: { isAdmin: boolean }) {
           getRowKey={(r) => r.id}
           emptyText="No worked tickets match the filters."
         />
+      )}
+    </div>
+  )
+}
+
+interface LocationDashRow {
+  location: string
+  opened: number
+  workedOn: number
+  pending: number
+  resolved: number
+}
+
+/** Per-location ops summary: opened / worked-on / pending / resolved, with a
+ * date range. Reuses the tickets-by-location + worked-tickets query pattern. */
+function LocationDashboardView() {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0]
+  const now = new Date()
+  const [from, setFrom] = useState(new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10))
+  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+
+  const query = useQuery<LocationDashRow[]>({
+    queryKey: ['location-dashboard', from, to],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (from) params.set('from', new Date(`${from}T00:00:00Z`).toISOString())
+      if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/location-dashboard?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  const rows = query.data ?? []
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium text-muted-foreground">Location Dashboard</h3>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-1.5" />
+          <DateInput value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1.5" />
+          {rows.length > 0 && (
+            <button
+              onClick={() => downloadCsv('location-dashboard.csv', rows)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Opened = created in range · Worked-on = any logged activity in range · Pending = currently open · Resolved = resolved/fulfilled in range.
+      </p>
+      {query.isLoading ? (
+        <Loading compact />
+      ) : query.error ? (
+        <p className="text-sm text-destructive">Could not load location dashboard.</p>
+      ) : (
+        <>
+          {rows.length > 0 && (
+            <div className="mb-4 h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={rows} margin={{ top: 5, right: 20, left: -10, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="location" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="opened" name="Opened" fill={COLORS[0]} />
+                  <Bar dataKey="workedOn" name="Worked on" fill={COLORS[1]} />
+                  <Bar dataKey="pending" name="Pending" fill={COLORS[3]} />
+                  <Bar dataKey="resolved" name="Resolved" fill={COLORS[2]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <DataTable<LocationDashRow>
+            caption="Per-location operations summary"
+            columns={[
+              { key: 'location', header: 'Location' },
+              { key: 'opened', header: 'Opened' },
+              { key: 'workedOn', header: 'Worked On' },
+              { key: 'pending', header: 'Pending' },
+              { key: 'resolved', header: 'Resolved' },
+            ]}
+            data={rows}
+            getRowKey={(r) => r.location}
+            emptyText="No location data in this range."
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+interface WorkloadDetailMember {
+  agentId: string
+  name: string
+  openAssigned: number
+  worked: number
+  resolved: number
+  overdue: number
+  slaPercent: number | null
+}
+
+interface WorkloadDetailTeam {
+  team: string
+  teamId: string
+  members: WorkloadDetailMember[]
+}
+
+/** SUPER_ADMIN: per-tier member workload — includes members with zero work
+ * (the monthly Agent Performance table only shows agents with activity). */
+function AgentWorkloadDetailView() {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0]
+  const now = new Date()
+  const [from, setFrom] = useState(new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10))
+  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+
+  const query = useQuery<WorkloadDetailTeam[]>({
+    queryKey: ['agent-workload-detail', from, to],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (from) params.set('from', new Date(`${from}T00:00:00Z`).toISOString())
+      if (to) params.set('to', new Date(`${to}T23:59:59.999Z`).toISOString())
+      const res = await fetchWithToken(instance, account!, `/api/v1/reports/agent-workload-detail?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    enabled: !!account,
+  })
+
+  const teams = query.data ?? []
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <h3 className="text-sm font-medium text-muted-foreground">Agent Workload Detail — by support tier</h3>
+        <div className="ml-auto flex items-center gap-2">
+          <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className="px-2 py-1.5" />
+          <DateInput value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1.5" />
+        </div>
+      </div>
+      {query.isLoading ? (
+        <Loading compact />
+      ) : query.error ? (
+        <p className="text-sm text-destructive">Could not load workload detail.</p>
+      ) : (
+        teams.map((team) => (
+          <div key={team.teamId} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <h4 className="mb-3 text-sm font-semibold">{team.team}</h4>
+            {team.members.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No members in this team.</p>
+            ) : (
+              <>
+                <div className="mb-3 h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={team.members} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="openAssigned" name="Open assigned" stackId="a" fill={COLORS[0]} />
+                      <Bar dataKey="worked" name="Actions in range" stackId="a" fill={COLORS[1]} />
+                      <Bar dataKey="resolved" name="Resolved" stackId="a" fill={COLORS[2]} />
+                      <Bar dataKey="overdue" name="Overdue" stackId="a" fill={COLORS[4] ?? '#dc2828'} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <DataTable<WorkloadDetailMember>
+                  caption={`${team.team} member workload`}
+                  columns={[
+                    { key: 'name', header: 'Agent' },
+                    { key: 'openAssigned', header: 'Open Assigned' },
+                    { key: 'worked', header: 'Actions in Range' },
+                    { key: 'resolved', header: 'Resolved in Range' },
+                    { key: 'overdue', header: 'Overdue', render: (m) =>
+                        m.overdue > 0 ? <span className="font-medium text-destructive">{m.overdue}</span> : m.overdue },
+                    { key: 'slaPercent', header: 'SLA %', render: (m) =>
+                        m.slaPercent != null ? `${m.slaPercent}%` : '—' },
+                  ]}
+                  data={team.members}
+                  getRowKey={(m) => m.agentId}
+                  emptyText="No members."
+                />
+              </>
+            )}
+          </div>
+        ))
       )}
     </div>
   )

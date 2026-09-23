@@ -669,13 +669,13 @@ function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHoc
             <p className="mb-1 text-xs text-muted-foreground">Open incidents by priority</p>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={priorityData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                <PieChart>
+                  <Pie data={priorityData} dataKey="count" nameKey="name" outerRadius={60} label>
+                    {priorityData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
                   <Tooltip />
-                  <Bar dataKey="count" name="Incidents" fill={COLORS[0]} />
-                </BarChart>
+                  <Legend />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </div>

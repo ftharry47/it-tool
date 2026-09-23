@@ -1,12 +1,17 @@
 package com.alignedcardio.itsm.service.reporting;
 
+import com.alignedcardio.itsm.entity.AppUser;
 import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.ChangeRequest;
 import com.alignedcardio.itsm.entity.FulfillmentTask;
 import com.alignedcardio.itsm.entity.Incident;
-import com.alignedcardio.itsm.entity.Team;
+import com.alignedcardio.itsm.entity.Location;
 import com.alignedcardio.itsm.entity.Problem;
+import com.alignedcardio.itsm.entity.ServiceRequest;
+import com.alignedcardio.itsm.entity.Team;
+import org.mockito.ArgumentCaptor;
 import com.alignedcardio.itsm.entity.SlaInstance;
+import com.alignedcardio.itsm.service.SupportTiers;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
@@ -17,6 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -440,7 +447,7 @@ class ReportingServiceTest {
         OffsetDateTime from = OffsetDateTime.now().minusDays(7);
         OffsetDateTime to = OffsetDateTime.now();
         List<Map<String, Object>> rows = service.agentPerformanceTickets(
-                UUID.randomUUID(), agentId, from, to, null, null);
+                UUID.randomUUID(), List.of(agentId), from, to, null, null);
 
         assertEquals(1, rows.size());
         Map<String, Object> row = rows.get(0);
@@ -449,7 +456,7 @@ class ReportingServiceTest {
         assertEquals(workedAt, row.get("workedAt"));
         // The audit query — not a createdAt filter — decided inclusion.
         verify(auditQuery).setParameter("from", from);
-        verify(auditQuery).setParameter("agent", agentId);
+        verify(auditQuery).setParameter("agents", List.of(agentId));
     }
 
     /** SLA compliance grouped by agent, with fulfiller attribution for SRs. */
@@ -504,6 +511,480 @@ class ReportingServiceTest {
 
         verify(instanceQuery).setParameter("cancelled",
                 com.alignedcardio.itsm.entity.ServiceRequest.Status.CANCELLED);
+    }
+
+    // --- Parts D/E/F: union export, location dashboard, workload detail ---
+
+    /** Dispatches string-JPQL Tuple queries by content fragment. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void stubJpql(Map<String, List<Tuple>> responses) {
+        lenient().when(entityManager.createQuery(anyString(), eq(Tuple.class))).thenAnswer(inv -> {
+            String jpql = inv.getArgument(0);
+            TypedQuery<Tuple> q = mock(TypedQuery.class);
+            List<Tuple> result = List.of();
+            for (Map.Entry<String, List<Tuple>> e : responses.entrySet()) {
+                if (jpql.contains(e.getKey())) {
+                    result = e.getValue();
+                    break;
+                }
+            }
+            lenient().when(q.getResultList()).thenReturn(result);
+            lenient().when(q.setParameter(anyString(), any())).thenReturn(q);
+            lenient().when(q.setParameter(anyInt(), any())).thenReturn(q);
+            return q;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private Tuple tuple(Object... values) {
+        Tuple t = mock(Tuple.class);
+        lenient().when(t.get(anyInt())).thenAnswer(inv -> values[(int) inv.getArgument(0)]);
+        lenient().when(t.get(anyInt(), any(Class.class))).thenAnswer(
+                inv -> values[(int) inv.getArgument(0)]);
+        return t;
+    }
+
+    @Test
+    void fullDetailExportUnionsIncidentsAndServiceRequests() {
+        UUID orgId = UUID.randomUUID();
+        UUID incId = UUID.randomUUID();
+        UUID srId = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        stubJpql(Map.of(
+                "SELECT si.incident.id", List.of(
+                        tuple(incId, null, SlaInstance.BreachStatus.BREACHED, now)),
+                "FROM Incident i", List.of(
+                        tuple(incId, 42L, "VPN down", Incident.Status.IN_PROGRESS,
+                                "High", "Network", "HQ", "Alice", "Bob", now, now)),
+                "FROM ServiceRequest s", List.of(
+                        tuple(srId, "SR-7", "Laptop Request", ServiceRequest.Status.FULFILLED,
+                                "Medium", "HQ", "Carol", "Dan", now, now)),
+                "FROM AuditLog a", List.of(
+                        tuple("INCIDENT", incId, actor),
+                        tuple("SERVICE_REQUEST", srId, actor)),
+                "FROM AppUser u", List.of(tuple(actor, "Eve"))));
+
+        // Location name query returns String.class, needs its own stub.
+        ReportingService service = new ReportingService(entityManager);
+        List<Map<String, Object>> rows = service.fullDetailExport(
+                orgId, now.minusDays(30), now.plusDays(1));
+
+        assertEquals(2, rows.size());
+        Map<String, Object> inc = rows.get(0);
+        assertEquals("INCIDENT", inc.get("type"));
+        assertEquals("INC-42", inc.get("number"));
+        assertEquals("BREACHED", inc.get("slaStatus"));
+        assertEquals("Eve", inc.get("lastWorkedBy"));
+        Map<String, Object> sr = rows.get(1);
+        assertEquals("SERVICE_REQUEST", sr.get("type"));
+        assertEquals("SR-7", sr.get("number"));
+        assertEquals("Laptop Request", sr.get("catalogItem"));
+        assertEquals("Carol", sr.get("approver"));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void locationDashboardAggregatesAllFourMetrics() {
+        UUID orgId = UUID.randomUUID();
+        UUID incId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // Location names come back as String queries.
+        TypedQuery<String> locNames = mock(TypedQuery.class);
+        lenient().when(locNames.getResultList()).thenReturn(List.of("HQ"));
+        lenient().when(locNames.setParameter(anyString(), any())).thenReturn(locNames);
+        lenient().when(entityManager.createQuery(
+                contains("SELECT l.name FROM Location"), eq(String.class)))
+                .thenReturn(locNames);
+
+        stubJpql(Map.of(
+                "i.createdAt >= :from", List.of(tuple("HQ", 5L)),
+                "i.id IN :ids", List.of(tuple("HQ", 1L)),
+                "s.id IN :ids", List.of(tuple("HQ", 2L)),
+                "i.status IN :statuses", List.of(tuple("HQ", 3L)),
+                "s.status IN :statuses", List.of(tuple("HQ", 1L)),
+                "i.resolvedAt >= :from", List.of(tuple("HQ", 4L)),
+                "s.updatedAt >= :from", List.of(tuple("HQ", 2L)),
+                "GROUP BY a.entityType", List.of(
+                        tuple("INCIDENT", incId),
+                        tuple("SERVICE_REQUEST", UUID.randomUUID()))));
+
+        ReportingService service = new ReportingService(entityManager);
+        List<Map<String, Object>> rows = service.locationDashboard(
+                orgId, now.minusDays(30), now.plusDays(1));
+
+        Map<String, Object> hq = rows.stream()
+                .filter(r -> "HQ".equals(r.get("location"))).findFirst().orElseThrow();
+        assertEquals(5L, hq.get("opened"));      // incidents only (SR query unmatched → HQ fragment shared)
+        assertEquals(3L, hq.get("workedOn"));    // 1 incident + 2 requests
+        assertEquals(4L, hq.get("pending"));     // 3 incidents + 1 request
+        assertEquals(6L, hq.get("resolved"));    // 4 incidents + 2 requests
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void agentWorkloadDetailIncludesZeroWorkMembers() {
+        UUID orgId = UUID.randomUUID();
+        UUID aliceId = UUID.randomUUID();
+        UUID bobId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        TypedQuery<Team> teamQ = mock(TypedQuery.class);
+        Team l1 = mock(Team.class);
+        lenient().when(l1.getId()).thenReturn(SupportTiers.L1_ID);
+        lenient().when(l1.getName()).thenReturn("L1 Support");
+        lenient().when(teamQ.getResultList()).thenReturn(List.of(l1));
+        lenient().when(teamQ.setParameter(anyString(), any())).thenReturn(teamQ);
+        lenient().when(entityManager.createQuery(
+                contains("SELECT t FROM Team t"), eq(Team.class))).thenReturn(teamQ);
+
+        // Alice (L1) has work; Bob (L1) is a member with zero work.
+        // LinkedHashMap — fragment order matters (more specific first).
+        Map<String, List<Tuple>> responses = new LinkedHashMap<>();
+        responses.put("FROM TeamMember tm JOIN tm.user u", List.of(
+                tuple(SupportTiers.L1_ID, aliceId, "Alice"),
+                tuple(SupportTiers.L1_ID, bobId, "Bob")));
+        responses.put("SUM(CASE WHEN si.breachStatus", List.of(tuple(aliceId, 4L, 1L)));
+        responses.put("si.breachStatus = :breached", List.of(tuple(aliceId, 1L)));
+        responses.put("i.status IN :statuses", List.of(tuple(aliceId, 3L)));
+        responses.put("ft.status IN :statuses", List.of(tuple(aliceId, 1L)));
+        responses.put("FROM AuditLog a", List.of(tuple(aliceId, 7L)));
+        responses.put("i.resolvedAt >= :from", List.of(tuple(aliceId, 2L)));
+        responses.put("ft.deliveredAt >= :from", List.of(tuple(aliceId, 1L)));
+        responses.put("ft.expectedDeliveryDate < :today", List.of(tuple(aliceId, 1L)));
+        stubJpql(responses);
+
+        ReportingService service = new ReportingService(entityManager);
+        List<Map<String, Object>> tiers = service.agentWorkloadDetail(
+                orgId, now.minusDays(30), now.plusDays(1));
+
+        assertEquals(4, tiers.size());
+        Map<String, Object> l1tier = tiers.get(0);
+        assertEquals("L1 Support", l1tier.get("team"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> members =
+                (List<Map<String, Object>>) l1tier.get("members");
+        assertEquals(2, members.size());
+        Map<String, Object> alice = members.stream()
+                .filter(m -> "Alice".equals(m.get("name"))).findFirst().orElseThrow();
+        assertEquals(4L, alice.get("openAssigned"));   // 3 incidents + 1 task
+        assertEquals(7L, alice.get("worked"));
+        assertEquals(3L, alice.get("resolved"));       // 2 incidents + 1 task
+        assertEquals(2L, alice.get("overdue"));        // 1 breached + 1 overdue task
+        assertEquals(75.0, alice.get("slaPercent"));   // 3/4 compliant
+        // Bob: member row exists with all zeros — the Part L zero-work gap.
+        Map<String, Object> bob = members.stream()
+                .filter(m -> "Bob".equals(m.get("name"))).findFirst().orElseThrow();
+        assertEquals(0L, bob.get("openAssigned"));
+        assertEquals(0L, bob.get("worked"));
+        assertEquals(null, bob.get("slaPercent"));
+        // Empty tiers still render.
+        assertEquals("IT Fulfillment",
+                ((Map<?, ?>) tiers.get(3)).get("team"));
+    }
+
+    @Test
+    void slaComplianceMonthlyByPriorityBreaksDownPerPriority() {
+        UUID orgId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        String thisMonth = YearMonth.now().toString();
+
+        stubJpql(Map.of(
+                "FROM SlaInstance si", List.of(
+                        // High incident, breached (met after due)
+                        tuple(now, now.minusHours(1), now, "High", null),
+                        // Critical service request, compliant
+                        tuple(now, now.plusHours(1), now, null, "Critical"))));
+
+        ReportingService service = new ReportingService(entityManager);
+        List<Map<String, Object>> rows = service.slaComplianceMonthlyByPriority(orgId, 3);
+
+        assertEquals(2, rows.size());
+        Map<String, Object> critical = rows.stream()
+                .filter(r -> "Critical".equals(r.get("priority"))).findFirst().orElseThrow();
+        assertEquals(thisMonth, critical.get("month"));
+        assertEquals(1L, critical.get("total"));
+        assertEquals(0L, critical.get("breached"));
+        assertEquals(100.0, critical.get("compliancePercent"));
+        Map<String, Object> high = rows.stream()
+                .filter(r -> "High".equals(r.get("priority"))).findFirst().orElseThrow();
+        assertEquals(1L, high.get("breached"));
+        assertEquals(0.0, high.get("compliancePercent"));
+    }
+
+    // --- Part N: every Query Builder template must run end-to-end ---------
+
+    /**
+     * Mirrors every BUILDER_TEMPLATES entry in AdHocQueryBuilder.tsx (both
+     * the original 8 and the 5 added in this batch). Each is run through
+     * adHocQuery against a fully-stubbed criteria engine — guards against a
+     * repeat of the Part A "No enum constant" breakage where templates
+     * shipped without ever being executed.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void everyBuilderTemplateRunsWithoutError() {
+        String OPEN_INCIDENT = "NEW,IN_PROGRESS,ON_HOLD,REOPENED";
+        String OPEN_REQUEST = "SUBMITTED,PENDING_APPROVAL,APPROVED,IN_FULFILLMENT,ON_HOLD,REJECTED_NEEDS_REVIEW";
+
+        stubAdHocEngine();
+        ReportingService service = new ReportingService(entityManager);
+        UUID orgId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime weekAgo = now.minusDays(7);
+
+        record T(String name, String entity, boolean detailed, String groupBy,
+                 List<AdHocQueryFilter> filters,
+                 AdHocQueryRequest.DateRange range) {}
+        List<T> templates = List.of(
+                new T("Open Incidents by Agent", "incident", false, "assignee",
+                        List.of(new AdHocQueryFilter("status", "in", OPEN_INCIDENT)), null),
+                new T("Open Critical Incidents", "incident", true, null,
+                        List.of(new AdHocQueryFilter("status", "in", OPEN_INCIDENT),
+                                new AdHocQueryFilter("priority", "eq", "Critical")), null),
+                new T("Incidents Resolved This Week", "incident", true, null,
+                        List.of(new AdHocQueryFilter("status", "in", "RESOLVED,CLOSED")),
+                        new AdHocQueryRequest.DateRange(weekAgo, now, "resolvedAt")),
+                new T("Pending Approvals Older Than 3 Days", "service_request", true, null,
+                        List.of(new AdHocQueryFilter("status", "eq", "PENDING_APPROVAL")),
+                        new AdHocQueryRequest.DateRange(now.minusMonths(6), now.minusDays(3), null)),
+                new T("Service Requests Awaiting Fulfillment", "service_request", true, null,
+                        List.of(new AdHocQueryFilter("status", "in", "APPROVED,IN_FULFILLMENT")), null),
+                new T("Reopened Incidents Last 30 Days", "incident", true, null,
+                        List.of(new AdHocQueryFilter("status", "eq", "REOPENED")),
+                        new AdHocQueryRequest.DateRange(now.minusDays(30), now, null)),
+                new T("Incidents by Location", "incident", false, "location", List.of(), null),
+                new T("Open Requests by Catalog Item", "service_request", false, "catalogItem",
+                        List.of(new AdHocQueryFilter("status", "in", OPEN_REQUEST)), null),
+                new T("Open Incidents Older Than 14 Days", "incident", true, null,
+                        List.of(new AdHocQueryFilter("status", "in", OPEN_INCIDENT)),
+                        new AdHocQueryRequest.DateRange(now.minusMonths(6), now.minusDays(14), null)),
+                new T("Incidents by Category", "incident", false, "category", List.of(), null),
+                new T("All Requests by Catalog Item", "service_request", false, "catalogItem",
+                        List.of(), null),
+                new T("Changes Scheduled This Week", "change", true, null,
+                        List.of(new AdHocQueryFilter("status", "in", "APPROVED,SCHEDULED,IN_PROGRESS")),
+                        new AdHocQueryRequest.DateRange(now, now.plusDays(7), "plannedStart")),
+                new T("Changes by Risk", "change", false, "risk", List.of(), null));
+
+        for (T t : templates) {
+            AdHocQueryResponse res = assertDoesNotThrow(() -> service.adHocQuery(orgId,
+                    new AdHocQueryRequest(t.entity(), t.filters(), t.groupBy(), t.range(),
+                            t.detailed() ? Boolean.TRUE : null, null, null), null),
+                    "Template failed: " + t.name());
+            assertNotNull(res.rows(), t.name());
+        }
+    }
+
+    /** Fully-stubbed criteria engine: any entity root, per-field java types,
+     * empty result lists. Mirrors adHocQuery's grouped + detailed plumbing. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void stubAdHocEngine() {
+        lenient().when(entityManager.getCriteriaBuilder()).thenReturn(criteriaBuilder);
+        lenient().when(criteriaBuilder.createTupleQuery()).thenReturn(criteriaQuery);
+        lenient().when(criteriaQuery.from(any(Class.class))).thenAnswer(inv -> {
+            Root root = mock(Root.class);
+            stubRoot(root, inv.getArgument(0));
+            return root;
+        });
+        lenient().when(criteriaQuery.where(any(Predicate[].class))).thenReturn(criteriaQuery);
+        lenient().when(criteriaQuery.multiselect(any(Selection[].class))).thenReturn(criteriaQuery);
+        lenient().when(criteriaQuery.groupBy(any(Expression[].class))).thenReturn(criteriaQuery);
+        lenient().when(entityManager.createQuery(criteriaQuery)).thenReturn(typedQuery);
+        lenient().when(typedQuery.setMaxResults(anyInt())).thenReturn(typedQuery);
+        lenient().when(typedQuery.getResultList()).thenReturn(List.of());
+
+        // detailed mode: count query + entity select query
+        CriteriaQuery<Long> countQ = mock(CriteriaQuery.class);
+        CriteriaQuery<Object> selectQ = mock(CriteriaQuery.class);
+        TypedQuery<Long> countTyped = mock(TypedQuery.class);
+        TypedQuery<Object> selectTyped = mock(TypedQuery.class);
+        lenient().when(criteriaBuilder.createQuery(Long.class)).thenReturn(countQ);
+        lenient().when(criteriaBuilder.createQuery(Object.class)).thenReturn(selectQ);
+        lenient().when(countQ.from(any(Class.class))).thenAnswer(inv -> {
+            Root r = mock(Root.class);
+            stubRoot(r, inv.getArgument(0));
+            return r;
+        });
+        lenient().when(selectQ.from(any(Class.class))).thenAnswer(inv -> {
+            Root r = mock(Root.class);
+            stubRoot(r, inv.getArgument(0));
+            return r;
+        });
+        lenient().when(criteriaBuilder.count(any())).thenReturn(countExpr);
+        lenient().when(countQ.select(any(Selection.class))).thenReturn(countQ);
+        lenient().when(countQ.where(any(Predicate[].class))).thenReturn(countQ);
+        lenient().when(selectQ.select(any(Selection.class))).thenReturn(selectQ);
+        lenient().when(selectQ.where(any(Predicate[].class))).thenReturn(selectQ);
+        lenient().when(selectQ.orderBy(any(Order.class))).thenReturn(selectQ);
+        lenient().when(criteriaBuilder.desc(any())).thenReturn(mock(Order.class));
+        lenient().when(entityManager.createQuery(countQ)).thenReturn(countTyped);
+        lenient().when(countTyped.getSingleResult()).thenReturn(0L);
+        lenient().when(entityManager.createQuery(selectQ)).thenReturn(selectTyped);
+        lenient().when(selectTyped.setFirstResult(anyInt())).thenReturn(selectTyped);
+        lenient().when(selectTyped.setMaxResults(anyInt())).thenReturn(selectTyped);
+        lenient().when(selectTyped.getResultList()).thenReturn(List.of());
+
+        // predicate combinators
+        lenient().when(criteriaBuilder.equal(any(), any())).thenReturn(predicate);
+        lenient().when(criteriaBuilder.notEqual(any(), any())).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNull(any())).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNotNull(any())).thenReturn(predicate);
+        lenient().when(criteriaBuilder.and(any(Predicate[].class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.or(any(Predicate[].class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.not(any())).thenReturn(predicate);
+        lenient().when(criteriaBuilder.between(any(Expression.class), any(Expression.class), any(Expression.class)))
+                .thenReturn(predicate);
+        lenient().when(criteriaBuilder.between(any(Expression.class), any(Comparable.class), any(Comparable.class)))
+                .thenReturn(predicate);
+        lenient().when(criteriaBuilder.lower(any())).thenReturn(mock(Expression.class));
+        lenient().when(criteriaBuilder.coalesce(any(), any())).thenReturn((Expression) path);
+        lenient().when(criteriaBuilder.literal(any())).thenReturn(path);
+        lenient().when(entityManager.getReference(any(Class.class), any()))
+                .thenAnswer(inv -> mock((Class) inv.getArgument(0)));
+    }
+
+    /** Per-field path stubs: correct javaType per entity field so enum/entity
+     * parsing takes the right branch. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void stubRoot(Root<?> root, Class<?> entity) {
+        lenient().when(root.get(anyString())).thenAnswer(inv -> {
+            String field = inv.getArgument(0);
+            Path p = mock(Path.class);
+            lenient().when(p.getJavaType()).thenReturn((Class) fieldClass(entity, field));
+            lenient().when(p.get(anyString())).thenReturn(p);
+            lenient().when(p.as(any())).thenReturn(p);
+            lenient().when(p.in(any(java.util.Collection.class))).thenReturn(predicate);
+            return p;
+        });
+        Join join = mock(Join.class);
+        lenient().when(join.get(anyString())).thenAnswer(inv -> {
+            Path p = mock(Path.class);
+            lenient().when(p.getJavaType()).thenReturn((Class) Object.class);
+            lenient().when(p.as(any())).thenReturn(p);
+            return p;
+        });
+        lenient().when(root.join(anyString(), any(JoinType.class))).thenReturn(join);
+    }
+
+    private Class<?> fieldClass(Class<?> entity, String field) {
+        if (entity == Incident.class) {
+            return switch (field) {
+                case "status" -> Incident.Status.class;
+                case "priority" -> com.alignedcardio.itsm.entity.Priority.class;
+                case "category" -> com.alignedcardio.itsm.entity.Category.class;
+                case "assignee", "requester" -> AppUser.class;
+                case "location" -> Location.class;
+                case "orgId" -> UUID.class;
+                case "createdAt", "resolvedAt", "closedAt" -> OffsetDateTime.class;
+                case "impact", "urgency" -> int.class;
+                default -> String.class;
+            };
+        }
+        if (entity == ServiceRequest.class) {
+            return switch (field) {
+                case "status" -> ServiceRequest.Status.class;
+                case "requester", "approver" -> AppUser.class;
+                case "catalogItem" -> CatalogItem.class;
+                case "location" -> Location.class;
+                case "orgId" -> UUID.class;
+                case "createdAt", "decidedAt" -> OffsetDateTime.class;
+                default -> String.class;
+            };
+        }
+        if (entity == ChangeRequest.class) {
+            return switch (field) {
+                case "status" -> ChangeRequest.Status.class;
+                case "changeType" -> ChangeRequest.ChangeType.class;
+                case "risk" -> ChangeRequest.Risk.class;
+                case "assignee", "requestedBy" -> AppUser.class;
+                case "orgId" -> UUID.class;
+                case "createdAt", "plannedStart" -> OffsetDateTime.class;
+                default -> String.class;
+            };
+        }
+        if (entity == Problem.class) {
+            return switch (field) {
+                case "status" -> Problem.Status.class;
+                case "assignee" -> AppUser.class;
+                case "orgId" -> UUID.class;
+                case "createdAt", "resolvedAt", "closedAt" -> OffsetDateTime.class;
+                default -> String.class;
+            };
+        }
+        return String.class;
+    }
+
+    // --- Part A regression: "in" operator on enum fields ------------------
+
+    /**
+     * A comma-separated status list must be SPLIT before enum parsing —
+     * previously parseValue() ran eagerly on the whole "NEW,IN_PROGRESS"
+     * string, throwing "No enum constant" before the in-branch could split it.
+     */
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void inOperatorSplitsCommaSeparatedEnumList_incident() {
+        when(entityManager.getCriteriaBuilder()).thenReturn(criteriaBuilder);
+        when(criteriaBuilder.createTupleQuery()).thenReturn(criteriaQuery);
+        when(criteriaQuery.from(Incident.class)).thenReturn(root);
+        when(root.get(anyString())).thenReturn(path);
+        when(path.getJavaType()).thenReturn((Class) Incident.Status.class);
+        when(criteriaBuilder.count(root)).thenReturn(countExpr);
+        lenient().when(criteriaBuilder.equal(any(Path.class), any(Object.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNull(any(Path.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.and(any(Predicate[].class))).thenReturn(predicate);
+        when(criteriaQuery.where(any(Predicate[].class))).thenReturn(criteriaQuery);
+        when(criteriaQuery.multiselect(any(Selection[].class))).thenReturn(criteriaQuery);
+        when(entityManager.createQuery(criteriaQuery)).thenReturn(typedQuery);
+        when(typedQuery.getResultList()).thenReturn(List.of(tuple));
+        when(tuple.get(0)).thenReturn(9L);
+
+        ReportingService service = new ReportingService(entityManager);
+        // Would previously throw IllegalArgumentException "No enum constant
+        // Incident.Status.NEW,IN_PROGRESS,ON_HOLD".
+        service.adHocQuery(UUID.randomUUID(), new AdHocQueryRequest(
+                "incident",
+                List.of(new AdHocQueryFilter("status", "in", "NEW,IN_PROGRESS,ON_HOLD")),
+                null, null, null, null, null), null);
+
+        ArgumentCaptor<java.util.Collection<?>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(path).in(captor.capture());
+        assertEquals(List.of(Incident.Status.NEW, Incident.Status.IN_PROGRESS, Incident.Status.ON_HOLD),
+                List.copyOf(captor.getValue()));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void inOperatorSplitsCommaSeparatedEnumList_serviceRequest() {
+        Root<ServiceRequest> srRoot = mock(Root.class);
+        when(entityManager.getCriteriaBuilder()).thenReturn(criteriaBuilder);
+        when(criteriaBuilder.createTupleQuery()).thenReturn(criteriaQuery);
+        when(criteriaQuery.from(ServiceRequest.class)).thenReturn(srRoot);
+        when(srRoot.get(anyString())).thenReturn((Path) path);
+        when(path.getJavaType()).thenReturn((Class) ServiceRequest.Status.class);
+        when(criteriaBuilder.count(srRoot)).thenReturn(countExpr);
+        lenient().when(criteriaBuilder.equal(any(Path.class), any(Object.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.isNull(any(Path.class))).thenReturn(predicate);
+        lenient().when(criteriaBuilder.and(any(Predicate[].class))).thenReturn(predicate);
+        when(criteriaQuery.where(any(Predicate[].class))).thenReturn(criteriaQuery);
+        when(criteriaQuery.multiselect(any(Selection[].class))).thenReturn(criteriaQuery);
+        when(entityManager.createQuery(criteriaQuery)).thenReturn(typedQuery);
+        when(typedQuery.getResultList()).thenReturn(List.of(tuple));
+        when(tuple.get(0)).thenReturn(4L);
+
+        ReportingService service = new ReportingService(entityManager);
+        service.adHocQuery(UUID.randomUUID(), new AdHocQueryRequest(
+                "service_request",
+                List.of(new AdHocQueryFilter("status", "in", "PENDING_APPROVAL,IN_FULFILLMENT")),
+                null, null, null, null, null), null);
+
+        ArgumentCaptor<java.util.Collection<?>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(path).in(captor.capture());
+        assertEquals(List.of(ServiceRequest.Status.PENDING_APPROVAL, ServiceRequest.Status.IN_FULFILLMENT),
+                List.copyOf(captor.getValue()));
     }
 
     // --- Dashboard consolidation additions -------------------------------

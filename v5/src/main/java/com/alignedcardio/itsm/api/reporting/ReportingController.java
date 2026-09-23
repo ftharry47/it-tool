@@ -216,6 +216,98 @@ public class ReportingController {
         return reportingService.pendingApprovalsBacklog(user.getOrgId());
     }
 
+    /** CSV/XLSX export of the SLA compliance summary shown on the SLA tab. */
+    @GetMapping("/sla-compliance/export")
+    public ResponseEntity<byte[]> slaComplianceExport(@AuthenticationPrincipal Jwt jwt,
+                                                      Authentication auth,
+                                                      @RequestParam(defaultValue = "csv") String format,
+                                                      @RequestParam(required = false, defaultValue = "false") boolean mine)
+            throws java.io.IOException {
+        AppUser user = userService.syncFromJwt(jwt);
+        List<Map<String, Object>> rows = List.of(
+                reportingService.slaCompliance(user.getOrgId(), scopedUserId(auth, user, mine)));
+        return download("sla-compliance", format, rows);
+    }
+
+    /** CSV/XLSX export of the SLA-by-priority breakdown. */
+    @GetMapping("/sla-by-priority/export")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<byte[]> slaByPriorityExport(@AuthenticationPrincipal Jwt jwt,
+                                                      @RequestParam(defaultValue = "csv") String format)
+            throws java.io.IOException {
+        AppUser user = userService.syncFromJwt(jwt);
+        return download("sla-by-priority", format,
+                reportingService.slaComplianceByPriority(user.getOrgId()));
+    }
+
+    /**
+     * Full Detail Export: Incidents + Service Requests in one union table
+     * (type discriminator column), ranged on createdAt. format=json previews,
+     * csv/xlsx download.
+     */
+    @GetMapping("/full-detail-export")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<?> fullDetailExport(@AuthenticationPrincipal Jwt jwt,
+                                              @RequestParam OffsetDateTime from,
+                                              @RequestParam OffsetDateTime to,
+                                              @RequestParam(defaultValue = "json") String format)
+            throws java.io.IOException {
+        AppUser user = userService.syncFromJwt(jwt);
+        List<Map<String, Object>> rows = reportingService.fullDetailExport(
+                user.getOrgId(), from, to);
+        if ("json".equals(format)) {
+            return ResponseEntity.ok(rows);
+        }
+        return download("full-detail-export", format, rows);
+    }
+
+    /** Per-location ops summary: opened / worked-on / pending / resolved. */
+    @GetMapping("/location-dashboard")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public List<Map<String, Object>> locationDashboard(@AuthenticationPrincipal Jwt jwt,
+                                                       @RequestParam OffsetDateTime from,
+                                                       @RequestParam OffsetDateTime to) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.locationDashboard(user.getOrgId(), from, to);
+    }
+
+    /** Per-tier member workload detail — includes zero-work members. */
+    @GetMapping("/agent-workload-detail")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public List<Map<String, Object>> agentWorkloadDetail(@AuthenticationPrincipal Jwt jwt,
+                                                         @RequestParam(required = false) OffsetDateTime from,
+                                                         @RequestParam(required = false) OffsetDateTime to) {
+        AppUser user = userService.syncFromJwt(jwt);
+        OffsetDateTime effectiveFrom = from != null ? from : OffsetDateTime.now().minusDays(30);
+        OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
+        return reportingService.agentWorkloadDetail(user.getOrgId(), effectiveFrom, effectiveTo);
+    }
+
+    /** Monthly SLA compliance split by ticket priority. */
+    @GetMapping("/sla-trend/by-priority")
+    public List<Map<String, Object>> slaTrendByPriority(@AuthenticationPrincipal Jwt jwt,
+                                                        @RequestParam(defaultValue = "12") int months) {
+        AppUser user = userService.syncFromJwt(jwt);
+        return reportingService.slaComplianceMonthlyByPriority(user.getOrgId(), months);
+    }
+
+    private static ResponseEntity<byte[]> download(String name, String format,
+                                                   List<Map<String, Object>> rows)
+            throws java.io.IOException {
+        String filename = name + "." + ("xlsx".equals(format) ? "xlsx" : "csv");
+        if ("xlsx".equals(format)) {
+            return ResponseEntity.ok()
+                    .header("Content-Type",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .body(toXlsx(name, rows));
+        }
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv")
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(toCsv(rows).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     @PostMapping("/query")
     public AdHocQueryResponse adHocQuery(@AuthenticationPrincipal Jwt jwt, Authentication auth,
                                          @RequestBody AdHocQueryRequest request,
@@ -248,9 +340,9 @@ public class ReportingController {
     }
 
     /**
-     * Full worked-ticket list for an agent with date/type/status filters.
-     * Non-admin callers are scoped to themselves; ADMIN/SUPER_ADMIN may pass
-     * agentId to inspect any agent's history.
+     * Full worked-ticket list for one or more agents with date/type/status
+     * filters. Non-admin callers are scoped to themselves; ADMIN/SUPER_ADMIN
+     * may pass repeated/comma-separated agentId params to combine agents.
      */
     @GetMapping("/agent-performance/tickets")
     public List<Map<String, Object>> agentPerformanceTickets(@AuthenticationPrincipal Jwt jwt,
@@ -259,12 +351,14 @@ public class ReportingController {
                                                              @RequestParam(required = false) OffsetDateTime to,
                                                              @RequestParam(required = false) String entityType,
                                                              @RequestParam(required = false) String status,
-                                                             @RequestParam(required = false) UUID agentId) {
+                                                             @RequestParam(required = false) List<UUID> agentId) {
         AppUser user = userService.syncFromJwt(jwt);
-        UUID target = (agentId != null && isAdmin(auth)) ? agentId : user.getId();
+        List<UUID> targets = (agentId != null && !agentId.isEmpty() && isAdmin(auth))
+                ? agentId
+                : List.of(user.getId());
         OffsetDateTime effectiveFrom = from != null ? from : OffsetDateTime.now().minusMonths(3);
         OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
-        return reportingService.agentPerformanceTickets(user.getOrgId(), target,
+        return reportingService.agentPerformanceTickets(user.getOrgId(), targets,
                 effectiveFrom, effectiveTo, entityType, status);
     }
 

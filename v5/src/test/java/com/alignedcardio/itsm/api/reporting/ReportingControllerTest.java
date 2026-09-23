@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -182,5 +183,32 @@ class ReportingControllerTest {
             mockMvc.perform(get(path))
                     .andExpect(status().isForbidden());
         }
+    }
+
+    // --- Saved-query delete regression: the whole path must work ---
+
+    @Test
+    @WithMockUser(roles = "AGENT")
+    void deleteSavedReportReturnsNoContent() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        UUID reportId = UUID.randomUUID();
+        when(savedReportService.delete(reportId, user.getOrgId())).thenReturn(true);
+
+        mockMvc.perform(delete("/api/v1/reports/saved/{id}", reportId))
+                .andExpect(status().isNoContent());
+
+        verify(savedReportService).delete(reportId, user.getOrgId());
+    }
+
+    @Test
+    @WithMockUser(roles = "AGENT")
+    void deleteMissingSavedReportReturns404() throws Exception {
+        AppUser user = testUser();
+        lenient().when(userService.syncFromJwt(any())).thenReturn(user);
+        when(savedReportService.delete(any(), any())).thenReturn(false);
+
+        mockMvc.perform(delete("/api/v1/reports/saved/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
     }
 }
