@@ -4,26 +4,72 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Shared email wrapper. Renders a table-based text wordmark header and the
- * exact closing signature around the caller's body HTML. Plain-text bodies
- * are escaped and converted to simple <p>/<br> HTML; URL-only lines become
- * clickable links.
+ * Shared email wrapper. Emits a full HTML document: a quiet wordmark header
+ * ("Azentro" text + thin red underline — no banner fills), the caller's body,
+ * and the footer. Colors are defined as inline LIGHT-mode styles (the safe
+ * fallback for clients that strip <style>); a prefers-color-scheme: dark
+ * media block overrides the em-* classes for clients that support it.
+ * Plain-text bodies are escaped and converted to simple <p>/<br> HTML;
+ * URL-only lines become clickable links.
  */
 public final class EmailRenderer {
 
     private static final Pattern URL_LINE = Pattern.compile("^https?://[^\\s]+$|^/[^\\s]*$");
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{([A-Za-z0-9_]+)\\}\\}");
+    private static final String FONT =
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif";
 
     private EmailRenderer() {
     }
 
     /**
-     * Wraps a fully-formed body HTML fragment with the header and footer.
+     * Wraps a fully-formed body HTML fragment in the email document.
      */
     public static String render(String bodyHtml) {
-        return header() + "<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #222;\">"
+        return "<!DOCTYPE html>\n<html>\n<head>\n"
+                + "<meta charset=\"utf-8\">\n"
+                + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+                + "<meta name=\"color-scheme\" content=\"light dark\">\n"
+                + "<meta name=\"supported-color-schemes\" content=\"light dark\">\n"
+                + "<style>\n"
+                + "  a { color: #dc2828; text-decoration: none; }\n"
+                + "  @media (prefers-color-scheme: dark) {\n"
+                + "    .em-canvas { background-color: #0a0a0d !important; }\n"
+                + "    .em-card { background-color: #17171c !important; border-color: #3f3f4a !important; }\n"
+                + "    .em-text { color: #fafafa !important; }\n"
+                + "    .em-muted { color: #9ca3af !important; }\n"
+                + "    .em-quote { background-color: #1c1c22 !important; color: #d4d4d8 !important; }\n"
+                + "    a, .em-link { color: #f87171 !important; }\n"
+                + "  }\n"
+                + "</style>\n</head>\n"
+                + "<body class=\"em-canvas\" style=\"margin:0; padding:28px 16px; background-color:#f4f4f5;\">\n"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n"
+                + "  <tr><td align=\"center\">\n"
+                + "    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
+                + "class=\"em-card\" style=\"max-width:600px; background-color:#ffffff; "
+                + "border:1px solid #e2e2e8; border-radius:8px;\">\n"
+                + "      <tr><td style=\"padding:22px 28px 4px 28px;\">\n"
+                + "        <span class=\"em-text\" style=\"font-family:" + FONT
+                + "; font-size:17px; font-weight:600; color:#1a1a1e;\">Azentro</span>\n"
+                + "        <div style=\"width:44px; border-bottom:3px solid #dc2828; margin-top:8px;\"></div>\n"
+                + "      </td></tr>\n"
+                + "      <tr><td class=\"em-text\" style=\"padding:14px 28px 8px 28px; font-family:" + FONT
+                + "; font-size:15px; line-height:1.6; color:#1a1a1e;\">\n"
                 + bodyHtml
-                + "</div>" + footer();
+                + "      </td></tr>\n"
+                + "      <tr><td class=\"em-card\" style=\"padding:16px 28px 20px 28px; "
+                + "border-top:1px solid #e2e2e8;\">\n"
+                + "        <p class=\"em-muted\" style=\"margin:0 0 8px 0; font-family:" + FONT
+                + "; font-size:13px; color:#6b7280;\">"
+                + "If you have questions about this ticket, reply from the portal or contact your IT team."
+                + "</p>\n"
+                + "        <p class=\"em-muted\" style=\"margin:0; font-family:" + FONT
+                + "; font-size:12px; color:#6b7280;\">© 2026 Azentro. All Rights Reserved.</p>\n"
+                + "      </td></tr>\n"
+                + "    </table>\n"
+                + "  </td></tr>\n"
+                + "</table>\n"
+                + "</body>\n</html>";
     }
 
     /**
@@ -79,7 +125,7 @@ public final class EmailRenderer {
                 if (line.isEmpty()) continue;
                 if (URL_LINE.matcher(line).matches()) {
                     String href = line.startsWith("/") ? line : line;
-                    out.append("<a href=\"").append(escape(href)).append("\" style=\"color: #dc2828; text-decoration: none;\">")
+                    out.append("<a href=\"").append(escape(href)).append("\" class=\"em-link\" style=\"color: #dc2828; text-decoration: none;\">")
                             .append(escape(line)).append("</a>");
                 } else {
                     out.append(escape(line));
@@ -99,23 +145,4 @@ public final class EmailRenderer {
                 .replace("\"", "&quot;");
     }
 
-    private static String header() {
-        return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" "
-                + "style=\"background: #dc2828; border-radius: 6px 6px 0 0; margin-bottom: 20px;\">\n"
-                + "  <tr>\n"
-                + "    <td style=\"padding: 20px;\">\n"
-                + "      <span style=\"color: #ffffff; font-size: 18px; font-weight: 600;\">"
-                + "Azentro"
-                + "</span>\n"
-                + "    </td>\n"
-                + "  </tr>\n"
-                + "</table>\n";
-    }
-
-    private static String footer() {
-        return "<p style=\"margin-top: 24px; color: #555;\">"
-                + "If you have questions about this ticket, reply from the portal or contact your IT team."
-                + "</p>\n"
-                + "<p style=\"color: #555;\">© 2026 Azentro. All Rights Reserved.</p>\n";
-    }
 }

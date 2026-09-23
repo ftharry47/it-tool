@@ -559,7 +559,7 @@ View full request:
         Map<String, Object> newest = (Map<String, Object>) values.get("newComment");
 
         if (prior != null && !prior.isEmpty()) {
-            html.append("<p style=\"color:#6b7280; font-size:13px;\">Recent comments:</p>");
+            html.append("<p class=\"em-muted\" style=\"color:#6b7280; font-size:13px;\">Recent comments:</p>");
             List<Map<String, Object>> visible = prior.stream().filter(c -> Boolean.TRUE.equals(c.get("public"))).toList();
             int start = Math.max(0, visible.size() - 3);
             for (int i = start; i < visible.size(); i++) {
@@ -569,7 +569,7 @@ View full request:
         if (newest != null) {
             appendComment(html, newest, false);
         } else {
-            html.append("<p style=\"margin-top:12px; padding:12px; background:#fef2f2; border-left:4px solid #dc2828;\">");
+            html.append("<p class=\"em-quote\" style=\"margin-top:12px; padding:12px; background:#fafafa; border-left:3px solid #dc2828;\">");
             html.append(escape(str(values, "commentPreview")));
             html.append("</p>");
         }
@@ -592,14 +592,14 @@ View full request:
         String when = c.get("createdAt") instanceof OffsetDateTime t
                 ? DateFormats.formatDateTime(t)
                 : str(c, "createdAt");
-        html.append("<div style=\"margin-bottom:12px; padding:12px; border-radius:4px; ");
+        html.append("<div class=\"em-quote\" style=\"margin-bottom:12px; padding:12px; border-radius:4px; ");
         if (grey) {
-            html.append("background:#f3f4f6; color:#374151;");
+            html.append("background:#fafafa; color:#374151;");
         } else {
-            html.append("background:#fef2f2; border-left:4px solid #dc2828;");
+            html.append("background:#fafafa; border-left:3px solid #dc2828;");
         }
         html.append("\">");
-        html.append("<p style=\"margin:0; font-size:12px; color:#6b7280;\">").append(escape(author))
+        html.append("<p class=\"em-muted\" style=\"margin:0; font-size:12px; color:#6b7280;\">").append(escape(author))
                 .append(" · ").append(escape(when)).append("</p>");
         html.append("<p style=\"margin:4px 0 0 0;\">").append(escape(body)).append("</p>");
         html.append("</div>");

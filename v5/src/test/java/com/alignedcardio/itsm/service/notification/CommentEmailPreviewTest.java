@@ -59,13 +59,23 @@ class CommentEmailPreviewTest {
         assertTrue(html.contains("09/21/2026, 12:23 PM"), html);
         assertFalse(html.contains("16:23")); // no UTC leakage
 
-        // 4: red theme — header banner, quote block, links.
-        assertTrue(html.contains("background: #dc2828"), html);       // header banner
-        assertTrue(html.contains("background:#fef2f2"));              // quote block
-        assertTrue(html.contains("border-left:4px solid #dc2828"));   // quote accent
+        // 4: calm design — no banner fill; thin red underline + left-border
+        // quote accent are the only red surfaces. Links stay brand red.
+        assertFalse(html.contains("background: #dc2828"), html);      // no banner fill
+        assertFalse(html.contains("#fef2f2"));                        // no pink quote tint
+        assertTrue(html.contains("border-bottom:3px solid #dc2828")); // wordmark underline
+        assertTrue(html.contains("border-left:3px solid #dc2828"));   // quote accent
         assertFalse(html.contains("#0f172a"));
         assertFalse(html.contains("#2563eb"));
         assertFalse(html.contains("#eff6ff"));
+
+        // 5: light/dark adaptation — media block present, light fallbacks
+        // inline so style-stripping clients (older Outlook) still render.
+        assertTrue(html.contains("@media (prefers-color-scheme: dark)"));
+        assertTrue(html.contains("name=\"color-scheme\" content=\"light dark\""));
+        assertTrue(html.contains("background-color:#f4f4f5"));        // light canvas (inline)
+        assertTrue(html.contains("background-color: #0a0a0d"));       // dark canvas (media)
+        assertTrue(html.contains("color: #f87171"));                  // dark-mode link red
 
         // Written preview so the rendered email can be opened in a browser.
         Path out = Path.of("target", "email-preview.html");
