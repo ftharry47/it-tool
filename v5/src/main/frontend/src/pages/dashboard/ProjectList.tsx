@@ -2,7 +2,7 @@ import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { FolderKanban, Plus } from 'lucide-react'
+import { ArrowLeft, FolderKanban, Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { EntityForm } from '../../components/ui/EntityForm'
@@ -10,6 +10,7 @@ import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { useAuth } from '../../auth/AuthProvider'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface ProjectResponse {
   id: string
@@ -22,6 +23,7 @@ interface ProjectResponse {
 
 
 export function ProjectList() {
+  const smartBack = useSmartBack('/dashboard')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -109,6 +111,13 @@ export function ProjectList() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center justify-between">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
           {canCreate && (
             <button

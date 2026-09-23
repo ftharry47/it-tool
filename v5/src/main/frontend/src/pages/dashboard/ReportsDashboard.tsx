@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Download, FileQuestion } from 'lucide-react'
+import { ArrowLeft, Download, FileQuestion } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { Loading } from '../../components/ui/Loading'
@@ -13,6 +13,7 @@ import { DateInput } from '../../components/ui/DateInput'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { downloadCsv } from '../../lib/csv'
 import { formatDate, formatDateTime } from '../../lib/date'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -685,6 +686,7 @@ function StandardTableView({ data, linkKey, linkFor }: {
 }
 
 export function ReportsDashboard() {
+  const smartBack = useSmartBack('/dashboard')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const { currentUser } = useAuth()
@@ -734,6 +736,13 @@ export function ReportsDashboard() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">{isAdmin ? 'Reporting Dashboards' : 'My Reporting'}</h1>
           {isAdmin && (
             <div className="flex gap-2">

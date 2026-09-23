@@ -1,9 +1,10 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { CommentThread } from '../../components/ui/CommentThread'
 import { CopyButton } from '../../components/ui/CopyButton'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
@@ -77,7 +78,7 @@ function describeAfter(afterState: string | null): string | null {
 
 export function MyRequestDetail() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+  const smartBack = useSmartBack('/home/service-requests')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
@@ -121,7 +122,7 @@ export function MyRequestDetail() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <button
-            onClick={() => navigate('/home/service-requests')}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />

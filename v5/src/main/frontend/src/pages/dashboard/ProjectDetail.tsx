@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { IssueBoard } from './IssueBoard'
@@ -31,6 +32,7 @@ interface IssueResponse {
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
+  const smartBack = useSmartBack('/dashboard/projects')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [tab, setTab] = useState<'board' | 'backlog' | 'sprints'>('board')
@@ -68,13 +70,13 @@ export function ProjectDetail() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-4">
         <div>
-          <Link
-            to="/dashboard/projects"
+          <button
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Link>
+          </button>
         </div>
         <div className="flex items-start justify-between">
           <div>

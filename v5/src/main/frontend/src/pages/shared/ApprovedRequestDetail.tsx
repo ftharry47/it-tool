@@ -1,9 +1,10 @@
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { CommentThread } from '../../components/ui/CommentThread'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
@@ -78,12 +79,12 @@ function describeAfter(afterState: string | null): string | null {
 
 export function ApprovedRequestDetail() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const location = useLocation()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const isHome = location.pathname.startsWith('/home')
   const listPath = isHome ? '/home/approved-requests' : '/dashboard/approved-requests'
+  const smartBack = useSmartBack(listPath)
 
   const requestQuery = useQuery<ServiceRequestDetail>({
     queryKey: ['approved-request', id],
@@ -121,7 +122,7 @@ export function ApprovedRequestDetail() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(listPath)}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted"
           >
             <ArrowLeft className="h-4 w-4" />

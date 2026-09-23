@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { DataTable } from '../../components/ui/DataTable'
@@ -12,6 +12,7 @@ import { FormDrawer } from '../../components/ui/FormDrawer'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { formatDateTime } from '../../lib/date'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface PendingApproval {
   id: string
@@ -24,6 +25,7 @@ interface PendingApproval {
 }
 
 export function Approvals() {
+  const smartBack = useSmartBack('/dashboard')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
@@ -87,6 +89,13 @@ export function Approvals() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
+        <button
+          onClick={smartBack}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
         <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
         <p className="text-sm text-muted-foreground">
           Service requests waiting for your approval.

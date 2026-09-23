@@ -1,10 +1,13 @@
 import { useMsal } from '@azure/msal-react'
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { fetchWithToken } from '../../api/client'
 import { isPushSupported, subscribeToPush, unsubscribeFromPush } from '../../api/push'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
+import { ArrowLeft } from 'lucide-react'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 function EventToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
@@ -35,6 +38,8 @@ interface NotificationPreferenceResponse {
 const MODES: NotificationPreferenceResponse['digestMode'][] = ['NONE', 'HOURLY', 'DAILY']
 
 export function NotificationPreferences() {
+  const location = useLocation()
+  const smartBack = useSmartBack(location.pathname.startsWith('/home') ? '/home' : '/dashboard')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -107,6 +112,13 @@ export function NotificationPreferences() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-2xl space-y-6">
         <div>
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Notification Preferences</h1>
           <p className="text-sm text-muted-foreground">Choose how you receive notifications.</p>
         </div>

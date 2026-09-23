@@ -2,12 +2,13 @@ import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Search } from 'lucide-react'
+import { ArrowLeft, Plus, Search } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface KbArticleSummary {
   id: string
@@ -21,6 +22,7 @@ interface KbArticleSummary {
 const statusOptions = ['', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'ARCHIVED']
 
 export function KbArticleList() {
+  const smartBack = useSmartBack('/dashboard')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [filter, setFilter] = useState('')
@@ -59,6 +61,13 @@ export function KbArticleList() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base Articles</h1>
           <Link
             to="/dashboard/kb/new"

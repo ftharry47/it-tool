@@ -1,10 +1,11 @@
 import { useMsal } from '@azure/msal-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { formatDateTime } from '../../lib/date'
@@ -48,6 +49,7 @@ interface IssueCard {
 
 export function IssueDetail() {
   const { projectId, issueId } = useParams<{ projectId: string; issueId: string }>()
+  const smartBack = useSmartBack(`/dashboard/projects/${projectId}`)
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -147,13 +149,13 @@ export function IssueDetail() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-4xl space-y-6">
         <div>
-          <Link
-            to={`/dashboard/projects/${projectId}`}
+          <button
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Link>
+          </button>
         </div>
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-start justify-between">

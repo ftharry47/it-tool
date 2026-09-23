@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, Search, ThumbsUp, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Eye, Search, ThumbsUp, TrendingUp } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { formatDate } from '../../lib/date'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface KbArticleSummary {
   id: string
@@ -79,6 +80,7 @@ function ArticleCard({ article }: { article: KbArticleSummary }) {
 }
 
 export function KbBrowse() {
+  const smartBack = useSmartBack('/home')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [query, setQuery] = useState('')
@@ -151,6 +153,13 @@ export function KbBrowse() {
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
+        <button
+          onClick={smartBack}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
         <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

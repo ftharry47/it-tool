@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Users, X } from 'lucide-react'
+import { ArrowLeft, Users, X } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
@@ -9,6 +9,7 @@ import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { UserCombobox } from '../../components/ui/UserCombobox'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface TeamMemberInfo {
   userId: string
@@ -164,6 +165,7 @@ function TeamCard({
 }
 
 export function SupportTiers() {
+  const smartBack = useSmartBack('/admin')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -250,6 +252,13 @@ export function SupportTiers() {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <div>
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Support Tiers</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             The L1/L2/L3 escalation roster. SLA escalation reassigns incidents to these teams.

@@ -5,6 +5,8 @@ import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { formatDate } from '../../lib/date'
+import { ArrowLeft } from 'lucide-react'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface QueueTicket {
   id: string
@@ -37,6 +39,7 @@ const SLA_TONE: Record<string, string> = {
 
 /** Admin drill-down from "Workload per Agent": one agent's open queue, all types. */
 export function AgentQueue() {
+  const smartBack = useSmartBack('/dashboard')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const [searchParams] = useSearchParams()
@@ -75,6 +78,13 @@ export function AgentQueue() {
           <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
             ← Dashboard
           </Link>
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Agent Queue</h1>
           <p className="text-sm text-muted-foreground">{total} open item{total === 1 ? '' : 's'} across all work types.</p>
         </div>

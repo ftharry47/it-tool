@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { CommentThread } from '../../components/ui/CommentThread'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { CopyButton } from '../../components/ui/CopyButton'
@@ -129,7 +130,7 @@ interface ServiceRequestDetail {
 export function ServiceRequestDetail() {
   const { id } = useParams<{ id: string }>()
   const { pathname } = useLocation()
-  const navigate = useNavigate()
+  const smartBack = useSmartBack(pathname.startsWith('/home') ? '/home/approvals' : '/dashboard/service-requests')
   const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
@@ -602,7 +603,7 @@ export function ServiceRequestDetail() {
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <button
-            onClick={() => navigate(pathname.startsWith('/home') ? '/home/approvals' : '/dashboard/service-requests')}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />

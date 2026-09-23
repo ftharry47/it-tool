@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Plus, Trash2, RotateCcw, CheckSquare, XSquare } from 'lucide-react'
+import { ArrowLeft, Calendar, Plus, Trash2, RotateCcw, CheckSquare, XSquare } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { DataTable } from '../../components/ui/DataTable'
@@ -13,6 +13,7 @@ import { formatDate } from '../../lib/date'
 import { BulkActionToolbar } from '../../components/ui/BulkActionToolbar'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 export interface Change {
   id: string
@@ -28,6 +29,7 @@ export interface Change {
 const statusOptions = ['', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ROLLED_BACK', 'REJECTED', 'CANCELLED']
 
 export function ChangeList() {
+  const smartBack = useSmartBack('/dashboard')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
@@ -112,6 +114,13 @@ export function ChangeList() {
       />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           <div className="flex items-center gap-2">
             {view === 'active' && (

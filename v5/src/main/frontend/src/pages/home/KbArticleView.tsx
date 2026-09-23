@@ -8,6 +8,7 @@ import { ArrowLeft, ChevronRight, Eye, History, ListTree, ThumbsUp, ThumbsDown }
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -88,6 +89,7 @@ function initials(name: string): string {
 
 export function KbArticleView() {
   const { id } = useParams<{ id: string }>()
+  const smartBack = useSmartBack('/home/kb')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const { currentUser } = useAuth()
@@ -162,13 +164,13 @@ export function KbArticleView() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl">
         <div className="mb-4">
-          <Link
-            to="/home/kb"
+          <button
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Link>
+          </button>
         </div>
         <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1 text-sm text-muted-foreground">
           <Link to="/home/kb" className="hover:text-foreground hover:underline">Knowledge Base</Link>

@@ -8,6 +8,8 @@ import { Loading } from '../../components/ui/Loading'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
 import { formatDateTime } from '../../lib/date'
+import { ArrowLeft } from 'lucide-react'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface AutomationRuleResponse {
   id: string
@@ -119,6 +121,7 @@ function prettyJson(value: unknown) {
 }
 
 export function AutomationAdmin() {
+  const smartBack = useSmartBack('/admin')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -406,6 +409,13 @@ export function AutomationAdmin() {
       />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Automation Rules</h1>
           <button onClick={() => guardDiscard(resetForm)} className="rounded-md border border-border px-3 py-1.5 text-sm transition hover:bg-muted">New Rule</button>
         </div>

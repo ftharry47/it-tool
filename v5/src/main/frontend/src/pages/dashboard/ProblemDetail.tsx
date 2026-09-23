@@ -6,6 +6,7 @@ import { ArrowLeft, History, Link2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { DataTable } from '../../components/ui/DataTable'
@@ -225,11 +226,12 @@ export function ProblemDetail() {
     )
   }, [editForm, problemQuery.data])
 
+  const smartBack = useSmartBack('/dashboard/problems')
   const handleBack = () => {
     if (editFormDirty) {
       setConfirmBack(true)
     } else {
-      navigate('/dashboard/problems')
+      smartBack()
     }
   }
 

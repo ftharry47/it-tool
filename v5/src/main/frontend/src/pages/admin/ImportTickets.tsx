@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { ArrowLeft, Upload, Loader2, AlertTriangle, CheckCircle2, FileSpreadsheet } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface NamedRef {
   id: string
@@ -106,7 +106,7 @@ function MappingCell({
 }
 
 export function ImportTickets() {
-  const navigate = useNavigate()
+  const smartBack = useSmartBack('/admin')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
@@ -168,7 +168,7 @@ export function ImportTickets() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/admin')}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />

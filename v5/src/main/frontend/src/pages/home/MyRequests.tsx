@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
-import { Plus } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { StatusBadge } from '../../components/ui/StatusBadge'
@@ -9,6 +9,7 @@ import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FilterBar, FilterSelect, useSessionFilters, enumLabel } from '../../components/ui/FilterBar'
 import { formatDate } from '../../lib/date'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 const SR_STATUSES = ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'IN_FULFILLMENT', 'FULFILLED', 'CANCELLED']
 
@@ -22,6 +23,7 @@ interface MyServiceRequest {
 }
 
 export function MyRequests() {
+  const smartBack = useSmartBack('/home')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const navigate = useNavigate()
@@ -59,6 +61,13 @@ export function MyRequests() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">My Requests</h1>
           <Link
             to="/home/catalog"

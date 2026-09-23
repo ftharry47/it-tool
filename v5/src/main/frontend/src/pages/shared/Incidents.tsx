@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { DataTable } from '../../components/ui/DataTable'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -46,6 +47,7 @@ export function Incidents() {
   const account = accounts[0]
   const { currentUser } = useAuth()
   const homeRoute = location.pathname.startsWith('/home') ? '/home' : '/dashboard'
+  const smartBack = useSmartBack(homeRoute)
   const catalogPath = location.pathname.startsWith('/home') ? '/home/catalog' : '/dashboard/service-requests/new'
   
   const isEndUser = currentUser?.roles.includes('END_USER') && !currentUser?.roles.some(r => ['AGENT', 'TEAM_LEAD', 'ADMIN', 'SUPER_ADMIN'].includes(r))
@@ -276,7 +278,7 @@ export function Incidents() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(homeRoute)}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ArrowLeft className="h-4 w-4" />

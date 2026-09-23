@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { ArrowLeft, Plus } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { DataTable } from '../../components/ui/DataTable'
 import { EntityForm } from '../../components/ui/EntityForm'
@@ -11,6 +11,7 @@ import { Loading } from '../../components/ui/Loading'
 import { SchemaForm, isValidSchema, type SchemaField } from '../../components/ui/SchemaForm'
 import { SchemaFieldsEditor } from '../../components/ui/SchemaFieldsEditor'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface CatalogItem {
   id: string
@@ -58,6 +59,7 @@ function valuesFromItem(item: CatalogItem | null): CatalogFormValues {
 }
 
 export function CatalogAdmin() {
+  const smartBack = useSmartBack('/admin')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -186,6 +188,13 @@ export function CatalogAdmin() {
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Catalog Administration</h1>
           <button
             onClick={openCreate}

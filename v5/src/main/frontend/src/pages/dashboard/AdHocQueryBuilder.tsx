@@ -4,7 +4,7 @@ import { DateTimeInput } from '../../components/ui/DateTimeInput'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Play, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Play, Save, Trash2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { downloadCsv } from '../../lib/csv'
 import { DataTable } from '../../components/ui/DataTable'
@@ -12,6 +12,7 @@ import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { toEasternInputValue } from '../../lib/date'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface QueryFilter {
   field: string
@@ -133,6 +134,7 @@ function toIso(input: string) {
 }
 
 export function AdHocQueryBuilder() {
+  const smartBack = useSmartBack('/dashboard/reports')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
 
@@ -419,6 +421,13 @@ export function AdHocQueryBuilder() {
         onCancel={() => setPendingDelete(null)}
       />
       <div className="mx-auto max-w-5xl space-y-6">
+        <button
+          onClick={smartBack}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
         <h1 className="text-2xl font-semibold tracking-tight">Query Builder</h1>
         <p className="text-sm text-muted-foreground">
           Build a grouped or row-level report, save it for reuse, or start from a template. Click any grouped result to drill into the actual records.

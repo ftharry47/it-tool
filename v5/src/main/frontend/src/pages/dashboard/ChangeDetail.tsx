@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Check, CheckCircle2, History, XCircle } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription } from '../../components/ui/ActivityTimeline'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EntityForm } from '../../components/ui/EntityForm'
@@ -359,11 +360,12 @@ export function ChangeDetail() {
     return baseDirty || selectedStatus !== ''
   }, [form, initialForm, selectedStatus])
 
+  const smartBack = useSmartBack('/dashboard/changes')
   const handleBack = () => {
     if (formDirty) {
       setConfirmBack(true)
     } else {
-      navigate('/dashboard/changes')
+      smartBack()
     }
   }
 

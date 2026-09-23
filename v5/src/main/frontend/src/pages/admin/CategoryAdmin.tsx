@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Pencil, Plus, Tags, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Pencil, Plus, Tags, Trash2 } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { Loading } from '../../components/ui/Loading'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { FormDrawer } from '../../components/ui/FormDrawer'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ToastStack, type ToastItem } from '../../components/ui/Toast'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface Category {
   id: string
@@ -29,6 +30,7 @@ interface CategoryFormState {
 const EMPTY_FORM: CategoryFormState = { name: '', description: '', displayOrder: '0', status: 'ACTIVE' }
 
 export function CategoryAdmin() {
+  const smartBack = useSmartBack('/admin')
   const { instance, accounts } = useMsal()
   const account = accounts[0]
   const queryClient = useQueryClient()
@@ -149,6 +151,13 @@ export function CategoryAdmin() {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             <Tags className="h-6 w-6" />
             Incident Categories

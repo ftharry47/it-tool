@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
-import { Bell, Building, ChevronRight, LogOut, Moon, Palette, Shield, User } from 'lucide-react'
+import { ArrowLeft, Bell, Building, ChevronRight, LogOut, Moon, Palette, Shield, User } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { useTheme } from '../../components/theme/ThemeProvider'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 function SettingsCard({ title, children, icon: Icon }: { title: string; children: React.ReactNode; icon: React.ElementType }) {
   return (
@@ -45,6 +46,7 @@ function SettingsLink({ to, icon: Icon, label, description }: { to: string; icon
 }
 
 export function Settings() {
+  const smartBack = useSmartBack('/dashboard')
   const { currentUser, logout } = useAuth()
   const { theme, setTheme } = useTheme()
 
@@ -62,6 +64,13 @@ export function Settings() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
+          <button
+            onClick={smartBack}
+            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">Manage your account, appearance, and organization preferences.</p>
         </div>

@@ -6,6 +6,7 @@ import { ArrowLeft, Link2, Paperclip, MessageCircle, Loader2, History, Clock } f
 import { fetchWithToken } from '../../api/client'
 import { useAuth } from '../../auth/AuthProvider'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { ActivityTimeline, type Activity, type AuditEntry, auditTitle, auditDescription, parseState } from '../../components/ui/ActivityTimeline'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
@@ -543,11 +544,12 @@ const [confirmBack, setConfirmBack] = useState(false)
   }, [incidentQuery.data, commentsQuery.data, attachmentsQuery.data, activityQuery.data, isEndUser])
 
   const backPath = isEndUser ? '/home/incidents' : '/dashboard/incidents'
+  const smartBack = useSmartBack(backPath)
   const handleBack = () => {
     if (isEditing && editFormDirty) {
       setConfirmBack(true)
     } else {
-      navigate(backPath)
+      smartBack()
     }
   }
 

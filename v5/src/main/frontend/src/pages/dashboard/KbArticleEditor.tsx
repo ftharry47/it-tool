@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { useDocumentTitle } from '../../components/layout/useDocumentTitle'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { EntityForm } from '../../components/ui/EntityForm'
 import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { Loading } from '../../components/ui/Loading'
@@ -42,6 +43,7 @@ const statusTransitions: Record<string, string[]> = {
 export function KbArticleEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const smartBack = useSmartBack('/dashboard/kb')
   const queryClient = useQueryClient()
   const { instance, accounts } = useMsal()
   const account = accounts[0]
@@ -122,10 +124,10 @@ export function KbArticleEditor() {
     <div className="min-h-full bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/dashboard/kb" className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <button onClick={smartBack} className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Link>
+          </button>
           <h1 className="text-2xl font-semibold tracking-tight">
             {isNew ? 'New Article' : `Edit #${articleQuery.data?.number}`}
           </h1>

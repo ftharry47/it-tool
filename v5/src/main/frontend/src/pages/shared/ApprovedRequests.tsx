@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMsal } from '@azure/msal-react'
 import { ArrowLeft } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
+import { useSmartBack } from '../../lib/useSmartBack'
 import { DataTable } from '../../components/ui/DataTable'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Loading } from '../../components/ui/Loading'
@@ -27,6 +28,7 @@ export function ApprovedRequests() {
   const location = useLocation()
   const isHome = location.pathname.startsWith('/home')
   const backPath = isHome ? '/home' : '/dashboard'
+  const smartBack = useSmartBack(backPath)
   const detailPrefix = isHome ? '/home/approved-requests' : '/dashboard/approved-requests'
 
   const query = useQuery<ApprovedRequest[]>({
@@ -47,7 +49,7 @@ export function ApprovedRequests() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(backPath)}
+            onClick={smartBack}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted"
           >
             <ArrowLeft className="h-4 w-4" />

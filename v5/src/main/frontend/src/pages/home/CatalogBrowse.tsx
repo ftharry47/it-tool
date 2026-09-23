@@ -9,6 +9,8 @@ import { ErrorFallback } from '../../components/ui/ErrorFallback'
 import { SchemaForm, type SchemaField } from '../../components/ui/SchemaForm'
 import { SubmissionNarrative, type SubmissionNarrativeStep } from '../../components/ui/SubmissionNarrative'
 import { isValidPhone, normalizePhone, PHONE_ERROR } from '../../lib/phone'
+import { ArrowLeft } from 'lucide-react'
+import { useSmartBack } from '../../lib/useSmartBack'
 
 interface CatalogItem {
   id: string
@@ -42,6 +44,7 @@ export function CatalogBrowse() {
   const account = accounts[0]
   const location = useLocation()
   const navigate = useNavigate()
+  const smartBack = useSmartBack(location.pathname.startsWith('/home') ? '/home' : '/dashboard')
   const incidentPath = location.pathname.startsWith('/home') ? '/home/incidents' : '/dashboard/incidents'
   const isHome = location.pathname.startsWith('/home')
 
@@ -178,6 +181,13 @@ export function CatalogBrowse() {
         successSubtitle={narrativeSuccess.subtitle}
       />
       <div className="mx-auto max-w-6xl space-y-6">
+        <button
+          onClick={smartBack}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
         <h1 className="text-2xl font-semibold tracking-tight">Service Catalog</h1>
         <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Not sure where to start?</p>
