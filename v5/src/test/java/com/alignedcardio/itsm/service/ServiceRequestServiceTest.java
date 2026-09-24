@@ -990,6 +990,39 @@ class ServiceRequestServiceTest {
         assertTrue(e.getMessage().contains("on hold"));
     }
 
+    /**
+     * Terminal requests reject every fulfillment mutation — previously only
+     * ON_HOLD was guarded, so a CANCELLED request's pending tasks could still
+     * be progressed and the request reassigned via direct API calls.
+     */
+    @Test
+    void taskMutationsAndAssignmentRejectedOnTerminalRequests() {
+        AppUser fulfiller = user("Fulfiller");
+        for (ServiceRequest.Status terminal : List.of(
+                ServiceRequest.Status.FULFILLED, ServiceRequest.Status.CANCELLED)) {
+            ServiceRequest sr = pendingRequest(item("Laptop", false, null), user("Requester"), null);
+            sr.setStatus(terminal);
+            FulfillmentTask task = assignedTask(sr, fulfiller);
+            task.setStatus(FulfillmentTask.Status.ORDERED);
+            stubTaskLookup(sr, task);
+
+            assertTerminal(() -> service.markOrdered(fulfiller, ORG_ID, sr.getId(), task.getId()));
+            assertTerminal(() -> service.setDeliveryDate(fulfiller, ORG_ID, sr.getId(), task.getId(),
+                    java.time.LocalDate.now().plusDays(1)));
+            assertTerminal(() -> service.markDelivered(fulfiller, ORG_ID, sr.getId(), task.getId()));
+            assertTerminal(() -> service.completeTask(fulfiller, ORG_ID, sr.getId(), task.getId(), "done"));
+            assertTerminal(() -> service.assignTask(superAdmin(), ORG_ID, sr.getId(), task.getId(),
+                    UUID.randomUUID()));
+            assertTerminal(() -> service.sendToApproval(superAdmin(), ORG_ID, sr.getId(), "reason"));
+        }
+    }
+
+    private void assertTerminal(org.junit.jupiter.api.function.Executable action) {
+        IllegalStateException e = assertThrows(IllegalStateException.class, action);
+        assertTrue(e.getMessage().contains("no further fulfillment changes"),
+                "expected terminal-state rejection, got: " + e.getMessage());
+    }
+
     // --- Part J: cancel ---
 
     @Test

@@ -1,2 +1,0 @@
-import{j as t}from"./index-NoeVzfFm.js";import{r as a}from"./react-B1z9iAW_.js";import{a as s}from"./utils-BEhiKRD9.js";const i=a.forwardRef(({className:r,...o},e)=>t.jsx("input",{ref:e,type:"datetime-local",className:s("w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring [color-scheme:light] dark:[color-scheme:dark] disabled:opacity-60 disabled:cursor-not-allowed",r),...o}));i.displayName="DateTimeInput";export{i as D};
-//# sourceMappingURL=DateTimeInput-Bqc2Ns3y.js.map

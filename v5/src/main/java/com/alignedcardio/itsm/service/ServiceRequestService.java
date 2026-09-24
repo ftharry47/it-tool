@@ -284,6 +284,7 @@ public class ServiceRequestService {
         if (sr.getStatus() == ServiceRequest.Status.PENDING_APPROVAL) {
             throw new IllegalStateException("Request is already pending approval");
         }
+        requireNotTerminal(sr);
 
         if (reason == null || reason.isBlank()) {
             throw new IllegalStateException("A reason is required when sending a request to approval");
@@ -961,13 +962,27 @@ public class ServiceRequestService {
     }
 
     /**
-     * A held request's fulfillment work is frozen — task progression resumes
-     * only when the request leaves ON_HOLD.
+     * Task progression requires a live request: ON_HOLD freezes work until
+     * resumed, and FULFILLED/CANCELLED are terminal — nothing can progress.
      */
-    private void requireNotOnHold(ServiceRequest sr) {
+    private void requireWorkable(ServiceRequest sr) {
         if (sr.getStatus() == ServiceRequest.Status.ON_HOLD) {
             throw new IllegalStateException(
                     "Request is on hold — resume it before progressing fulfillment tasks");
+        }
+        requireNotTerminal(sr);
+    }
+
+    /**
+     * Terminal requests accept no fulfillment changes at all — including
+     * reassignment, which remains available while merely ON_HOLD.
+     */
+    private void requireNotTerminal(ServiceRequest sr) {
+        if (sr.getStatus() == ServiceRequest.Status.FULFILLED
+                || sr.getStatus() == ServiceRequest.Status.CANCELLED) {
+            throw new IllegalStateException(
+                    "Request is " + sr.getStatus().name().toLowerCase()
+                            + " — no further fulfillment changes are allowed");
         }
     }
 
@@ -1002,6 +1017,9 @@ public class ServiceRequestService {
         if (!task.getServiceRequest().getId().equals(sr.getId())) {
             throw new NotFoundException("Task does not belong to this request");
         }
+        // Assignment stays available while ON_HOLD (administrative, not work
+        // progression) but not on terminal requests.
+        requireNotTerminal(sr);
 
         boolean isMember = teamMemberRepository.findByTeamId(IT_FULFILLMENT_TEAM_ID).stream()
                 .anyMatch(tm -> tm.getUser() != null && tm.getUser().getId().equals(assigneeId));
@@ -1107,7 +1125,7 @@ public class ServiceRequestService {
         if (!task.getServiceRequest().getId().equals(sr.getId())) {
             throw new NotFoundException("Task does not belong to this request");
         }
-        requireNotOnHold(sr);
+        requireWorkable(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task ordered");
         }
@@ -1164,7 +1182,7 @@ public class ServiceRequestService {
             throw new NotFoundException("Task does not belong to this request");
         }
 
-        requireNotOnHold(sr);
+        requireWorkable(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can complete this task");
         }
@@ -1227,7 +1245,7 @@ public class ServiceRequestService {
         if (expectedDeliveryDate == null) {
             throw new IllegalStateException("expectedDeliveryDate is required");
         }
-        requireNotOnHold(sr);
+        requireWorkable(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can set the delivery date");
         }
@@ -1275,7 +1293,7 @@ public class ServiceRequestService {
             throw new NotFoundException("Task does not belong to this request");
         }
 
-        requireNotOnHold(sr);
+        requireWorkable(sr);
         if (!isTaskActor(user, task)) {
             throw new IllegalStateException("Only the assigned fulfiller or staff can mark this task installed");
         }

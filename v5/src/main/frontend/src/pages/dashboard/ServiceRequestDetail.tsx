@@ -538,6 +538,10 @@ export function ServiceRequestDetail() {
   if (!requestQuery.data) return <Loading />
 
   const request = requestQuery.data
+  // FULFILLED/CANCELLED are terminal: tasks frozen AND assignee locked.
+  // ON_HOLD only freezes task progression — reassignment stays available.
+  const isTerminal = request?.status === 'FULFILLED' || request?.status === 'CANCELLED'
+  const tasksFrozen = request?.status === 'ON_HOLD' || isTerminal
   const formDataDisplay = (() => {
     try {
       return JSON.parse(request.formData)
@@ -760,7 +764,7 @@ export function ServiceRequestDetail() {
                     key: 'assigneeName',
                     header: 'Assignee',
                     render: (row) =>
-                      isSuperAdmin ? (
+                      isSuperAdmin && !isTerminal ? (
                         <select
                           value={row.assigneeId ?? ''}
                           onChange={(e) => {
@@ -796,9 +800,17 @@ export function ServiceRequestDetail() {
                     render: (row) => {
                       const workflow = row.workflow ?? 'FULL'
                       const btn = 'inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50'
-                      // Held request: progression is frozen — the SLA clock is paused.
-                      if (request.status === 'ON_HOLD' && row.status !== 'COMPLETED') {
-                        return <span className="text-xs text-muted-foreground">Paused — resume the request to continue</span>
+                      // Held or terminal request: progression is frozen.
+                      if (tasksFrozen && row.status !== 'COMPLETED') {
+                        return (
+                          <span className="text-xs text-muted-foreground">
+                            {request.status === 'ON_HOLD'
+                              ? 'Paused — resume the request to continue'
+                              : request.status === 'CANCELLED'
+                                ? 'Cancelled'
+                                : 'Fulfilled'}
+                          </span>
+                        )
                       }
                       if (row.status === 'COMPLETED') {
                         return <span className="text-xs text-muted-foreground">Done</span>
@@ -978,7 +990,7 @@ export function ServiceRequestDetail() {
               </div>
             )}
 
-            {request.status !== 'PENDING_APPROVAL' && isAdminOrSuperAdmin && (
+            {request.status !== 'PENDING_APPROVAL' && !isTerminal && isAdminOrSuperAdmin && (
               <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="mb-4 text-lg font-semibold">Approval</h2>
                 <p className="mb-3 text-sm text-muted-foreground">Send this request to the location's approval manager retroactively.</p>
