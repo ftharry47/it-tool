@@ -147,7 +147,7 @@ export function IssueDetail() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <button

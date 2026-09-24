@@ -255,7 +255,7 @@ export function ProblemDetail() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <button
             onClick={handleBack}

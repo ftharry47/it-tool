@@ -66,7 +66,7 @@ export function BoardPage() {
   if (projects.length === 0) {
     return (
       <div className="min-h-full bg-background p-6 text-foreground">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-6xl">
           <h1 className="text-2xl font-semibold tracking-tight">Board</h1>
           <p className="mt-4 text-sm text-muted-foreground">No projects available. Create a project first.</p>
         </div>
@@ -78,7 +78,7 @@ export function BoardPage() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Board</h1>

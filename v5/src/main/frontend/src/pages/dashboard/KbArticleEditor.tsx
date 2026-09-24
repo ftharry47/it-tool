@@ -122,7 +122,7 @@ export function KbArticleEditor() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-4">
           <button onClick={smartBack} className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ArrowLeft className="h-4 w-4" />

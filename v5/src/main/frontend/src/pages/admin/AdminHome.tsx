@@ -21,7 +21,7 @@ export function AdminHome() {
 
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <h1 className="text-2xl font-semibold tracking-tight">Administration</h1>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {tiles.map(({ to, icon: Icon, label }) => (

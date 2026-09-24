@@ -267,7 +267,7 @@ export function WorkflowAdmin() {
         }}
         onCancel={() => setPendingTransitionRemoval(null)}
       />
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-3">
           <button
                     onClick={smartBack}

@@ -196,7 +196,7 @@ export function UserAdmin() {
         }}
         onCancel={() => setPendingActive(null)}
       />
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center justify-between">
           <button
             onClick={smartBack}

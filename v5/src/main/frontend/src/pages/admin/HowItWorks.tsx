@@ -5,7 +5,7 @@ export function HowItWorks() {
   const smartBack = useSmartBack('/admin')
   return (
     <div className="min-h-full bg-background p-6 text-foreground">
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex items-center gap-3">
           <button
                     onClick={smartBack}

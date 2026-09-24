@@ -30,7 +30,7 @@ export function Home() {
     <div className="flex min-h-full flex-col items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-4xl space-y-6 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-card-foreground">Self-Service Portal</h1>
-        <p className="mx-auto max-w-xl text-sm text-muted-foreground">
+        <p className="mx-auto max-w-6xl text-sm text-muted-foreground">
           Get help, track requests, and find answers in one place.
         </p>
       </div>

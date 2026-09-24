@@ -665,7 +665,7 @@ export function SlaDetails() {
         }}
         onCancel={() => setConfirmCancelPolicyId(null)}
       />
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div>
           <div className="flex items-center gap-3">
             <button
