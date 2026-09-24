@@ -28,6 +28,8 @@ interface SlaInstanceRow {
   serviceRequestId: string | null
   serviceRequestNumber: string | null
   serviceRequestTitle: string | null
+  serviceRequestPriority: string | null
+  fulfillerName: string | null
   problemId: string | null
   problemNumber: string | null
   problemTitle: string | null
@@ -35,6 +37,7 @@ interface SlaInstanceRow {
   changeNumber: string | null
   changeTitle: string | null
   policyName: string
+  workflowType: string | null
   responseDueAt: string | null
   resolutionDueAt: string | null
   responseMetAt: string | null
@@ -407,6 +410,7 @@ export function SlaDetails() {
   const [createFormDirty, setCreateFormDirty] = useState(false)
   const [confirmCloseCreate, setConfirmCloseCreate] = useState(false)
   const [confirmCancelPolicyId, setConfirmCancelPolicyId] = useState<string | null>(null)
+  const [slaTab, setSlaTab] = useState<'INCIDENT' | 'SERVICE_REQUEST'>('INCIDENT')
 
   const mine = !canEdit
 
@@ -513,40 +517,7 @@ export function SlaDetails() {
             ? { to: `/dashboard/changes/${row.changeId}`, label: row.changeNumber ?? '—' }
             : null
 
-  const KIND_LABEL: Record<string, string> = {
-    INCIDENT: 'Incident',
-    SERVICE_REQUEST: 'Request',
-    PROBLEM: 'Problem',
-    CHANGE: 'Change',
-  }
-
-  const columns = [
-    {
-      key: 'entityKind',
-      header: 'Type',
-      render: (row: SlaInstanceRow) => (row.entityKind ? KIND_LABEL[row.entityKind] ?? row.entityKind : '—'),
-    },
-    {
-      key: 'ticketNumber',
-      header: '#',
-      render: (row: SlaInstanceRow) => {
-        const ref = ticketRef(row)
-        return ref ? (
-          <Link to={ref.to} className="font-medium hover:underline">
-            {ref.label}
-          </Link>
-        ) : (
-          '—'
-        )
-      },
-    },
-    {
-      key: 'title',
-      header: 'Title',
-      render: (row: SlaInstanceRow) =>
-        row.incidentTitle ?? row.serviceRequestTitle ?? row.problemTitle ?? row.changeTitle ?? '—',
-    },
-    { key: 'incidentPriority', header: 'Priority', render: (row: SlaInstanceRow) => row.incidentPriority ?? '—' },
+  const clockColumns = [
     { key: 'policyName', header: 'Policy' },
     {
       key: 'responseDueAt',
@@ -583,6 +554,60 @@ export function SlaDetails() {
       render: (row: SlaInstanceRow) => (row.pausedAt ? 'Yes' : '—'),
     },
   ]
+
+  const ticketColumn = {
+    key: 'ticketNumber',
+    header: '#',
+    render: (row: SlaInstanceRow) => {
+      const ref = ticketRef(row)
+      return ref ? (
+        <Link to={ref.to} className="font-medium hover:underline">
+          {ref.label}
+        </Link>
+      ) : (
+        '—'
+      )
+    },
+  }
+
+  const incidentColumns = [
+    ticketColumn,
+    { key: 'incidentTitle', header: 'Title', render: (row: SlaInstanceRow) => row.incidentTitle ?? '—' },
+    { key: 'incidentPriority', header: 'Priority', render: (row: SlaInstanceRow) => row.incidentPriority ?? '—' },
+    ...clockColumns,
+  ]
+
+  const WORKFLOW_BADGE: Record<string, string> = {
+    INSTANT: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    SOFTWARE: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+    FULL: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
+  }
+
+  const requestColumns = [
+    ticketColumn,
+    { key: 'serviceRequestTitle', header: 'Catalog Item', render: (row: SlaInstanceRow) => row.serviceRequestTitle ?? '—' },
+    { key: 'serviceRequestPriority', header: 'Priority', render: (row: SlaInstanceRow) => row.serviceRequestPriority ?? '—' },
+    {
+      key: 'workflowType',
+      header: 'Workflow',
+      render: (row: SlaInstanceRow) =>
+        row.workflowType ? (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WORKFLOW_BADGE[row.workflowType] ?? 'bg-muted text-muted-foreground'}`}>
+            {row.workflowType}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    { key: 'fulfillerName', header: 'Fulfiller', render: (row: SlaInstanceRow) => row.fulfillerName ?? '—' },
+    ...clockColumns,
+  ]
+
+  const allInstances = instancesQuery.data ?? []
+  const incidentRows = allInstances.filter((r) => r.entityKind === 'INCIDENT')
+  const requestRows = allInstances.filter((r) => r.entityKind === 'SERVICE_REQUEST')
+  const activeRows = slaTab === 'INCIDENT' ? incidentRows : requestRows
+  const activeColumns = slaTab === 'INCIDENT' ? incidentColumns : requestColumns
 
   function startEdit(policy: SlaPolicy) {
     setEditing((prev) => ({
@@ -787,12 +812,32 @@ export function SlaDetails() {
         )}
 
         {!isLoading && !hasError && (
-          <DataTable<SlaInstanceRow>
-            data={instancesQuery.data ?? []}
-            columns={columns}
-            getRowKey={(row) => row.id}
-            emptyText="No SLA instances match the selected filters."
-          />
+          <div className="space-y-3">
+            <div className="inline-flex rounded-md border border-border bg-muted p-0.5">
+              {([
+                { key: 'INCIDENT' as const, label: `Incidents (${incidentRows.length})` },
+                { key: 'SERVICE_REQUEST' as const, label: `Service Requests (${requestRows.length})` },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setSlaTab(t.key)}
+                  className={`rounded px-3 py-1.5 text-sm font-medium transition ${
+                    slaTab === t.key
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <DataTable<SlaInstanceRow>
+              data={activeRows}
+              columns={activeColumns}
+              getRowKey={(row) => row.id}
+              emptyText={`No ${slaTab === 'INCIDENT' ? 'incident' : 'service request'} SLA instances match the selected filters.`}
+            />
+          </div>
         )}
 
         {canEdit && (

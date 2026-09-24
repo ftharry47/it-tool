@@ -131,6 +131,58 @@ class SlaDetailsServiceTest {
         verify(root).join("serviceRequest", JoinType.LEFT);
     }
 
+    /**
+     * Regression: the priority filter previously checked only
+     * incident.priority — SR rows could never match it. Now it must
+     * dereference serviceRequest.priority as well.
+     */
+    @Test
+    void priorityFilterAlsoMatchesServiceRequestPriority() {
+        AppUser agent = user();
+        when(query.getResultList()).thenReturn(List.of(sla(null, serviceRequest("SR-9"))));
+
+        service.list(ORG, null, "High", null, null, agent, false, null, null, null, null);
+
+        Root<SlaInstance> root = entityManager.getCriteriaBuilder()
+                .createQuery(SlaInstance.class).from(SlaInstance.class);
+        verify(root.join("serviceRequest", JoinType.LEFT)).get("priority");
+    }
+
+    @Test
+    void serviceRequestRowsExposePriorityFulfillerAndWorkflow() {
+        AppUser agent = user();
+
+        com.alignedcardio.itsm.entity.Priority prio = new com.alignedcardio.itsm.entity.Priority();
+        prio.setName("High");
+        ServiceRequest sr = serviceRequest("SR-9");
+        sr.setPriority(prio);
+
+        SlaPolicy policy = new SlaPolicy();
+        policy.setName("SR SLA - Instant / High");
+        policy.setWorkflowType("INSTANT");
+        SlaInstance si = sla(null, sr);
+        si.setPolicy(policy);
+
+        AppUser fulfiller = new AppUser();
+        fulfiller.setDisplayName("Pat Fulfiller");
+        FulfillmentTask task = new FulfillmentTask();
+        task.setServiceRequest(sr);
+        task.setAssignee(fulfiller);
+        when(fulfillmentTaskRepository.findByServiceRequest_IdInAndAssigneeIsNotNull(any()))
+                .thenReturn(List.of(task));
+
+        when(query.getResultList()).thenReturn(List.of(si));
+
+        List<SlaInstanceDetailResponse> rows =
+                service.list(ORG, null, null, null, null, agent, false, null, null, null, null);
+
+        assertEquals(1, rows.size());
+        SlaInstanceDetailResponse row = rows.get(0);
+        assertEquals("High", row.serviceRequestPriority());
+        assertEquals("INSTANT", row.workflowType());
+        assertEquals("Pat Fulfiller", row.fulfillerName());
+    }
+
     private AppUser user() {
         AppUser user = new AppUser();
         user.setId(UUID.randomUUID());

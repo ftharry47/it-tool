@@ -24,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -120,7 +122,11 @@ public class SlaDetailsService {
         }
 
         if (priority != null && !priority.isBlank()) {
-            predicates.add(cb.equal(incident.get("priority").get("name"), priority));
+            // Priority filter must match SRs too — incidents alone would
+            // silently drop every service-request row.
+            predicates.add(cb.or(
+                    cb.equal(incident.get("priority").get("name"), priority),
+                    cb.equal(serviceRequest.get("priority").get("name"), priority)));
         }
 
         if (dateFrom != null) {
@@ -142,22 +148,39 @@ public class SlaDetailsService {
         priorityGraph.addAttributeNodes("name");
         Subgraph<ServiceRequest> serviceRequestGraph = graph.addSubgraph("serviceRequest", ServiceRequest.class);
         serviceRequestGraph.addAttributeNodes("number");
+        serviceRequestGraph.addSubgraph("priority", Priority.class).addAttributeNodes("name");
         Subgraph<CatalogItem> catalogItemGraph = serviceRequestGraph.addSubgraph("catalogItem", CatalogItem.class);
         catalogItemGraph.addAttributeNodes("name");
         graph.addSubgraph("problem", Problem.class).addAttributeNodes("number", "title");
         graph.addSubgraph("changeRequest", ChangeRequest.class).addAttributeNodes("number", "title");
-        graph.addSubgraph("policy").addAttributeNodes("name");
+        graph.addSubgraph("policy").addAttributeNodes("name", "workflowType");
         query.setHint("jakarta.persistence.fetchgraph", graph);
 
-        // The Criteria predicate excludes deleted tickets, but a lazy
-        // soft-deleted association can still materialize as a null join row or
-        // throw EntityNotFoundException — post-filter defensively.
-        return query.getResultList().stream()
+        List<SlaInstance> instances = query.getResultList().stream()
                 .filter(this::isLinkedTicketNotDeleted)
-                .map(this::toResponse)
                 .toList();
+
+        // Fulfiller = first task assignee per request — one batch query, no N+1.
+        List<UUID> srIds = instances.stream()
+                .map(SlaInstance::getServiceRequest)
+                .filter(java.util.Objects::nonNull)
+                .map(ServiceRequest::getId)
+                .toList();
+        Map<UUID, String> fulfillerBySr = new java.util.HashMap<>();
+        if (!srIds.isEmpty()) {
+            fulfillmentTaskRepository.findByServiceRequest_IdInAndAssigneeIsNotNull(srIds).stream()
+                    .sorted(Comparator.comparingInt(FulfillmentTask::getSequenceOrder))
+                    .forEach(t -> fulfillerBySr.putIfAbsent(
+                            t.getServiceRequest().getId(), t.getAssignee().getDisplayName()));
+        }
+
+        Map<UUID, String> finalFulfillers = fulfillerBySr;
+        return instances.stream().map(si -> toResponse(si, finalFulfillers)).toList();
     }
 
+    // The Criteria predicate excludes deleted tickets, but a lazy
+    // soft-deleted association can still materialize as a null join row or
+    // throw EntityNotFoundException — post-filter defensively.
     private boolean isLinkedTicketNotDeleted(SlaInstance si) {
         try {
             Incident incident = si.getIncident();
@@ -191,7 +214,7 @@ public class SlaDetailsService {
         }
     }
 
-    private SlaInstanceDetailResponse toResponse(SlaInstance si) {
+    private SlaInstanceDetailResponse toResponse(SlaInstance si, Map<UUID, String> fulfillerBySr) {
         Incident incident = si.getIncident();
         UUID incidentId = incident != null ? incident.getId() : null;
         Long incidentNumber = incident != null ? incident.getNumber() : null;
@@ -204,6 +227,12 @@ public class SlaDetailsService {
         String serviceRequestTitle = serviceRequest != null && serviceRequest.getCatalogItem() != null
                 ? serviceRequest.getCatalogItem().getName()
                 : null;
+        String serviceRequestPriority = serviceRequest != null && serviceRequest.getPriority() != null
+                ? serviceRequest.getPriority().getName()
+                : null;
+        String fulfillerName = serviceRequest != null
+                ? fulfillerBySr.get(serviceRequest.getId())
+                : null;
 
         Problem problem = si.getProblem();
         ChangeRequest change = si.getChangeRequest();
@@ -215,6 +244,7 @@ public class SlaDetailsService {
                 : null;
 
         String policyName = si.getPolicy() != null ? si.getPolicy().getName() : null;
+        String workflowType = si.getPolicy() != null ? si.getPolicy().getWorkflowType() : null;
 
         return new SlaInstanceDetailResponse(
                 si.getId(),
@@ -226,6 +256,8 @@ public class SlaDetailsService {
                 serviceRequestId,
                 serviceRequestNumber,
                 serviceRequestTitle,
+                serviceRequestPriority,
+                fulfillerName,
                 problem != null ? problem.getId() : null,
                 problem != null ? problem.getNumber() : null,
                 problem != null ? problem.getTitle() : null,
@@ -233,6 +265,7 @@ public class SlaDetailsService {
                 change != null ? change.getNumber() : null,
                 change != null ? change.getTitle() : null,
                 policyName,
+                workflowType,
                 si.getResponseDueAt(),
                 si.getResolutionDueAt(),
                 si.getResponseMetAt(),

@@ -12,6 +12,8 @@ public interface FulfillmentTaskRepository extends JpaRepository<FulfillmentTask
 
     List<FulfillmentTask> findByServiceRequestIdOrderBySequenceOrderAsc(UUID serviceRequestId);
 
+    List<FulfillmentTask> findByServiceRequest_IdInAndAssigneeIsNotNull(java.util.List<UUID> serviceRequestIds);
+
     boolean existsByServiceRequestIdAndStatus(UUID serviceRequestId, FulfillmentTask.Status status);
 
     List<FulfillmentTask> findByExpectedDeliveryDateIsNotNullAndDeliveredAtIsNull();
