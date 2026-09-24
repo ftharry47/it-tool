@@ -1,0 +1,7 @@
+import{c as d,j as t,m as p}from"./index-CyQtq6Dd.js";import{r as b}from"./react-B1z9iAW_.js";/**
+ * @license lucide-react v0.436.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const m=d("Copy",[["rect",{width:"14",height:"14",x:"8",y:"8",rx:"2",ry:"2",key:"17jyea"}],["path",{d:"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",key:"zix9uf"}]]);function h({html:a,plain:i,className:n}){const[o,r]=b.useState(!1),s=async()=>{try{const e=navigator;if(e.clipboard&&"write"in e.clipboard){const l=new Blob([a],{type:"text/html"}),c=new Blob([i],{type:"text/plain"});await e.clipboard.write([new window.ClipboardItem({"text/html":l,"text/plain":c})])}else if(e.clipboard&&"writeText"in e.clipboard)await e.clipboard.writeText(i);else throw new Error("Clipboard API unavailable");r(!0),setTimeout(()=>r(!1),2e3)}catch{}};return t.jsxs("button",{onClick:s,title:"Copy formatted details",className:`inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${n??""}`,children:[o?t.jsx(p,{className:"h-4 w-4"}):t.jsx(m,{className:"h-4 w-4"}),t.jsx("span",{className:"hidden sm:inline",children:o?"Copied":"Copy"})]})}export{h as C};
+//# sourceMappingURL=CopyButton-CujIAQ1s.js.map

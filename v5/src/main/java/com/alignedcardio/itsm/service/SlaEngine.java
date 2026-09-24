@@ -92,6 +92,13 @@ public class SlaEngine {
             return;
         }
 
+        // No instance yet (created before a matching policy existed, or with
+        // an unmatched priority) — create one now rather than no-op.
+        if (slaInstanceRepository.findByIncidentId(incident.getId()).isEmpty()) {
+            onIncidentCreated(incident);
+            return;
+        }
+
         BusinessCalendar calendar = policy.getBusinessHoursCalendar();
         slaInstanceRepository.findByIncidentId(incident.getId()).ifPresent(instance -> {
             if (instance.getResolutionMetAt() != null) {
@@ -584,6 +591,13 @@ public class SlaEngine {
     public void onServiceRequestPriorityChanged(ServiceRequest serviceRequest) {
         SlaPolicy policy = findBestServiceRequestPolicy(serviceRequest).orElse(null);
         if (policy == null || policy.getBusinessHoursCalendar() == null) {
+            return;
+        }
+
+        // No instance yet (created before a matching policy existed, or with
+        // an unmatched priority) — create one now rather than no-op.
+        if (slaInstanceRepository.findByServiceRequest_Id(serviceRequest.getId()).isEmpty()) {
+            onServiceRequestCreated(serviceRequest);
             return;
         }
 

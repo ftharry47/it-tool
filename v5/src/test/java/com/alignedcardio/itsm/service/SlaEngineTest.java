@@ -445,6 +445,70 @@ class SlaEngineTest {
         assertEquals(start.plusMinutes(120), saved.getResolutionDueAt());
     }
 
+    @Test
+    void serviceRequestPriorityChangeCreatesInstanceWhenNoneExists() {
+        // Regression: a request created with no matching policy has no
+        // SlaInstance; when priority is later set and a policy now matches,
+        // the engine must CREATE the instance — previously ifPresent()
+        // silently no-oped and the request stayed SLA-less forever.
+        OffsetDateTime start = OffsetDateTime.parse("2026-01-01T12:00:00Z");
+        BusinessCalendar calendar = create24x7Calendar();
+
+        SlaPolicy policy = new SlaPolicy();
+        policy.setBusinessHoursCalendar(calendar);
+        policy.setResponseTargetMinutes(30);
+        policy.setResolutionTargetMinutes(120);
+        policy.setWorkflowType("INSTANT");
+
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.SUBMITTED, "INSTANT");
+        sr.setCreatedAt(start);
+        when(slaInstanceRepository.findByServiceRequest_Id(sr.getId())).thenReturn(Optional.empty());
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(sr.getOrgId(), SlaPolicy.AppliesTo.REQUEST))
+                .thenReturn(java.util.List.of(policy));
+
+        slaEngine.onServiceRequestPriorityChanged(sr);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        SlaInstance saved = captor.getValue();
+        assertSame(policy, saved.getPolicy());
+        assertSame(sr, saved.getServiceRequest());
+        assertEquals(start.plusMinutes(30), saved.getResponseDueAt(),
+                "New instance must anchor to createdAt, not the priority-change time");
+        assertEquals(start.plusMinutes(120), saved.getResolutionDueAt());
+    }
+
+    @Test
+    void incidentPriorityChangeCreatesInstanceWhenNoneExists() {
+        // Same gap on the incident side: priority set on a ticket created
+        // before a matching policy existed must create the instance.
+        OffsetDateTime start = OffsetDateTime.parse("2026-01-01T12:00:00Z");
+        BusinessCalendar calendar = create24x7Calendar();
+
+        SlaPolicy policy = new SlaPolicy();
+        policy.setBusinessHoursCalendar(calendar);
+        policy.setResponseTargetMinutes(30);
+        policy.setResolutionTargetMinutes(120);
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setOrgId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.NEW);
+        incident.setCreatedAt(start);
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.empty());
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(incident.getOrgId(), SlaPolicy.AppliesTo.INCIDENT))
+                .thenReturn(java.util.List.of(policy));
+
+        slaEngine.onPriorityChanged(incident);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        SlaInstance saved = captor.getValue();
+        assertSame(policy, saved.getPolicy());
+        assertEquals(start.plusMinutes(30), saved.getResponseDueAt());
+        assertEquals(start.plusMinutes(120), saved.getResolutionDueAt());
+    }
+
     private SlaInstance createInstance() {
         SlaInstance instance = new SlaInstance();
         instance.setPolicy(new SlaPolicy());
