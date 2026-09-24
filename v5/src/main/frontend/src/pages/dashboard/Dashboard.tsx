@@ -655,16 +655,19 @@ function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHoc
         <MetricCard label="Resolved Today" value={data.resolvedToday} />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} label>
-                {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+        <div>
+          <p className="mb-1 text-xs text-muted-foreground">Open incidents by status</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} label>
+                  {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
         {priorityData.length > 0 && (
           <div>

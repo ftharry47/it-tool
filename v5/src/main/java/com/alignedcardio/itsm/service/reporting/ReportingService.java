@@ -391,6 +391,7 @@ public class ReportingService {
             List<Predicate> rrPreds = new ArrayList<>(
                     List.of(baseIncidentPredicates(cb, rrRoot, orgId, mineUserId)));
             rrPreds.add(cb.isNotNull(rrRoot.get("resolvedAt")));
+            rrPreds.add(cb.isFalse(rrRoot.get("legacyImport")));
             if (from != null) rrPreds.add(cb.greaterThanOrEqualTo(rrRoot.get("resolvedAt"), from));
             if (to != null) rrPreds.add(cb.lessThanOrEqualTo(rrRoot.get("resolvedAt"), to));
             rr.where(rrPreds.toArray(new Predicate[0]));
@@ -2483,9 +2484,9 @@ public class ReportingService {
         cols.put("escalationCount", escalationEvents.size());
         cols.put("escalationHistory", escalationEvents.stream()
                 .map(e -> {
-                    Object detail = e.get(3);
-                    return fmt(e.get(4, OffsetDateTime.class)) + " " + e.get(2)
-                            + (detail != null ? " — " + detail : "");
+                    String detail = compactDiff(e.get(3, String.class), e.get(4, String.class));
+                    return fmt(e.get(5, OffsetDateTime.class)) + " " + e.get(2)
+                            + (!detail.isEmpty() ? " — " + detail : "");
                 })
                 .collect(Collectors.joining("; ")));
         return cols;
@@ -2495,10 +2496,41 @@ public class ReportingService {
      * Escalation audit trail per entity ("TYPE:id" → ordered events).
      * One grouped query — no per-ticket round-trips.
      */
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** "key: old → new" compact diff of two audit before/after JSON blobs. */
+    private static String compactDiff(String beforeJson, String afterJson) {
+        if ((beforeJson == null || beforeJson.isBlank())
+                && (afterJson == null || afterJson.isBlank())) {
+            return "";
+        }
+        try {
+            Map<String, Object> before = beforeJson == null || beforeJson.isBlank()
+                    ? Map.of() : JSON.readValue(beforeJson, Map.class);
+            Map<String, Object> after = afterJson == null || afterJson.isBlank()
+                    ? Map.of() : JSON.readValue(afterJson, Map.class);
+            java.util.Set<String> keys = new java.util.TreeSet<>();
+            keys.addAll(before.keySet());
+            keys.addAll(after.keySet());
+            List<String> parts = new ArrayList<>();
+            for (String k : keys) {
+                Object b = before.get(k);
+                Object a = after.get(k);
+                if (!java.util.Objects.equals(b, a)) {
+                    parts.add(k + ": " + (b == null ? "—" : b) + " → " + (a == null ? "—" : a));
+                }
+            }
+            return String.join(", ", parts);
+        } catch (Exception e) {
+            return afterJson != null ? afterJson : "";
+        }
+    }
+
     private Map<String, List<Tuple>> escalationHistoryMap(UUID orgId, Set<UUID> entityIds) {
         Map<String, List<Tuple>> byEntity = new HashMap<>();
         for (Tuple t : entityManager.createQuery(
-                "SELECT a.entityType, a.entityId, a.action, a.detail, a.createdAt FROM AuditLog a "
+                "SELECT a.entityType, a.entityId, a.action, a.beforeState, a.afterState, a.createdAt FROM AuditLog a "
                         + "WHERE a.orgId = :org AND a.entityId IN :ids "
                         + "AND a.action IN ('ESCALATE_PRIORITY','ESCALATE_TIER','AUTO_ESCALATE_TIER','REOPEN') "
                         + "ORDER BY a.createdAt", Tuple.class)
@@ -2739,10 +2771,13 @@ public class ReportingService {
             m.computeIfAbsent(t.get(0, UUID.class), k -> new long[4])[1] += t.get(1, Long.class);
         }
 
-        // resolved: incidents resolvedAt + tasks deliveredAt in range
+        // resolved: incidents resolvedAt + tasks deliveredAt in range.
+        // Legacy imports carry resolvedAt + a single import assignee — exclude
+        // them so one agent doesn't appear to have resolved ~1000 tickets.
         for (Tuple t : entityManager.createQuery(
                 "SELECT a.id, COUNT(i) FROM Incident i JOIN i.assignee a "
                         + "WHERE i.orgId = :org AND i.deletedAt IS NULL AND a.id IN :ids "
+                        + "AND i.legacyImport = false "
                         + "AND i.resolvedAt >= :from AND i.resolvedAt <= :to GROUP BY a.id", Tuple.class)
                 .setParameter("org", orgId).setParameter("ids", agentIds)
                 .setParameter("from", from).setParameter("to", to).getResultList()) {

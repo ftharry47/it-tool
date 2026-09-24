@@ -33,6 +33,7 @@ interface FulfillmentTask {
   vendor?: string | null
   expectedDeliveryDate: string | null
   deliveredAt: string | null
+  closingNotes?: string | null
 }
 
 interface TeamInfo {
@@ -753,7 +754,20 @@ export function ServiceRequestDetail() {
                 caption="Tasks for this request"
                 columns={[
                   { key: 'sequenceOrder', header: '#' },
-                  { key: 'description', header: 'Task' },
+                  {
+                    key: 'description',
+                    header: 'Task',
+                    render: (row) => (
+                      <div>
+                        <span>{row.description}</span>
+                        {canPostInternal && row.status === 'COMPLETED' && row.closingNotes && (
+                          <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">
+                            Closing notes: {row.closingNotes}
+                          </p>
+                        )}
+                      </div>
+                    ),
+                  },
                   { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
                   {
                     key: 'assigneeName',

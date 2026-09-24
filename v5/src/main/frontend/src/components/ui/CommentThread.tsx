@@ -84,7 +84,7 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
                 <span className="flex items-center gap-2">
                   {!c.isPublic && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      <Lock className="h-3 w-3" /> Internal
+                      <Lock className="h-3 w-3" /> Work Notes
                     </span>
                   )}
                   {formatDateTime(c.createdAt)}
@@ -122,7 +122,7 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
                   onChange={(e) => setIsInternal(e.target.checked)}
                   className="rounded border-input"
                 />
-                Internal only (hidden from requester)
+                Work note (hidden from requester)
               </label>
             ) : (
               <span />

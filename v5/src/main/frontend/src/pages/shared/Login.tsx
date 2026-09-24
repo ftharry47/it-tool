@@ -129,14 +129,11 @@ export function Login() {
             <button
               onClick={handleLogin}
               disabled={busy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LogIn className="h-4 w-4" />
               {busy ? 'Signing in…' : 'Sign in with Microsoft'}
             </button>
-            <p className="text-center text-xs text-muted-foreground">
-              Use your Aligned Cardiovascular Partners Microsoft account (firstname.lastname@alignedcardio.com)
-            </p>
           </div>
 
           {/* Need Help? */}

@@ -18,6 +18,7 @@ public record FulfillmentTaskResponse(
         OffsetDateTime deliveredAt,
         String workflow,
         String orderId,
-        String vendor
+        String vendor,
+        String closingNotes
 ) {
 }

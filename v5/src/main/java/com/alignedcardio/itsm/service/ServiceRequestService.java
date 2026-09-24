@@ -1439,7 +1439,8 @@ public class ServiceRequestService {
                                 t.getDeliveredAt(),
                                 t.getWorkflow(),
                                 t.getOrderId(),
-                                t.getVendor()))
+                                t.getVendor(),
+                                t.getClosingNotes()))
                         .toList(),
                 sr.getCreatedAt(),
                 sr.getPriority() != null ? sr.getPriority().getId() : null,

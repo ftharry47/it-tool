@@ -503,7 +503,7 @@ const [confirmBack, setConfirmBack] = useState(false)
     commentsToShow.forEach((comment) => {
       list.push({
         id: `comment-${comment.id}`,
-        title: isEndUser ? `Comment by ${comment.author}` : `${comment.isPublic ? 'Public' : 'Internal'} comment by ${comment.author}`,
+        title: isEndUser ? `Comment by ${comment.author}` : `${comment.isPublic ? 'Additional comment' : 'Work notes'} by ${comment.author}`,
         description: comment.body,
         actorName: comment.author,
         createdAt: comment.createdAt,
@@ -1085,7 +1085,9 @@ const [confirmBack, setConfirmBack] = useState(false)
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-sm font-medium">{comment.author}</span>
                         {!comment.isPublic && (
-                          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Internal</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            Work Notes
+                          </span>
                         )}
                       </div>
                       <p className="text-sm text-foreground">{comment.body}</p>
@@ -1124,7 +1126,7 @@ const [confirmBack, setConfirmBack] = useState(false)
                       onChange={(e) => setCommentIsInternal(e.target.checked)}
                       className="rounded border border-input"
                     />
-                    <span>Internal comment (not visible to requester)</span>
+                    <span>Work note (hidden from requester)</span>
                   </label>
                 )}
                 <button

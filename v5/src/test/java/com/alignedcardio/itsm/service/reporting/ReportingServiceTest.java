@@ -39,6 +39,39 @@ import org.mockito.Mockito;
 @ExtendWith(MockitoExtension.class)
 class ReportingServiceTest {
 
+    /**
+     * The mocked JPQL tests key queries by string fragment, so a phantom entity
+     * attribute (e.g. the earlier `a.detail` — not a real AuditLog field) only
+     * fails at runtime. Guard statically: every `a.<field>` in the audit-log
+     * queries must be a declared AuditLog attribute.
+     */
+    @Test
+    void auditLogJpqlReferencesOnlyRealFields() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/alignedcardio/itsm/service/reporting/ReportingService.java"));
+        java.util.Set<String> realFields = java.util.Arrays.stream(
+                        com.alignedcardio.itsm.entity.AuditLog.class.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName)
+                .collect(java.util.stream.Collectors.toSet());
+        // Fields reachable via the JPA metamodel (inherited id/audit columns).
+        for (java.lang.reflect.Field f : com.alignedcardio.itsm.entity.BaseEntity.class.getDeclaredFields()) {
+            realFields.add(f.getName());
+        }
+
+        for (String marker : new String[]{"escalationHistoryMap", "lastWorkedByMap"}) {
+            int start = src.indexOf(marker);
+            assertTrue(start > 0, "method " + marker + " not found");
+            int end = src.indexOf("\n    private", start + 1);
+            String body = end > start ? src.substring(start, end) : src.substring(start);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("a\\.(\\w+)").matcher(body);
+            while (m.find()) {
+                assertTrue(realFields.contains(m.group(1)),
+                        "JPQL references AuditLog." + m.group(1)
+                                + " which is not a declared field — would 500 at runtime");
+            }
+        }
+    }
+
     @Mock
     private EntityManager entityManager;
 
@@ -671,9 +704,13 @@ class ReportingServiceTest {
         responses.put("a.actorUserId", List.of(
                 tuple("INCIDENT", incId, actor),
                 tuple("SERVICE_REQUEST", srId, actor)));
-        responses.put("a.action, a.detail", List.of(
-                tuple("INCIDENT", incId, "ESCALATE_TIER", "L1 → L2", now.minusHours(5)),
-                tuple("INCIDENT", incId, "AUTO_ESCALATE_TIER", "L2 → L3", now.minusHours(3))));
+        // Escalation events carry before/after JSONB — the history column is a
+        // compact "key: old → new" diff rendered from those blobs.
+        responses.put("a.action, a.beforeState, a.afterState", List.of(
+                tuple("INCIDENT", incId, "ESCALATE_TIER",
+                        "{\"tier\":\"L1\"}", "{\"tier\":\"L2\"}", now.minusHours(5)),
+                tuple("INCIDENT", incId, "AUTO_ESCALATE_TIER",
+                        "{\"tier\":\"L2\"}", "{\"tier\":\"L3\"}", now.minusHours(3))));
         responses.put("FROM AppUser u", List.of(tuple(actor, "Eve")));
         stubJpql(responses);
 
@@ -698,10 +735,11 @@ class ReportingServiceTest {
         assertEquals(2, inc.get("escalationLevel"));
         assertEquals(2, inc.get("escalationCount"));
         String hist = (String) inc.get("escalationHistory");
-        assertTrue(hist.contains("ESCALATE_TIER — L1 → L2"), hist);
-        assertTrue(hist.contains("AUTO_ESCALATE_TIER — L2 → L3"), hist);
+        assertTrue(hist.contains("ESCALATE_TIER — tier: L1 → L2"), hist);
+        assertTrue(hist.contains("AUTO_ESCALATE_TIER — tier: L2 → L3"), hist);
         assertTrue(hist.indexOf("ESCALATE_TIER") < hist.indexOf("AUTO_ESCALATE_TIER"),
                 "escalation history should be chronological");
+        assertFalse(hist.contains("beforeState"), "raw JSON must not leak into the export");
 
         Map<String, Object> sr = requestRows.get(0);
         assertEquals("SR-7", sr.get("number"));
