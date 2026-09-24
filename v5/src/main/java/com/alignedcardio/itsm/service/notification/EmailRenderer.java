@@ -145,4 +145,16 @@ public final class EmailRenderer {
                 .replace("\"", "&quot;");
     }
 
+    /**
+     * Escape + preserve line structure inside an existing HTML block.
+     * Plain escape() collapses \n — comment bodies quoted in emails were
+     * rendered as one long run-on line. Also renders **bold** as <strong>.
+     */
+    public static String escapeMultiline(String text) {
+        if (text == null) return "";
+        return escape(text)
+                .replaceAll("\\*\\*([^*]+)\\*\\*", "<strong>$1</strong>")
+                .replace("\n", "<br>");
+    }
+
 }

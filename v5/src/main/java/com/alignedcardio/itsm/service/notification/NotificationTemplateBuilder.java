@@ -148,7 +148,7 @@ Hi {{recipientFirstName}},
 "{{commentPreview}}"
 
 View full ticket:
-{{appBaseUrl}}/dashboard/incidents/{{entityId}}
+{{appBaseUrl}}{{entityPath}}
 """));
 
         TEMPLATES.put("SLA_ESCALATION", new TemplateSpec(
@@ -601,7 +601,7 @@ View full request:
         html.append("\">");
         html.append("<p class=\"em-muted\" style=\"margin:0; font-size:12px; color:#6b7280;\">").append(escape(author))
                 .append(" · ").append(escape(when)).append("</p>");
-        html.append("<p style=\"margin:4px 0 0 0;\">").append(escape(body)).append("</p>");
+        html.append("<p style=\"margin:4px 0 0 0;\">").append(EmailRenderer.escapeMultiline(body)).append("</p>");
         html.append("</div>");
     }
 

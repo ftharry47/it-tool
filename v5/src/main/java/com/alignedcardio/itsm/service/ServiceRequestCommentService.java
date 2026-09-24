@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -93,8 +94,50 @@ public class ServiceRequestCommentService {
         comment = commentRepository.save(comment);
 
         notifyOnComment(sr, author, comment, request);
+        // Mentions fire on internal notes too — but only for staff who can
+        // actually see them.
+        notifyMentions(sr, author, request.body(), request.isPublic());
 
         return toResponse(comment);
+    }
+
+    /**
+     * Mentions resolve against real org users — "@Display Name" (spaces OK,
+     * inserted by the composer picker) or "@email". Internal comments only
+     * notify staff, since the mention must be visible to the recipient.
+     */
+    private void notifyMentions(ServiceRequest sr, AppUser author, String body, boolean isPublic) {
+        if (body == null || body.isBlank()) return;
+        for (AppUser u : appUserRepository.findByOrgId(sr.getOrgId())) {
+            if (u.getId().equals(author.getId()) || u.getDeletedAt() != null) continue;
+            if (!isPublic && !canViewInternal(u)) continue;
+            if (containsMention(body, u.getEmail()) || containsMention(body, u.getDisplayName())) {
+                try {
+                    Map<String, Object> mentionPayload = new HashMap<>();
+                    mentionPayload.put("number", sr.getNumber());
+                    mentionPayload.put("title", sr.getCatalogItem() != null ? sr.getCatalogItem().getName() : "");
+                    mentionPayload.put("authorName", author.getDisplayName());
+                    mentionPayload.put("commentPreview", bodyPreview(body));
+                    mentionPayload.put("recipientFirstName", firstName(u.getDisplayName()));
+                    mentionPayload.put("entityType", "SERVICE_REQUEST");
+                    mentionPayload.put("entityId", sr.getId());
+                    mentionPayload.put("entityPath", "/dashboard/service-requests/" + sr.getId());
+                    var content = notificationTemplateBuilder.forEvent("MENTION", mentionPayload);
+                    notificationService.send(new NotificationRequest(
+                            sr.getOrgId(), u.getId(), "MENTION",
+                            content.inAppSubject(), content.inAppBody(),
+                            "SERVICE_REQUEST", sr.getId(), null, content));
+                } catch (Exception e) {
+                    logger.warn("Failed to notify mentioned user {}", u.getId(), e);
+                }
+            }
+        }
+    }
+
+    private boolean containsMention(String body, String token) {
+        return token != null && !token.isBlank()
+                && Pattern.compile("@" + Pattern.quote(token), Pattern.CASE_INSENSITIVE)
+                        .matcher(body).find();
     }
 
     private String firstName(String displayName) {

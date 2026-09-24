@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import java.util.Map;
@@ -36,7 +35,7 @@ import java.util.UUID;
 public class IncidentCommentService {
 
     private static final Logger logger = LoggerFactory.getLogger(IncidentCommentService.class);
-    private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\w.\\-@]+)");
+
 
     private final IncidentRepository incidentRepository;
     private final IncidentCommentRepository commentRepository;
@@ -143,8 +142,10 @@ public class IncidentCommentService {
             }
             commentPayload.put("priorComments", prior);
             notifyWatchers(incident, author, "INCIDENT_COMMENT", commentPayload);
-            notifyMentions(incident, author, orgId, request.body());
         }
+        // Mentions fire on internal notes too — but only for staff who can
+        // actually see them.
+        notifyMentions(incident, author, orgId, request.body(), request.isPublic());
 
         return toResponse(comment);
     }
@@ -208,17 +209,26 @@ public class IncidentCommentService {
         });
     }
 
-    private void notifyMentions(Incident incident, AppUser author, UUID orgId, String body) {
+    /**
+     * Mentions resolve against real org users — "@Display Name" (spaces OK,
+     * inserted by the composer picker) or "@email". Internal comments only
+     * notify staff, since the mention must be visible to the recipient.
+     */
+    private void notifyMentions(Incident incident, AppUser author, UUID orgId, String body, boolean isPublic) {
         if (body == null || body.isBlank()) return;
-        Set<String> seen = new HashSet<>();
-        Matcher matcher = MENTION_PATTERN.matcher(body);
-        while (matcher.find()) {
-            String mention = matcher.group(1);
-            if (!seen.add(mention)) continue;
-
-            appUserRepository.findByOrgIdAndEmailIgnoreCase(orgId, mention)
-                    .ifPresent(mentioned -> sendMention(incident, author, mentioned, body));
+        for (AppUser u : appUserRepository.findByOrgId(orgId)) {
+            if (u.getId().equals(author.getId()) || u.getDeletedAt() != null) continue;
+            if (!isPublic && !canViewInternal(u)) continue;
+            if (containsMention(body, u.getEmail()) || containsMention(body, u.getDisplayName())) {
+                sendMention(incident, author, u, body);
+            }
         }
+    }
+
+    private boolean containsMention(String body, String token) {
+        return token != null && !token.isBlank()
+                && Pattern.compile("@" + Pattern.quote(token), Pattern.CASE_INSENSITIVE)
+                        .matcher(body).find();
     }
 
     private void sendMention(Incident incident, AppUser author, AppUser mentioned, String commentBody) {
@@ -232,6 +242,7 @@ public class IncidentCommentService {
             mentionPayload.put("recipientFirstName", firstName(mentioned.getDisplayName()));
             mentionPayload.put("entityType", "INCIDENT");
             mentionPayload.put("entityId", incident.getId());
+            mentionPayload.put("entityPath", "/dashboard/incidents/" + incident.getId());
             var content = notificationTemplateBuilder.forEvent("MENTION", mentionPayload);
             notificationService.send(new NotificationRequest(
                     incident.getOrgId(),

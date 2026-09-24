@@ -183,7 +183,7 @@ export function ActivityTimeline({ activities, emptyText = 'No activity yet.', h
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">{activity.title}</p>
                 {activity.description && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{activity.description}</p>
+                  <p className="line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">{activity.description}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
                   {activity.actorName ? `by ${activity.actorName}` : 'by System'}

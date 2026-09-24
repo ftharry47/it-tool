@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Lock } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { formatDateTime } from '../../lib/date'
+import { renderCommentBody } from '../../lib/commentBody'
 import { Loading } from './Loading'
+import { MentionTextarea } from './MentionTextarea'
 
 export interface CommentItem {
   id: string
@@ -105,7 +107,7 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
                   {formatDateTime(c.createdAt)}
                 </span>
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{c.body}</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{renderCommentBody(c.body)}</p>
             </li>
           ))}
         </ul>
@@ -120,12 +122,11 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
             postMutation.mutate({ body: body.trim(), isPublic: !(canPostInternal && isInternal) })
           }}
         >
-          <textarea
+          <MentionTextarea
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
             rows={3}
             placeholder="Add a comment…"
-            aria-label="Comment"
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
           <div className="flex items-center justify-between">

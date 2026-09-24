@@ -16,6 +16,8 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { CopyButton } from '../../components/ui/CopyButton'
 import { TicketSlaPanel } from '../../components/sla/TicketSlaPanel'
 import { formatDateTime } from '../../lib/date'
+import { renderCommentBody } from '../../lib/commentBody'
+import { MentionTextarea } from '../../components/ui/MentionTextarea'
 
 interface IncidentDetail {
   id: string
@@ -1099,7 +1101,7 @@ const [confirmBack, setConfirmBack] = useState(false)
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-foreground">{comment.body}</p>
+                      <p className="whitespace-pre-wrap text-sm text-foreground">{renderCommentBody(comment.body)}</p>
                       <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(comment.createdAt)}</p>
                     </div>
                   ))
@@ -1118,10 +1120,9 @@ const [confirmBack, setConfirmBack] = useState(false)
               >
                 <div className="space-y-2">
                   <label htmlFor="comment" className="text-sm font-medium">Add Comment</label>
-                  <textarea
-                    id="comment"
+                  <MentionTextarea
                     value={commentContent}
-                    onChange={(e) => setCommentContent(e.target.value)}
+                    onChange={setCommentContent}
                     placeholder="Type your comment…"
                     rows={3}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"

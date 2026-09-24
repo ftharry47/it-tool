@@ -18,6 +18,7 @@ import com.alignedcardio.itsm.repository.IncidentRepository;
 import com.alignedcardio.itsm.repository.IncidentWatcherRepository;
 import com.alignedcardio.itsm.repository.ServiceRequestCommentRepository;
 import com.alignedcardio.itsm.repository.ServiceRequestRepository;
+import com.alignedcardio.itsm.service.notification.NotificationRequest;
 import com.alignedcardio.itsm.service.notification.NotificationService;
 import com.alignedcardio.itsm.service.notification.NotificationTemplateBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -216,5 +222,77 @@ class CommentVisibilityTest {
         assertThrows(IllegalStateException.class,
                 () -> srCommentService.addComment(orgId, sr.getId(), endUser,
                         new CommentCreateRequest("trying internal", false)));
+    }
+
+    // --- Mentions ---
+
+    private com.alignedcardio.itsm.service.notification.NotificationContent stubContent() {
+        return new com.alignedcardio.itsm.service.notification.NotificationContent(
+                "subj", "plain", "<p>html</p>", "subj", "body", "push-title", "push-body");
+    }
+
+    @Test
+    void serviceRequestMentionByDisplayNameNotifiesMentionedUser() {
+        // Regression: SR comments had no mention support at all — only the
+        // incident side triggered MENTION, and only on raw "@email".
+        ServiceRequest sr = serviceRequest();
+        AppUser mentioned = userWithRole("AGENT");
+        mentioned.setDisplayName("Pat Fulfiller");
+        mentioned.setEmail("pat.fulfiller@alignedcardio.com");
+        when(serviceRequestRepository.findByOrgIdAndId(orgId, sr.getId())).thenReturn(Optional.of(sr));
+        when(srCommentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(appUserRepository.findByOrgId(orgId)).thenReturn(List.of(endUser, agent, mentioned));
+        when(notificationTemplateBuilder.forEvent(any(), any())).thenReturn(stubContent());
+        when(appUserRepository.findById(any())).thenReturn(Optional.of(mentioned));
+
+        srCommentService.addComment(orgId, sr.getId(), agent,
+                new CommentCreateRequest("Handing off to @Pat Fulfiller for ordering", true));
+
+        verify(notificationService).send(argThat((NotificationRequest r) ->
+                r.userId().equals(mentioned.getId()) && "MENTION".equals(r.type())));
+    }
+
+    @Test
+    void incidentMentionByDisplayNameNotifiesMentionedUser() {
+        // The old regex only matched "@token" against the email column —
+        // "@Pat Fulfiller" (what the picker inserts) never resolved.
+        Incident incident = incident();
+        incident.setNumber(42L);
+        incident.setTitle("Test incident");
+        AppUser mentioned = userWithRole("AGENT");
+        mentioned.setDisplayName("Pat Fulfiller");
+        mentioned.setEmail("pat.fulfiller@alignedcardio.com");
+        when(incidentRepository.findByOrgIdAndId(orgId, incident.getId())).thenReturn(Optional.of(incident));
+        when(incidentCommentRepository.save(any())).thenAnswer(i -> {
+            IncidentComment c = i.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+        when(incidentCommentRepository.findByIncidentIdOrderByCreatedAtAsc(incident.getId()))
+                .thenReturn(List.of());
+        when(watcherRepository.findByIncidentIdAndDeletedAtIsNull(incident.getId())).thenReturn(List.of());
+        when(appUserRepository.findByOrgId(orgId)).thenReturn(List.of(endUser, agent, mentioned));
+        when(notificationTemplateBuilder.forEvent(eq("MENTION"), any())).thenReturn(stubContent());
+
+        incidentCommentService.addComment(orgId, incident.getId(), agent,
+                new CommentCreateRequest("Looping in @Pat Fulfiller", true));
+
+        verify(notificationService).send(argThat((NotificationRequest r) ->
+                r.userId().equals(mentioned.getId()) && "MENTION".equals(r.type())));
+    }
+
+    @Test
+    void internalMentionDoesNotNotifyEndUsers() {
+        // A mention inside a work note must not leak to someone who can't see it.
+        Incident incident = incident();
+        when(incidentRepository.findByOrgIdAndId(orgId, incident.getId())).thenReturn(Optional.of(incident));
+        when(incidentCommentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(appUserRepository.findByOrgId(orgId)).thenReturn(List.of(endUser, agent));
+
+        incidentCommentService.addComment(orgId, incident.getId(), agent,
+                new CommentCreateRequest("Internal note re @" + endUser.getDisplayName(), false));
+
+        verify(notificationService, never()).send(argThat((NotificationRequest r) ->
+                r.userId().equals(endUser.getId()) && "MENTION".equals(r.type())));
     }
 }
