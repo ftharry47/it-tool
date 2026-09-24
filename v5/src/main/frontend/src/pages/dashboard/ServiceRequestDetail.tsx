@@ -754,20 +754,7 @@ export function ServiceRequestDetail() {
                 caption="Tasks for this request"
                 columns={[
                   { key: 'sequenceOrder', header: '#' },
-                  {
-                    key: 'description',
-                    header: 'Task',
-                    render: (row) => (
-                      <div>
-                        <span>{row.description}</span>
-                        {canPostInternal && row.status === 'COMPLETED' && row.closingNotes && (
-                          <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">
-                            Closing notes: {row.closingNotes}
-                          </p>
-                        )}
-                      </div>
-                    ),
-                  },
+                  { key: 'description', header: 'Task' },
                   { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
                   {
                     key: 'assigneeName',
@@ -878,6 +865,23 @@ export function ServiceRequestDetail() {
                 emptyText="No fulfillment tasks."
               />
             </section>
+
+            {/* Closing Notes (staff-only) — one block per task that has them */}
+            {canPostInternal && request.tasks.some((t) => t.closingNotes) && (
+              <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="mb-2 text-lg font-semibold">Closing Notes</h2>
+                <div className="space-y-3">
+                  {request.tasks
+                    .filter((t) => t.closingNotes)
+                    .map((t) => (
+                      <div key={t.id}>
+                        <p className="text-xs font-medium text-muted-foreground">{t.description}</p>
+                        <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{t.closingNotes}</p>
+                      </div>
+                    ))}
+                </div>
+              </section>
+            )}
 
             <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <h2 className="mb-4 text-lg font-semibold">Activity</h2>

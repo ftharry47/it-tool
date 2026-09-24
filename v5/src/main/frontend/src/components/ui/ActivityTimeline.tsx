@@ -160,9 +160,11 @@ export function auditDescription(entry: AuditEntry): string | undefined {
 interface ActivityTimelineProps {
   activities: Activity[]
   emptyText?: string
+  /** Entries that just changed get the fade-slide + flash treatment. */
+  highlightIds?: Set<string>
 }
 
-export function ActivityTimeline({ activities, emptyText = 'No activity yet.' }: ActivityTimelineProps) {
+export function ActivityTimeline({ activities, emptyText = 'No activity yet.', highlightIds }: ActivityTimelineProps) {
   return (
     <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold">Activity Timeline</h2>
@@ -171,7 +173,10 @@ export function ActivityTimeline({ activities, emptyText = 'No activity yet.' }:
       ) : (
         <ol className="relative space-y-8 border-l border-border pl-6">
           {activities.map((activity) => (
-            <li key={activity.id} className="relative">
+            <li
+              key={activity.id}
+              className={`relative${highlightIds?.has(activity.id) ? ' rounded-md px-2 py-1 animate-fade-slide-up animate-comment-flash' : ''}`}
+            >
               <span className="absolute -left-[2.25rem] flex h-5 w-5 items-center justify-center rounded-full bg-muted ring-4 ring-card">
                 {activity.icon}
               </span>

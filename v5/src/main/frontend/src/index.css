@@ -178,6 +178,17 @@
   }
 }
 
+/* Brief highlight on a newly-posted comment — same "this just happened"
+   tint language as the email comment-history highlight. */
+@keyframes comment-flash {
+  from {
+    background-color: hsl(var(--primary) / 0.12);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
 @layer utilities {
   .animate-fade-slide-up {
     /* 'backwards' (not 'both'): a persisted 'to' transform would make this
@@ -191,10 +202,14 @@
   .animate-float-slow {
     animation: float-slow 6s ease-in-out infinite;
   }
+  .animate-comment-flash {
+    animation: comment-flash 1.6s ease-out both;
+  }
   @media (prefers-reduced-motion: reduce) {
     .animate-fade-slide-up,
     .animate-zoom-in-95,
-    .animate-float-slow {
+    .animate-float-slow,
+    .animate-comment-flash {
       animation: none;
     }
   }

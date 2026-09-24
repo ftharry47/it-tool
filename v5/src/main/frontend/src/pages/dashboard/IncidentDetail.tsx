@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMsal } from '@azure/msal-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -123,6 +123,14 @@ const [confirmDiscardEdit, setConfirmDiscardEdit] = useState(false)
 const [confirmBack, setConfirmBack] = useState(false)
   const [commentContent, setCommentContent] = useState('')
   const [commentIsInternal, setCommentIsInternal] = useState(false)
+  const [justPostedId, setJustPostedId] = useState<string | null>(null)
+
+  // Clear the new-comment flash shortly after it appears.
+  useEffect(() => {
+    if (justPostedId == null) return
+    const t = setTimeout(() => setJustPostedId(null), 1800)
+    return () => clearTimeout(t)
+  }, [justPostedId])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [selectedLinkIncident, setSelectedLinkIncident] = useState('')
@@ -378,9 +386,10 @@ const [confirmBack, setConfirmBack] = useState(false)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       setCommentContent('')
       setCommentIsInternal(false)
+      setJustPostedId(`comment-${created.id}`)
       queryClient.invalidateQueries({ queryKey: ['incident-comments', id] })
     },
     onError: (error) => {
@@ -1135,7 +1144,7 @@ const [confirmBack, setConfirmBack] = useState(false)
                   className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {commentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Post Comment
+                  {commentMutation.isPending ? 'Posting…' : 'Post Comment'}
                 </button>
               </form>
             </section>
@@ -1311,7 +1320,10 @@ const [confirmBack, setConfirmBack] = useState(false)
               </dl>
             </div>
 
-            <ActivityTimeline activities={activities} />
+            <ActivityTimeline
+              activities={activities}
+              highlightIds={justPostedId ? new Set([justPostedId]) : undefined}
+            />
           </aside>
         </div>
       </div>

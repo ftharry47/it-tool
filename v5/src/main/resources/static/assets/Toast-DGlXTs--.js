@@ -1,7 +1,0 @@
-import{c as n,j as r,X as o}from"./index-i8n-IAMs.js";import{r as c}from"./react-B1z9iAW_.js";import{C as a}from"./circle-alert-BwfxmwSI.js";/**
- * @license lucide-react v0.436.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const l=n("CircleCheckBig",[["path",{d:"M21.801 10A10 10 0 1 1 17 3.335",key:"yps3ct"}],["path",{d:"m9 11 3 3L22 4",key:"1pflzl"}]]),d={success:4e3,error:6e3};function m({toast:e,onDismiss:t}){c.useEffect(()=>{const s=setTimeout(t,d[e.type]);return()=>clearTimeout(s)},[e.id,e.type,t]);const i=e.type==="error"?a:l;return r.jsxs("div",{role:e.type==="error"?"alert":"status",className:"animate-zoom-in-95 pointer-events-auto flex w-80 items-start gap-3 rounded-lg border border-border bg-card p-4 text-foreground shadow-lg",children:[r.jsx(i,{className:`mt-0.5 h-5 w-5 shrink-0 ${e.type==="error"?"text-destructive":"text-primary"}`}),r.jsx("span",{className:"flex-1 text-sm",children:e.message}),r.jsx("button",{onClick:t,"aria-label":"Dismiss notification",className:"shrink-0 rounded-md p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",children:r.jsx(o,{className:"h-4 w-4"})})]})}function f({toasts:e,onDismiss:t}){return e.length===0?null:r.jsx("div",{className:"pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2",children:e.map(i=>r.jsx(m,{toast:i,onDismiss:()=>t(i.id)},i.id))})}export{f as T};
-//# sourceMappingURL=Toast-DGlXTs--.js.map

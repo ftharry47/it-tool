@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Lock } from 'lucide-react'
 import { fetchWithToken } from '../../api/client'
 import { formatDateTime } from '../../lib/date'
+import { Loading } from './Loading'
 
 export interface CommentItem {
   id: string
@@ -31,6 +32,14 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
   const [body, setBody] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [justPostedId, setJustPostedId] = useState<string | null>(null)
+
+  // Clear the new-comment flash shortly after it appears.
+  useEffect(() => {
+    if (justPostedId == null) return
+    const t = setTimeout(() => setJustPostedId(null), 1800)
+    return () => clearTimeout(t)
+  }, [justPostedId])
 
   const commentsQuery = useQuery<CommentItem[]>({
     queryKey: [queryKey],
@@ -51,10 +60,11 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       setBody('')
       setIsInternal(false)
       setError(null)
+      setJustPostedId(created.id)
       queryClient.invalidateQueries({ queryKey: [queryKey] })
     },
     onError: (e) => setError(`Failed to post comment: ${e.message}`),
@@ -69,13 +79,18 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
       <h2 className="mb-4 text-lg font-semibold">Comments</h2>
 
       {commentsQuery.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <Loading compact />
       ) : comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">No comments yet.</p>
       ) : (
         <ul className="space-y-4">
           {comments.map((c) => (
-            <li key={c.id} className="rounded-md border border-border/60 bg-muted/30 p-3">
+            <li
+              key={c.id}
+              className={`rounded-md border border-border/60 bg-muted/30 p-3${
+                c.id === justPostedId ? ' animate-fade-slide-up animate-comment-flash' : ''
+              }`}
+            >
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">
                   {c.author ?? 'Unknown'}
@@ -133,7 +148,7 @@ export function CommentThread({ baseUrl, queryKey, canPostInternal, canPost = tr
               className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
             >
               {postMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Post
+              {postMutation.isPending ? 'Posting…' : 'Post'}
             </button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
