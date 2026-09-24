@@ -660,7 +660,7 @@ function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHoc
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} label>
+                <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={70} cy={95} label>
                   {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
@@ -675,7 +675,7 @@ function TicketsView({ data, priority }: { data: TicketsSummary; priority: AdHoc
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={priorityData} dataKey="count" nameKey="name" outerRadius={70} label>
+                  <Pie data={priorityData} dataKey="count" nameKey="name" outerRadius={70} cy={95} label>
                     {priorityData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
