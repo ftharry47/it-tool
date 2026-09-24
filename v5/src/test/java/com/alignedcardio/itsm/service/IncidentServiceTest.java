@@ -432,6 +432,45 @@ class IncidentServiceTest {
     }
 
     @Test
+    void assignNotifiesSlaEngineWhenStatusFlips() {
+        // Regression: assignment NEW -> IN_PROGRESS must reach the SLA engine
+        // so the response clock is marked met (previously only public
+        // comments set responseMetAt — tickets worked without comments kept
+        // "calculating" forever).
+        AppUser admin = userWithRole("ADMIN");
+        AppUser assignee = userWithRole("AGENT");
+        Incident incident = incident(null, priority("Medium", 3));
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(appUserRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(teamMemberRepository.findByUserId(assignee.getId())).thenReturn(List.of());
+
+        incidentService.assign(admin, ORG_ID, incident.getId(), assignee.getId(), null);
+
+        assertEquals(Incident.Status.IN_PROGRESS, incident.getStatus());
+        verify(slaEngine).onStatusChanged(incident);
+    }
+
+    @Test
+    void assignWhileOnHoldResumesSlaClockViaEngine() {
+        // Regression: assigning an ON_HOLD incident flips it to IN_PROGRESS —
+        // the engine must be told so pausedAt is cleared and the clock resumes.
+        AppUser admin = userWithRole("ADMIN");
+        AppUser assignee = userWithRole("AGENT");
+        Incident incident = incident(null, priority("Medium", 3));
+        incident.setStatus(Incident.Status.ON_HOLD);
+
+        when(incidentRepository.findByOrgIdAndId(ORG_ID, incident.getId())).thenReturn(Optional.of(incident));
+        when(appUserRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(teamMemberRepository.findByUserId(assignee.getId())).thenReturn(List.of());
+
+        incidentService.assign(admin, ORG_ID, incident.getId(), assignee.getId(), null);
+
+        assertEquals(Incident.Status.IN_PROGRESS, incident.getStatus());
+        verify(slaEngine).onStatusChanged(incident);
+    }
+
+    @Test
     void escalateTierBlockedWhenNoTierAssigned() {
         AppUser admin = userWithRole("ADMIN");
         Incident incident = incident(userWithRole("AGENT"), priority("Medium", 3));

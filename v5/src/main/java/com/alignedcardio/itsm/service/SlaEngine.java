@@ -132,6 +132,16 @@ public class SlaEngine {
         slaInstanceRepository.findByIncidentId(incident.getId()).ifPresent(instance -> {
             OffsetDateTime now = OffsetDateTime.now();
 
+            // First engagement = any non-NEW status (assignment, triage, hold,
+            // work, terminal). Previously only a PUBLIC comment set this, so
+            // tickets handled purely via status changes kept "calculating" a
+            // response clock forever — even after closure. Mirrors the
+            // response-status sets used for SRs, problems, and changes.
+            if (incident.getStatus() != Incident.Status.NEW
+                    && instance.getResponseMetAt() == null) {
+                instance.setResponseMetAt(now);
+            }
+
             if (PAUSED_STATUSES.contains(incident.getStatus())) {
                 if (instance.getPausedAt() == null) {
                     instance.setPausedAt(now);

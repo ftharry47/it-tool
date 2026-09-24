@@ -95,8 +95,10 @@ class SlaEngineTest {
         assertNull(saved.getPausedAt());
         assertTrue(saved.getTotalPausedMinutes() >= 29 && saved.getTotalPausedMinutes() <= 31,
                 "Expected ~30 paused minutes, got " + saved.getTotalPausedMinutes());
-        assertTrue(saved.getResponseDueAt().isAfter(start.plusMinutes(60)),
-                "Response due date should be extended after a pause");
+        assertNotNull(saved.getResponseMetAt(),
+                "Resuming to IN_PROGRESS marks the response clock met");
+        assertEquals(start.plusMinutes(60), saved.getResponseDueAt(),
+                "Met response clocks keep their original due date");
         assertTrue(saved.getResolutionDueAt().isAfter(start.plusMinutes(240)),
                 "Resolution due date should be extended after a pause");
     }
@@ -154,8 +156,10 @@ class SlaEngineTest {
         assertNull(saved.getPausedAt());
         assertTrue(saved.getTotalPausedMinutes() >= 29 && saved.getTotalPausedMinutes() <= 31,
                 "Expected ~30 paused minutes, got " + saved.getTotalPausedMinutes());
-        assertTrue(saved.getResponseDueAt().isAfter(start.plusMinutes(60)),
-                "Response due date should be extended after a pause");
+        assertNotNull(saved.getResponseMetAt(),
+                "Resuming to IN_PROGRESS marks the response clock met");
+        assertEquals(start.plusMinutes(60), saved.getResponseDueAt(),
+                "Met response clocks keep their original due date");
         assertTrue(saved.getResolutionDueAt().isAfter(start.plusMinutes(240)),
                 "Resolution due date should be extended after a pause");
     }
@@ -176,6 +180,68 @@ class SlaEngineTest {
         verify(slaInstanceRepository).save(captor.capture());
 
         assertNotNull(captor.getValue().getResolutionMetAt());
+    }
+
+    @Test
+    void nonNewStatusMarksFirstResponse() {
+        // Any engagement status counts as the first response — not just a
+        // public comment (mirrors SR/problem/change response-status sets).
+        SlaInstance instance = createInstance();
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.IN_PROGRESS);
+
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.of(instance));
+
+        slaEngine.onStatusChanged(incident);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getResponseMetAt(),
+                "IN_PROGRESS must mark the response clock as met");
+        assertNull(captor.getValue().getResolutionMetAt());
+    }
+
+    @Test
+    void closedWithoutAnyCommentStopsBothClocks() {
+        // Regression: NEW -> IN_PROGRESS -> RESOLVED -> CLOSED handled purely
+        // through status changes (no public comment) must stop BOTH clocks.
+        SlaInstance instance = createInstance();
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.CLOSED);
+
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.of(instance));
+
+        slaEngine.onStatusChanged(incident);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+
+        SlaInstance saved = captor.getValue();
+        assertNotNull(saved.getResponseMetAt(), "CLOSED must mark the response clock as met");
+        assertNotNull(saved.getResolutionMetAt(), "CLOSED must mark the resolution clock as met");
+        assertEquals(SlaInstance.BreachStatus.ON_TRACK, saved.getBreachStatus(),
+                "A closed ticket's SLA must be terminal, not still calculating");
+    }
+
+    @Test
+    void newStatusDoesNotMarkFirstResponse() {
+        SlaInstance instance = createInstance();
+
+        Incident incident = new Incident();
+        incident.setId(UUID.randomUUID());
+        incident.setStatus(Incident.Status.NEW);
+
+        when(slaInstanceRepository.findByIncidentId(incident.getId())).thenReturn(Optional.of(instance));
+
+        slaEngine.onStatusChanged(incident);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertNull(captor.getValue().getResponseMetAt());
     }
 
     @Test

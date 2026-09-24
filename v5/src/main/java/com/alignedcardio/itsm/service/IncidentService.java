@@ -568,14 +568,22 @@ public class IncidentService {
         if (assigneeChanged) {
             resetEstimateLock(incident);
         }
-        if (incident.getStatus() == Incident.Status.NEW
+        boolean statusFlipped = incident.getStatus() == Incident.Status.NEW
                 || incident.getStatus() == Incident.Status.REOPENED
-                || incident.getStatus() == Incident.Status.ON_HOLD) {
+                || incident.getStatus() == Incident.Status.ON_HOLD;
+        if (statusFlipped) {
             incident.setStatus(Incident.Status.IN_PROGRESS);
         }
         incident.setUpdatedBy(updater.getId());
 
         Incident saved = incidentRepository.save(incident);
+
+        // Assignment-driven status flips must reach the SLA engine too —
+        // otherwise responseMetAt is never recorded and an ON_HOLD incident
+        // assigned into IN_PROGRESS keeps its clock paused.
+        if (statusFlipped) {
+            slaEngine.onStatusChanged(saved);
+        }
 
         if (priorityChanged) {
             slaEngine.onPriorityChanged(saved);
