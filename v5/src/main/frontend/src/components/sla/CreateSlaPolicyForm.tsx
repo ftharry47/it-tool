@@ -35,6 +35,7 @@ export function CreateSlaPolicyForm({
   const [name, setName] = useState('')
   const [appliesTo, setAppliesTo] = useState<'INCIDENT' | 'REQUEST' | 'PROBLEM' | 'CHANGE'>('INCIDENT')
   const [priorityFilter, setPriorityFilter] = useState('')
+  const [workflowType, setWorkflowType] = useState('')
   const [responseTargetMinutes, setResponseTargetMinutes] = useState('')
   const [resolutionTargetMinutes, setResolutionTargetMinutes] = useState('')
   const [businessHoursCalendarId, setBusinessHoursCalendarId] = useState('')
@@ -44,6 +45,7 @@ export function CreateSlaPolicyForm({
     name !== '' ||
     appliesTo !== 'INCIDENT' ||
     priorityFilter !== '' ||
+    workflowType !== '' ||
     responseTargetMinutes !== '' ||
     resolutionTargetMinutes !== '' ||
     businessHoursCalendarId !== ''
@@ -58,6 +60,7 @@ export function CreateSlaPolicyForm({
         name,
         appliesTo,
         priorityFilter: priorityFilter || null,
+        workflowType: appliesTo === 'REQUEST' ? workflowType || null : null,
         responseTargetMinutes: Number(responseTargetMinutes),
         resolutionTargetMinutes: Number(resolutionTargetMinutes),
         businessHoursCalendarId: businessHoursCalendarId || null,
@@ -74,6 +77,7 @@ export function CreateSlaPolicyForm({
       setName('')
       setAppliesTo('INCIDENT')
       setPriorityFilter('')
+      setWorkflowType('')
       setResponseTargetMinutes('')
       setResolutionTargetMinutes('')
       setBusinessHoursCalendarId('')
@@ -140,6 +144,21 @@ export function CreateSlaPolicyForm({
             ))}
           </select>
         </div>
+        {appliesTo === 'REQUEST' && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Workflow Type</label>
+            <select
+              value={workflowType}
+              onChange={(e) => setWorkflowType(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">All workflows</option>
+              <option value="FULL">Full (physical procurement)</option>
+              <option value="SOFTWARE">Software</option>
+              <option value="INSTANT">Instant</option>
+            </select>
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Response Target (min)</label>
           <input

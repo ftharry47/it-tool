@@ -199,11 +199,6 @@ public class SlaEngine {
             ServiceRequest.Status.REJECTED,
             ServiceRequest.Status.CANCELLED);
 
-    private static final Set<ServiceRequest.Status> SR_FIRST_RESPONSE_STATUSES = Set.of(
-            ServiceRequest.Status.APPROVED,
-            ServiceRequest.Status.IN_FULFILLMENT,
-            ServiceRequest.Status.FULFILLED);
-
     @Transactional
     public boolean onServiceRequestCreated(ServiceRequest serviceRequest) {
         return onServiceRequestCreated(serviceRequest, null);
@@ -250,6 +245,16 @@ public class SlaEngine {
         slaInstanceRepository.findByServiceRequest_Id(serviceRequest.getId()).ifPresent(instance -> {
             OffsetDateTime now = OffsetDateTime.now();
 
+            // First engagement = any status past submission/approval-routing —
+            // including terminal REJECTED/CANCELLED/REJECTED_NEEDS_REVIEW and
+            // ON_HOLD. Without this, a request decided or cancelled without an
+            // approval kept "calculating" a response clock forever.
+            if (serviceRequest.getStatus() != ServiceRequest.Status.SUBMITTED
+                    && serviceRequest.getStatus() != ServiceRequest.Status.PENDING_APPROVAL
+                    && instance.getResponseMetAt() == null) {
+                instance.setResponseMetAt(now);
+            }
+
             if (SR_PAUSED_STATUSES.contains(serviceRequest.getStatus())) {
                 if (instance.getPausedAt() == null) {
                     instance.setPausedAt(now);
@@ -283,12 +288,6 @@ public class SlaEngine {
                 if (SR_TERMINAL_STATUSES.contains(serviceRequest.getStatus())) {
                     if (instance.getResolutionMetAt() == null) {
                         instance.setResolutionMetAt(now);
-                    }
-                }
-
-                if (SR_FIRST_RESPONSE_STATUSES.contains(serviceRequest.getStatus())) {
-                    if (instance.getResponseMetAt() == null) {
-                        instance.setResponseMetAt(now);
                     }
                 }
             }
@@ -540,10 +539,82 @@ public class SlaEngine {
 
     private Optional<SlaPolicy> findBestServiceRequestPolicy(ServiceRequest serviceRequest) {
         String priorityName = serviceRequest.getPriority() != null ? serviceRequest.getPriority().getName() : null;
+        String workflow = effectiveWorkflow(serviceRequest);
         return slaPolicyRepository.findByOrgIdAndAppliesTo(serviceRequest.getOrgId(), SlaPolicy.AppliesTo.REQUEST)
                 .stream()
                 .filter(p -> p.getBusinessHoursCalendar() != null)
                 .filter(p -> p.getPriorityFilter() == null || p.getPriorityFilter().equals(priorityName))
+                .filter(p -> p.getWorkflowType() == null || p.getWorkflowType().equals(workflow))
+                // A workflow-specific policy wins over a generic one.
+                .sorted((a, b) -> Boolean.compare(
+                        b.getWorkflowType() != null, a.getWorkflowType() != null))
                 .findFirst();
+    }
+
+    /**
+     * The request's effective workflow = heaviest workflow across its catalog
+     * item's fulfillment-task templates (FULL > SOFTWARE > INSTANT). Defaults
+     * to FULL when templates are absent — matching FulfillmentTask's default.
+     */
+    private String effectiveWorkflow(ServiceRequest serviceRequest) {
+        com.fasterxml.jackson.databind.JsonNode tasks = serviceRequest.getCatalogItem() != null
+                ? serviceRequest.getCatalogItem().getFulfillmentTasks() : null;
+        if (tasks == null || !tasks.isArray()) {
+            return "FULL";
+        }
+        boolean software = false;
+        for (com.fasterxml.jackson.databind.JsonNode t : tasks) {
+            String w = t.hasNonNull("workflow") ? t.get("workflow").asText("FULL") : "FULL";
+            if ("FULL".equals(w)) {
+                return "FULL";
+            }
+            if ("SOFTWARE".equals(w)) {
+                software = true;
+            }
+        }
+        return software ? "SOFTWARE" : "INSTANT";
+    }
+
+    /**
+     * Priority changes must re-match the policy and re-target unmet clocks —
+     * same semantics as onPriorityChanged for incidents. Called from both the
+     * SR edit path and the fulfiller-assignment path.
+     */
+    @Transactional
+    public void onServiceRequestPriorityChanged(ServiceRequest serviceRequest) {
+        SlaPolicy policy = findBestServiceRequestPolicy(serviceRequest).orElse(null);
+        if (policy == null || policy.getBusinessHoursCalendar() == null) {
+            return;
+        }
+
+        BusinessCalendar calendar = policy.getBusinessHoursCalendar();
+        slaInstanceRepository.findByServiceRequest_Id(serviceRequest.getId()).ifPresent(instance -> {
+            if (instance.getResolutionMetAt() != null) {
+                return;
+            }
+
+            ZonedDateTime start = Optional.ofNullable(serviceRequest.getCreatedAt())
+                    .orElse(OffsetDateTime.now())
+                    .atZoneSameInstant(ZoneId.of(calendar.getTimezone()));
+
+            int paused = instance.getTotalPausedMinutes();
+
+            if (instance.getResponseMetAt() == null) {
+                ZonedDateTime responseDue = businessHoursCalculator.addBusinessMinutes(
+                        calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                        start, policy.getResponseTargetMinutes() + paused);
+                instance.setResponseDueAt(responseDue.toOffsetDateTime());
+            }
+
+            ZonedDateTime resolutionDue = businessHoursCalculator.addBusinessMinutes(
+                    calendar.getTimezone(), calendar.getWorkingHours(), calendar.getHolidays(),
+                    start, policy.getResolutionTargetMinutes() + paused);
+            instance.setResolutionDueAt(resolutionDue.toOffsetDateTime());
+
+            instance.setPolicy(policy);
+            instance.setUpdatedBy(serviceRequest.getUpdatedBy());
+            instance.setUpdatedAt(OffsetDateTime.now());
+            slaInstanceRepository.save(instance);
+        });
     }
 }

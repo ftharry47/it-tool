@@ -59,6 +59,7 @@ interface SlaPolicy {
   name: string
   appliesTo: 'INCIDENT' | 'REQUEST' | 'PROBLEM' | 'CHANGE'
   priorityFilter: string | null
+  workflowType: string | null
   responseTargetMinutes: number
   resolutionTargetMinutes: number
   businessHoursCalendar: CalendarOption | null
@@ -465,6 +466,7 @@ export function SlaDetails() {
         name: policy.name,
         appliesTo: policy.appliesTo,
         priorityFilter: policy.priorityFilter,
+        workflowType: policy.workflowType,
         responseTargetMinutes: edit.responseTargetMinutes,
         resolutionTargetMinutes: edit.resolutionTargetMinutes,
         businessHoursCalendarId: edit.businessHoursCalendarId || null,
@@ -843,6 +845,7 @@ export function SlaDetails() {
                   { key: 'name', header: 'Policy' },
                   { key: 'appliesTo', header: 'Applies To' },
                   { key: 'priorityFilter', header: 'Priority Filter' },
+                  { key: 'workflowType', header: 'Workflow' },
                   {
                     key: 'responseTargetMinutes',
                     header: 'Response (min)',

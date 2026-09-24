@@ -10,6 +10,7 @@ public record SlaPolicyRequest(
         @NotBlank String name,
         @NotNull SlaPolicy.AppliesTo appliesTo,
         String priorityFilter,
+        String workflowType,
         @NotNull Integer responseTargetMinutes,
         @NotNull Integer resolutionTargetMinutes,
         UUID businessHoursCalendarId

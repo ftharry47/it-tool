@@ -769,6 +769,75 @@ class ServiceRequestServiceTest {
                         && "TASK_ASSIGNED".equals(sre.triggerType())));
     }
 
+    @Test
+    void assignTaskWithPriorityRematchesSla() {
+        // The assign dialog can set priority in the same action — it must hit
+        // the same SLA re-match as the Edit path.
+        AppUser admin = superAdmin();
+        AppUser fulfiller = user("Fulfiller");
+        CatalogItem item = item("Laptop", false, null);
+        ServiceRequest sr = pendingRequest(item, user("Requester"), null);
+        FulfillmentTask task = pendingTask(sr);
+
+        com.alignedcardio.itsm.entity.Priority high = new com.alignedcardio.itsm.entity.Priority();
+        high.setId(UUID.randomUUID());
+        high.setName("High");
+
+        com.alignedcardio.itsm.entity.TeamMember tm = new com.alignedcardio.itsm.entity.TeamMember();
+        tm.setUser(fulfiller);
+        stubTaskLookup(sr, task);
+        stubTaskList(task);
+        when(teamMemberRepository.findByTeamId(any())).thenReturn(List.of(tm));
+        when(appUserRepository.findById(fulfiller.getId())).thenReturn(Optional.of(fulfiller));
+        when(priorityRepository.findByOrgIdAndId(ORG_ID, high.getId())).thenReturn(Optional.of(high));
+
+        service.assignTask(admin, ORG_ID, sr.getId(), task.getId(), fulfiller.getId(), high.getId());
+
+        assertSame(high, sr.getPriority());
+        verify(slaEngine).onServiceRequestPriorityChanged(sr);
+    }
+
+    @Test
+    void assignTaskWithoutPriorityLeavesSlaUntouched() {
+        AppUser admin = superAdmin();
+        AppUser fulfiller = user("Fulfiller");
+        CatalogItem item = item("Laptop", false, null);
+        ServiceRequest sr = pendingRequest(item, user("Requester"), null);
+        FulfillmentTask task = pendingTask(sr);
+
+        com.alignedcardio.itsm.entity.TeamMember tm = new com.alignedcardio.itsm.entity.TeamMember();
+        tm.setUser(fulfiller);
+        stubTaskLookup(sr, task);
+        stubTaskList(task);
+        when(teamMemberRepository.findByTeamId(any())).thenReturn(List.of(tm));
+        when(appUserRepository.findById(fulfiller.getId())).thenReturn(Optional.of(fulfiller));
+
+        service.assignTask(admin, ORG_ID, sr.getId(), task.getId(), fulfiller.getId(), null);
+
+        verify(slaEngine, never()).onServiceRequestPriorityChanged(any());
+    }
+
+    @Test
+    void updatePriorityRematchesSla() {
+        // Regression: the Edit path must also re-match the SLA policy —
+        // previously it changed the field but left SLA targeting untouched.
+        AppUser admin = superAdmin("Admin");
+        ServiceRequest sr = pendingRequest(item("Laptop", false, null), user("Requester"), null);
+        when(serviceRequestRepository.findByOrgIdAndId(ORG_ID, sr.getId())).thenReturn(Optional.of(sr));
+        stubSave();
+
+        com.alignedcardio.itsm.entity.Priority critical = new com.alignedcardio.itsm.entity.Priority();
+        critical.setId(UUID.randomUUID());
+        critical.setName("Critical");
+        when(priorityRepository.findByOrgIdAndId(ORG_ID, critical.getId())).thenReturn(Optional.of(critical));
+
+        service.update(admin, ORG_ID, sr.getId(),
+                new ServiceRequestUpdateRequest(null, critical.getId(), null, null, null));
+
+        assertSame(critical, sr.getPriority());
+        verify(slaEngine).onServiceRequestPriorityChanged(sr);
+    }
+
     private FulfillmentTask assignedTask(ServiceRequest sr, AppUser fulfiller) {
         FulfillmentTask task = pendingTask(sr);
         task.setAssignee(fulfiller);

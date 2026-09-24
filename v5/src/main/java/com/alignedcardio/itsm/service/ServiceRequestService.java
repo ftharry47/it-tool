@@ -468,6 +468,7 @@ public class ServiceRequestService {
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
+        boolean priorityChanged = false;
 
         if (request.locationId() != null) {
             Location location = locationRepository.findByOrgIdAndIdAndDeletedAtIsNull(orgId, request.locationId())
@@ -494,6 +495,7 @@ public class ServiceRequestService {
                 before.put("priority", sr.getPriority() != null ? sr.getPriority().getName() : null);
                 after.put("priority", priority.getName());
                 sr.setPriority(priority);
+                priorityChanged = true;
             }
         }
         if (request.phone() != null) {
@@ -532,7 +534,14 @@ public class ServiceRequestService {
         sr.setUpdatedBy(user.getId());
         sr.setUpdatedAt(OffsetDateTime.now());
         recordActivity(sr, user.getId(), "EDITED", before, after);
-        return toResponse(serviceRequestRepository.save(sr));
+        ServiceRequest saved = serviceRequestRepository.save(sr);
+        // A priority change re-matches the SLA policy and re-targets unmet
+        // clocks — previously the Edit path updated the field but left the
+        // SLA untouched.
+        if (priorityChanged) {
+            slaEngine.onServiceRequestPriorityChanged(saved);
+        }
+        return toResponse(saved);
     }
 
     /**
@@ -973,6 +982,16 @@ public class ServiceRequestService {
      */
     @Transactional
     public ServiceRequestResponse assignTask(AppUser user, UUID orgId, UUID requestId, UUID taskId, UUID assigneeId) {
+        return assignTask(user, orgId, requestId, taskId, assigneeId, null);
+    }
+
+    /**
+     * Assign a fulfiller to a task — optionally setting the request's priority
+     * in the same action. Priority changes take the same path as the Edit
+     * action: audit trail + SLA policy re-match.
+     */
+    @Transactional
+    public ServiceRequestResponse assignTask(AppUser user, UUID orgId, UUID requestId, UUID taskId, UUID assigneeId, UUID priorityId) {
         if (!isSuperAdmin(user)) {
             throw new IllegalStateException("Only SUPER_ADMIN can assign fulfillment tasks");
         }
@@ -992,6 +1011,22 @@ public class ServiceRequestService {
         AppUser assignee = appUserRepository.findById(assigneeId)
                 .orElseThrow(() -> new NotFoundException("Assignee not found"));
 
+        // Optional priority set at assignment time — same update logic and
+        // audit trail as the Edit action.
+        boolean priorityChanged = false;
+        if (priorityId != null) {
+            Priority priority = priorityRepository.findByOrgIdAndId(orgId, priorityId)
+                    .orElseThrow(() -> new NotFoundException("Priority not found"));
+            if (sr.getPriority() == null || !sr.getPriority().getId().equals(priority.getId())) {
+                String beforeName = sr.getPriority() != null ? sr.getPriority().getName() : null;
+                sr.setPriority(priority);
+                priorityChanged = true;
+                recordActivity(sr, user.getId(), "EDITED",
+                        Map.of("priority", beforeName != null ? beforeName : ""),
+                        Map.of("priority", priority.getName()));
+            }
+        }
+
         task.setAssignee(assignee);
         task.setAssignedBy(user);
         task.setAssignedAt(OffsetDateTime.now());
@@ -1000,6 +1035,12 @@ public class ServiceRequestService {
         task.setUpdatedBy(user.getId());
         task.setUpdatedAt(OffsetDateTime.now());
         fulfillmentTaskRepository.save(task);
+        if (priorityChanged) {
+            sr.setUpdatedBy(user.getId());
+            sr.setUpdatedAt(OffsetDateTime.now());
+            serviceRequestRepository.save(sr);
+            slaEngine.onServiceRequestPriorityChanged(sr);
+        }
 
         recordActivity(sr, user.getId(), "TASK_ASSIGNED", null,
                 Map.of("taskId", task.getId(), "taskDescription", task.getDescription(),

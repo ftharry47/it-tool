@@ -1,7 +1,9 @@
 package com.alignedcardio.itsm.service;
 
 import com.alignedcardio.itsm.entity.BusinessCalendar;
+import com.alignedcardio.itsm.entity.CatalogItem;
 import com.alignedcardio.itsm.entity.Incident;
+import com.alignedcardio.itsm.entity.ServiceRequest;
 import com.alignedcardio.itsm.entity.SlaInstance;
 import com.alignedcardio.itsm.entity.SlaPolicy;
 import com.alignedcardio.itsm.repository.BusinessCalendarRepository;
@@ -261,6 +263,186 @@ class SlaEngineTest {
         verify(slaInstanceRepository).save(captor.capture());
 
         assertEquals(respondedAt, captor.getValue().getResponseMetAt());
+    }
+
+    // --- Service request SLA (parity with the incident responseMetAt fix) ---
+
+    private ServiceRequest serviceRequest(ServiceRequest.Status status, String... taskWorkflows) {
+        ServiceRequest sr = new ServiceRequest();
+        sr.setId(UUID.randomUUID());
+        sr.setOrgId(UUID.randomUUID());
+        sr.setStatus(status);
+        sr.setCreatedAt(OffsetDateTime.now().minusHours(1));
+        CatalogItem item = new CatalogItem();
+        StringBuilder tasks = new StringBuilder("[");
+        for (int i = 0; i < taskWorkflows.length; i++) {
+            if (i > 0) tasks.append(',');
+            tasks.append("{\"description\":\"t\",\"workflow\":\"").append(taskWorkflows[i]).append("\"}");
+        }
+        tasks.append("]");
+        try {
+            item.setFulfillmentTasks(new com.fasterxml.jackson.databind.ObjectMapper().readTree(tasks.toString()));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        sr.setCatalogItem(item);
+        return sr;
+    }
+
+    private SlaInstance srInstance(ServiceRequest sr) {
+        SlaInstance instance = createInstance();
+        when(slaInstanceRepository.findByServiceRequest_Id(sr.getId())).thenReturn(Optional.of(instance));
+        return instance;
+    }
+
+    @Test
+    void rejectedServiceRequestStopsBothClocks() {
+        // Regression: PENDING_APPROVAL -> REJECTED without a fulfilled response
+        // must stop BOTH clocks — previously responseMetAt stayed null and the
+        // UI showed a live countdown on a dead request.
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.REJECTED);
+        SlaInstance instance = srInstance(sr);
+
+        slaEngine.onServiceRequestStatusChanged(sr);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getResponseMetAt());
+        assertNotNull(captor.getValue().getResolutionMetAt());
+    }
+
+    @Test
+    void cancelledServiceRequestStopsBothClocks() {
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.CANCELLED);
+        SlaInstance instance = srInstance(sr);
+
+        slaEngine.onServiceRequestStatusChanged(sr);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getResponseMetAt());
+        assertNotNull(captor.getValue().getResolutionMetAt());
+        assertEquals(SlaInstance.BreachStatus.ON_TRACK, captor.getValue().getBreachStatus());
+    }
+
+    @Test
+    void pendingApprovalPausesWithoutMarkingResponse() {
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.PENDING_APPROVAL);
+        SlaInstance instance = srInstance(sr);
+
+        slaEngine.onServiceRequestStatusChanged(sr);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getPausedAt());
+        assertNull(captor.getValue().getResponseMetAt(),
+                "Approval routing alone is not a response");
+    }
+
+    @Test
+    void instantWorkflowPrefersWorkflowSpecificPolicy() {
+        // A REQUEST policy scoped to INSTANT must win over a generic one.
+        BusinessCalendar calendar = create24x7Calendar();
+        SlaPolicy generic = new SlaPolicy();
+        generic.setBusinessHoursCalendar(calendar);
+        generic.setResponseTargetMinutes(240);
+        generic.setResolutionTargetMinutes(2880);
+        SlaPolicy instant = new SlaPolicy();
+        instant.setBusinessHoursCalendar(calendar);
+        instant.setWorkflowType("INSTANT");
+        instant.setResponseTargetMinutes(15);
+        instant.setResolutionTargetMinutes(60);
+
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.SUBMITTED, "INSTANT");
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(sr.getOrgId(), SlaPolicy.AppliesTo.REQUEST))
+                .thenReturn(java.util.List.of(generic, instant));
+
+        assertTrue(slaEngine.onServiceRequestCreated(sr));
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertSame(instant, captor.getValue().getPolicy(),
+                "INSTANT request must match the INSTANT-scoped policy");
+    }
+
+    @Test
+    void fullWorkflowFallsBackToGenericPolicy() {
+        // A FULL request must NOT match an INSTANT-scoped policy.
+        BusinessCalendar calendar = create24x7Calendar();
+        SlaPolicy generic = new SlaPolicy();
+        generic.setBusinessHoursCalendar(calendar);
+        generic.setResponseTargetMinutes(240);
+        generic.setResolutionTargetMinutes(2880);
+        SlaPolicy instant = new SlaPolicy();
+        instant.setBusinessHoursCalendar(calendar);
+        instant.setWorkflowType("INSTANT");
+        instant.setResponseTargetMinutes(15);
+        instant.setResolutionTargetMinutes(60);
+
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.SUBMITTED, "FULL");
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(sr.getOrgId(), SlaPolicy.AppliesTo.REQUEST))
+                .thenReturn(java.util.List.of(generic, instant));
+
+        assertTrue(slaEngine.onServiceRequestCreated(sr));
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertSame(generic, captor.getValue().getPolicy());
+    }
+
+    @Test
+    void mixedTasksResolveToHeaviestWorkflow() {
+        // INSTANT + FULL tasks -> effective workflow FULL -> generic/FULL policy.
+        BusinessCalendar calendar = create24x7Calendar();
+        SlaPolicy instant = new SlaPolicy();
+        instant.setBusinessHoursCalendar(calendar);
+        instant.setWorkflowType("INSTANT");
+        SlaPolicy generic = new SlaPolicy();
+        generic.setBusinessHoursCalendar(calendar);
+
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.SUBMITTED, "INSTANT", "FULL");
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(sr.getOrgId(), SlaPolicy.AppliesTo.REQUEST))
+                .thenReturn(java.util.List.of(generic, instant));
+
+        assertTrue(slaEngine.onServiceRequestCreated(sr));
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        assertSame(generic, captor.getValue().getPolicy());
+    }
+
+    @Test
+    void serviceRequestPriorityChangeRematchesPolicyAndRecomputesDueDates() {
+        // Regression: changing priority must re-match the policy and re-target
+        // unmet clocks — previously Edit changed the field but SLA stayed put.
+        OffsetDateTime start = OffsetDateTime.parse("2026-01-01T12:00:00Z");
+        BusinessCalendar calendar = create24x7Calendar();
+
+        SlaPolicy newPolicy = new SlaPolicy();
+        newPolicy.setBusinessHoursCalendar(calendar);
+        newPolicy.setResponseTargetMinutes(30);
+        newPolicy.setResolutionTargetMinutes(120);
+
+        SlaInstance instance = createInstance();
+        instance.setCreatedAt(start);
+        instance.setResponseDueAt(start.plusMinutes(240));
+        instance.setResolutionDueAt(start.plusMinutes(2880));
+
+        ServiceRequest sr = serviceRequest(ServiceRequest.Status.IN_FULFILLMENT);
+        sr.setCreatedAt(start);
+        when(slaInstanceRepository.findByServiceRequest_Id(sr.getId())).thenReturn(Optional.of(instance));
+        when(slaPolicyRepository.findByOrgIdAndAppliesTo(sr.getOrgId(), SlaPolicy.AppliesTo.REQUEST))
+                .thenReturn(java.util.List.of(newPolicy));
+
+        slaEngine.onServiceRequestPriorityChanged(sr);
+
+        ArgumentCaptor<SlaInstance> captor = ArgumentCaptor.forClass(SlaInstance.class);
+        verify(slaInstanceRepository).save(captor.capture());
+        SlaInstance saved = captor.getValue();
+        assertSame(newPolicy, saved.getPolicy());
+        assertEquals(start.plusMinutes(30), saved.getResponseDueAt(),
+                "Unmet response clock must re-target on priority change");
+        assertEquals(start.plusMinutes(120), saved.getResolutionDueAt());
     }
 
     private SlaInstance createInstance() {

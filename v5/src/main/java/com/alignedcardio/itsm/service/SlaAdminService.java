@@ -84,6 +84,7 @@ public class SlaAdminService {
                 p.getName(),
                 p.getAppliesTo() == null ? null : p.getAppliesTo().name(),
                 p.getPriorityFilter(),
+                p.getWorkflowType(),
                 p.getResponseTargetMinutes(),
                 p.getResolutionTargetMinutes(),
                 calendar);
@@ -96,6 +97,7 @@ public class SlaAdminService {
         policy.setName(request.name());
         policy.setAppliesTo(request.appliesTo());
         policy.setPriorityFilter(request.priorityFilter());
+        policy.setWorkflowType(normalizeWorkflowType(request));
         policy.setResponseTargetMinutes(request.responseTargetMinutes());
         policy.setResolutionTargetMinutes(request.resolutionTargetMinutes());
         if (request.businessHoursCalendarId() != null) {
@@ -131,10 +133,15 @@ public class SlaAdminService {
             diffs.add("priority filter " + orAll(policy.getPriorityFilter())
                     + " → " + orAll(request.priorityFilter()));
         }
+        if (!Objects.equals(policy.getWorkflowType(), normalizeWorkflowType(request))) {
+            diffs.add("workflow type " + orAll(policy.getWorkflowType())
+                    + " → " + orAll(request.workflowType()));
+        }
 
         policy.setName(request.name());
         policy.setAppliesTo(request.appliesTo());
         policy.setPriorityFilter(request.priorityFilter());
+        policy.setWorkflowType(normalizeWorkflowType(request));
         policy.setResponseTargetMinutes(request.responseTargetMinutes());
         policy.setResolutionTargetMinutes(request.resolutionTargetMinutes());
         if (request.businessHoursCalendarId() != null) {
@@ -250,6 +257,21 @@ public class SlaAdminService {
         return minutes + "m";
     }
 
+    /** workflowType is only meaningful on REQUEST policies; whitelist values. */
+    private static String normalizeWorkflowType(SlaPolicyRequest request) {
+        String wt = request.workflowType();
+        if (wt == null || wt.isBlank()) {
+            return null;
+        }
+        if (request.appliesTo() != SlaPolicy.AppliesTo.REQUEST) {
+            throw new IllegalStateException("workflowType applies only to REQUEST policies");
+        }
+        return switch (wt) {
+            case "FULL", "SOFTWARE", "INSTANT" -> wt;
+            default -> throw new IllegalStateException("workflowType must be FULL, SOFTWARE, or INSTANT");
+        };
+    }
+
     private static String orAll(String value) {
         return value == null || value.isBlank() ? "all" : value;
     }
@@ -277,6 +299,7 @@ public class SlaAdminService {
         row.put("name", p.getName());
         row.put("appliesTo", p.getAppliesTo() != null ? p.getAppliesTo().name() : null);
         row.put("priorityFilter", p.getPriorityFilter());
+        row.put("workflowType", p.getWorkflowType());
         row.put("responseTargetMinutes", p.getResponseTargetMinutes());
         row.put("resolutionTargetMinutes", p.getResolutionTargetMinutes());
         BusinessCalendar cal = p.getBusinessHoursCalendar();

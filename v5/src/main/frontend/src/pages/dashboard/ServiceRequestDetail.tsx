@@ -52,7 +52,7 @@ interface ActivityEntry {
 }
 
 interface PendingTaskAction {
-  type: 'assign' | 'ordered' | 'installed' | 'complete'
+  type: 'ordered' | 'installed' | 'complete'
   taskId: string
   workflow: 'FULL' | 'SOFTWARE' | 'INSTANT'
   description: string
@@ -283,21 +283,33 @@ export function ServiceRequestDetail() {
   const fulfillmentMembers =
     teamsQuery.data?.find((t) => t.name === 'IT Fulfillment')?.members ?? []
 
-  const assignMutation = useMutation<ServiceRequestDetail, Error, { taskId: string; assigneeId: string }>({
-    mutationFn: async ({ taskId, assigneeId }) => {
+  const assignMutation = useMutation<ServiceRequestDetail, Error, { taskId: string; assigneeId: string; priorityId: string | null }>({
+    mutationFn: async ({ taskId, assigneeId, priorityId }) => {
       const res = await fetchWithToken(instance, account!, `/api/v1/service-requests/${id}/tasks/${taskId}/assign`, {
         method: 'POST',
-        body: JSON.stringify({ assigneeId }),
+        body: JSON.stringify({ assigneeId, priorityId }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.json()
     },
     onSuccess: () => {
+      setAssignDialog(null)
       queryClient.invalidateQueries({ queryKey: ['service-request', id] })
       queryClient.invalidateQueries({ queryKey: ['service-request-activity', id] })
     },
     onError: (error) => setActionError(error.message),
   })
+
+  // Assign fulfiller — dedicated drawer so priority can be set in the same
+  // action (same downstream effects as Edit: audit + SLA re-match).
+  const [assignDialog, setAssignDialog] = useState<{
+    taskId: string
+    assigneeId: string
+    assigneeName: string
+    taskDescription: string
+    reassign: boolean
+  } | null>(null)
+  const [assignPriorityId, setAssignPriorityId] = useState('')
 
   const [deliveryDateTask, setDeliveryDateTask] = useState<string | null>(null)
   const [deliveryDate, setDeliveryDate] = useState('')
@@ -539,7 +551,6 @@ export function ServiceRequestDetail() {
 
   const confirmTaskTitle = (action: PendingTaskAction) => {
     switch (action.type) {
-      case 'assign': return action.reassign ? 'Reassign task?' : 'Assign task?'
       case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark provisioned?' : 'Mark ordered?'
       case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark granted?' : 'Mark installed?'
       case 'complete': return 'Complete task?'
@@ -548,7 +559,6 @@ export function ServiceRequestDetail() {
 
   const confirmTaskLabel = (action: PendingTaskAction) => {
     switch (action.type) {
-      case 'assign': return action.reassign ? 'Reassign' : 'Assign'
       case 'ordered': return action.workflow === 'SOFTWARE' ? 'Mark Provisioned' : 'Mark Ordered'
       case 'installed': return action.workflow === 'SOFTWARE' ? 'Mark Granted' : 'Mark Installed'
       case 'complete': return 'Complete'
@@ -564,14 +574,12 @@ export function ServiceRequestDetail() {
         confirmLabel={pendingTaskAction ? confirmTaskLabel(pendingTaskAction) : 'Confirm'}
         destructive={pendingTaskAction?.type === 'complete'}
         pending={pendingTaskAction ?
-          (pendingTaskAction.type === 'assign' ? assignMutation.isPending :
-            pendingTaskAction.type === 'ordered' ? orderedMutation.isPending :
-              pendingTaskAction.type === 'installed' ? deliverMutation.isPending : false)
+          (pendingTaskAction.type === 'ordered' ? orderedMutation.isPending :
+            pendingTaskAction.type === 'installed' ? deliverMutation.isPending : false)
           : false}
         onConfirm={() => {
           if (pendingTaskAction) {
-            const { type, taskId, assigneeId } = pendingTaskAction
-            if (type === 'assign' && assigneeId) assignMutation.mutate({ taskId, assigneeId })
+            const { type, taskId } = pendingTaskAction
             if (type === 'ordered') orderedMutation.mutate({ taskId })
             if (type === 'installed') deliverMutation.mutate(taskId)
             if (type === 'complete') {
@@ -584,6 +592,60 @@ export function ServiceRequestDetail() {
         }}
         onCancel={() => setPendingTaskAction(null)}
       />
+      <FormDrawer
+        open={assignDialog !== null}
+        title={assignDialog?.reassign ? 'Reassign task' : 'Assign task'}
+        dirty
+        onClose={() => { setAssignDialog(null); setActionError(null) }}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {assignDialog?.reassign ? 'Reassign' : 'Assign'} task "{assignDialog?.taskDescription}" to{' '}
+            <span className="font-medium text-foreground">{assignDialog?.assigneeName}</span>.
+          </p>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Priority</label>
+            <select
+              value={assignPriorityId}
+              onChange={(e) => setAssignPriorityId(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">No priority</option>
+              {(prioritiesQuery.data ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Changing priority re-matches the SLA policy — same as the Edit action.
+            </p>
+          </div>
+          {actionError && <p className="text-xs text-destructive">{actionError}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setAssignDialog(null)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={assignMutation.isPending}
+              onClick={() =>
+                assignDialog &&
+                assignMutation.mutate({
+                  taskId: assignDialog.taskId,
+                  assigneeId: assignDialog.assigneeId,
+                  priorityId: assignPriorityId || null,
+                })
+              }
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {assignMutation.isPending ? 'Assigning…' : assignDialog?.reassign ? 'Reassign' : 'Assign'}
+            </button>
+          </div>
+        </div>
+      </FormDrawer>
       <ConfirmDialog
         open={holdConfirm !== null}
         title={holdConfirm === 'hold' ? 'Place request on hold?' : 'Resume request?'}
@@ -704,12 +766,12 @@ export function ServiceRequestDetail() {
                             const assigneeId = e.target.value
                             if (assigneeId) {
                               const member = fulfillmentMembers.find((m) => m.userId === assigneeId)
-                              setPendingTaskAction({
-                                type: 'assign',
+                              setAssignPriorityId(request.priorityId ?? '')
+                              setAssignDialog({
                                 taskId: row.id,
-                                workflow: (row.workflow ?? 'FULL') as 'FULL' | 'SOFTWARE' | 'INSTANT',
-                                description: `${row.assigneeId ? 'Reassign' : 'Assign'} task "${row.description}" to ${member?.displayName ?? 'selected fulfiller'}?`,
                                 assigneeId,
+                                assigneeName: member?.displayName ?? 'selected fulfiller',
+                                taskDescription: row.description,
                                 reassign: !!row.assigneeId,
                               })
                             }

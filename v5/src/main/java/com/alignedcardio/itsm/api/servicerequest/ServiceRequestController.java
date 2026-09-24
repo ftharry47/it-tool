@@ -233,7 +233,10 @@ public class ServiceRequestController {
         if (assigneeId == null) {
             throw new IllegalStateException("assigneeId is required");
         }
-        return serviceRequestService.assignTask(user, user.getOrgId(), id, taskId, assigneeId);
+        UUID priorityId = body.get("priorityId") != null && !body.get("priorityId").isBlank()
+                ? UUID.fromString(body.get("priorityId"))
+                : null;
+        return serviceRequestService.assignTask(user, user.getOrgId(), id, taskId, assigneeId, priorityId);
     }
 
     @GetMapping("/{id}/comments")

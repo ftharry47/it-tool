@@ -389,6 +389,7 @@ interface SlaTarget {
   name: string
   appliesTo: string | null
   priorityFilter: string | null
+  workflowType: string | null
   responseTargetMinutes: number
   resolutionTargetMinutes: number
   calendar: { id: string; name: string; timezone: string; workingHours: string; holidays: string } | null
@@ -438,6 +439,7 @@ function YourSlaTargets({ data, isLoading, fulfillmentOnly }: { data: SlaTarget[
               <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {p.appliesTo ? (APPLIES_TO_LABEL[p.appliesTo] ?? p.appliesTo) : '—'}
                 {p.priorityFilter ? ` · ${p.priorityFilter}` : ''}
+                {p.workflowType ? ` · ${p.workflowType}` : ''}
               </span>
             </div>
             <p className="mt-1 text-sm">

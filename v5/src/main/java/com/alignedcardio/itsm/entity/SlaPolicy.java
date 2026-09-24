@@ -21,6 +21,14 @@ public class SlaPolicy extends BaseEntity {
     @Column(name = "priority_filter", length = 32)
     private String priorityFilter;
 
+    /**
+     * Optional workflow-type filter — only meaningful for REQUEST policies.
+     * Matches the heaviest fulfillment-task workflow on the request
+     * (FULL > SOFTWARE > INSTANT). NULL = applies to any workflow.
+     */
+    @Column(name = "workflow_type", length = 20)
+    private String workflowType;
+
     @Column(name = "response_target_minutes", nullable = false)
     private int responseTargetMinutes = 60;
 
@@ -53,6 +61,14 @@ public class SlaPolicy extends BaseEntity {
 
     public void setPriorityFilter(String priorityFilter) {
         this.priorityFilter = priorityFilter;
+    }
+
+    public String getWorkflowType() {
+        return workflowType;
+    }
+
+    public void setWorkflowType(String workflowType) {
+        this.workflowType = workflowType;
     }
 
     public int getResponseTargetMinutes() {

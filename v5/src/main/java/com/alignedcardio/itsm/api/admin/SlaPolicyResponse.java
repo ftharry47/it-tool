@@ -9,6 +9,7 @@ public record SlaPolicyResponse(
         String name,
         String appliesTo,
         String priorityFilter,
+        String workflowType,
         int responseTargetMinutes,
         int resolutionTargetMinutes,
         CalendarRef businessHoursCalendar
