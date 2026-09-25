@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:comments": "node node_modules/esbuild/bin/esbuild test/commentBody.test.tsx --bundle --platform=node --format=cjs --outfile=node_modules/.cache/commentBody.test.cjs && node node_modules/.cache/commentBody.test.cjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.20.0",
